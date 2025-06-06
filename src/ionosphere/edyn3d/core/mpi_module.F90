@@ -16,7 +16,8 @@ module mpi_module
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
-    nmlon_task, mlon0_task, mlon1_task
+    nmlon_task, mlon0_task, mlon1_task, &
+    task_lat_offset, task_lon_offset
 
   interface gather_mag ! gather magnetic fields
     module procedure gather_mag_2d, gather_mag_3d, gather_mag_4d, gather_mag_5d
@@ -96,11 +97,17 @@ module mpi_module
     allocate(mlon0_task(0:mpi_size-1))
     allocate(mlon1_task(0:mpi_size-1))
 
+    allocate(task_lat_offset(0:lat_size-1))
+    allocate(task_lon_offset(0:lon_size-1))
+
     mlat0_task = 1
     mlon0_task = 1
     mlat1_task = -1
     mlon1_task = -1
 
+    task_lat_offset = 0
+    task_lon_offset = 0
+    
     nmlat = nmlat_in
     nmlon = nmlon_in
 
@@ -145,6 +152,15 @@ module mpi_module
       mlon1_task(rnk) = mlon0_task(rnk) + nmlon_task(rnki) - 1
     enddo
 
+!calc offset for lat to faciliate matrix creation
+    do i = 1, lat_size-1
+       task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)       
+!calc offset for lon to faciliate matrix creation
+    do j = 1, lon_size-1
+       task_lon_offset(j) = task_lon_offset(j-1) + nmlon_task(j-1)       
+
+
+       
 ! halos
     mlatd0 = mlat0 - 1
     mlatd1 = mlat1 + 1

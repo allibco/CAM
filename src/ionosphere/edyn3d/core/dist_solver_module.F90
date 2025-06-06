@@ -177,57 +177,241 @@ module dist_solver_module
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
-    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,nmlat_task,nmlon_task
-
+    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
+         nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
+         lat_size, lon_size, task_lat_offset
+    
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
-    !real(kind=rp),dimension(nmlat_h,nmlon),intent(in) :: bij
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
-!    real(kind=rp),dimension(9,nmlat_T1,nmlon),intent(in) :: coef
-    !integer,dimension(nmlat_T1*nmlon+1),intent(out) :: rowptr
-    !integer,dimension(12*nmlat_T1*nmlon),intent(out) :: colind
-    !real(kind=rp),dimension(12*nmlat_T1*nmlon),intent(out) :: values
     integer,dimension(2*mygrid_size),intent(out) :: rowptr
     integer,dimension(12*2*mygrid_size),intent(out) :: colind
     real(kind=rp),dimension(12*2*mygrid_size),intent(out) :: values
+
+!mlatd0 and mlond0 can be 0    
+!mlatd1 and mlond1 can be nmlat+1 and nmlon+1
 
     
 ! if two hemispheres are uncoupled at high latitudes, set bijSum to zero
     real(kind=rp),parameter :: bijSum = 0
     integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip
-    !integer,dimension(nmlat_T1*nmlon) :: rowcnt
-    !TO DO: double?
-    integer,dimension(mygrid_size) :: rowcnt
+    integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
+    integer,dimension(mygrid_size) :: rowcnt_s, rowcnt_n
 
     
 ! the first row has most elements (nmlon+2)
-!TO DO - handle this special case
+!TO DO - handle this special case (only 1 processor does this_
     integer,dimension(nmlon+2) :: jcol1
     real(kind=rp),dimension(nmlon+2) :: nzval1
 
-! other rows have at most 12 elements
-    integer,dimension(12,mygrid_size) :: jcol
-    real(kind=rp),dimension(12,mygrid_size) :: nzval
+    ! other rows have at most 12 elements
+    !we want the indexes to be ranges of rows....
+    !TO DO
+    integer,dimension(12,mygrid_size) :: jcol_n, jcol_s
+    real(kind=rp),dimension(12,mygrid_size) :: nzval_n, nzval_s
 
-    !gloabl size (might not need this?)
+    !global size (might not need this?)
     nlonlat = nmlat_T1*nmlon
-    rowcnt = 0
 
+    !initialize
+    rowcnt_S = 0
+    rowcnt_N = 0
+    
 !_______________    
 
-!    I think one big loop over lat lines and then have to examin which
-!    case we are in (pole or < latm_JT or otherwise)
-! though that would mean lots of if statements, so ...figure out which lat_ranks have what?
+    ! i, j, ij are all global indices - each task has a subset of the grid
+    ! i loops thru longitude, j thru latitude, and ij is the global row in the matrix
+
+    ! recall the proc grid looks like this:
+    ! stack along latitudes first then longitudes
+    ! (lat_size=3)
+    !  8  9 10 11
+    !  4  5  6  7
+    !  0  1  2  3 (lon_size=4)
+
+    ! within each proc grid, the row numbering looks like this  (assume each has a 2x2 grid):
+    ! (each grid point is a row in the marix)
+    !task 0:
+    ! 2 4
+    ! 1 3
+    !task 1:
+    ! 6 8
+    ! 5 7
+    !task 4:
+    ! 18 20
+    ! 17 19
+    ! etc.
+
+    ! so now calculating ij is bit more involved (compared to serial) and we need info
+    ! about the processor grid
+
+    ! procs will set up rows for their domain in the southern hemisphere and nothern hemisphere
+    ! we'll keep in two different arrays to combine when we assemble the CSR matric
+    ! each proc has to have a continguous block od rows, so we'll have to apply a permutation
     
+    ! Set up matrix with loops through the following regions:
+    ! poles, lower/upper lats (through latm_JT), then latm_Jt, through equator
 
- !
-!Do the poles first (only affects subset of tasks)
-    if (lat_rank == 0) then
+    !coefficients:
+    ! ^   equatorward
+! coef(4) (i-1,j+1)      coef(3) (i,j+1)    coef(2) (i+1,j+1)
+! coef(5) (i-1,j)        coef(9) (i,j)      coef(1) (i+1,j)
+! coef(6) (i-1,j-1)      coef(7) (i,j-1)    coef(8) (i+1,j-1)
+! v   poleward
 
-       !POLES
+    
+    !Outer if statements to see if a proc owns rows in that region
 
+    !POLES------------------------------------------_!
+    if (lat_rank == 0) then ! I own the pole regions (j=1)
+       j = 1
+       ! there are no c6,c7,c8 values at the south pole
+
+       if (lon_rank == 0) then !I also own i=1 (special case)
+          !TODO
+
+
+          
+          !get ready for next loop
+          loop_start_i = 2
+       else !I don't own i=1
+          loop_start_i = mlon0
+       endif ! end i=1
+
+       !loop_start_i is set in above if statement (based on owning i=1 or not)
+       loop_stop_i = mlon1
+
+       !South pole - other longitudes (i/=1)
+       do i = loop_start_i, loop_stop_i   
+          !calculate matrix row for South
+          m = task_lat_offset[lat_rank] ! this will be 0 here at j=1
+          jS=j
+          ij = (nmlon*m) + (jS-m) + ((i-1)*nmlat_task(lat_rank))
+
+          !TO DO - fix these
+          jcol_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/(1-1)*nmlat_T1+j,(i-1)*nmlat_T1+j/)
+          nzval_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/-1,1/)
+          rowcnt_s(ij) = rowcnt_s(ij)+2
+       enddo
+       ! North pole
+       loop_start_i = mlon0
+       do i = loop_start_i, loop_stop_i   
+          !calculate matrix row for North
+          m = task_lat_offset[lat_rank] ! this will be 0 here at j=1
+          jN = nmlat_T1-j+1
+          ij = (nmlon*m) + (jN-m) + ((i-1)*nmlat_task(lat_rank))
+
+          !TO DO: fix these
+          rowcnt_n(ij) = rowcnt_n(ij)+1
+          jcol_n(rowcnt_n(ij),ij) = (i-1)*nmlat_T1+nmlat_T1-j+1
+          nzval_n(rowcnt_n(ij),ij) = 1
+          
+       enddo
+       
+    endif !end of loop for procs owning j=1
+
+    
+    !REGION BETWEEN POLES AND latm_JT (i.e., 2:latm_JT-1)
+    if (mlat0<latm_JT) then !I own rows in this region
+
+       m = task_lat_offset[lat_rank] ! this is needed to calculate the row
+
+       !loop through the longitudes in my grid
+       do i = mlon0, mlon1
+          !we have the halo regions
+          im = i-1
+          ip = 1+1
+
+          !loop through latitudes
+          if (lat_rank == 0) then
+             loop_start_j = 2
+          else
+             loop_start_j = mlat0
+          endif
+          loop_end_j = min(mlat1, latm_JT-1)
+          
+          do j = loop_start_j, loop_end_j
+             
+             !South Hemishere
+             jS=j
+             ij = (nmlon*m) + (jS-m) + ((i-1)*nmlat_task(lat_rank))
+
+             if (i==1) then !would be better for perf to have these if statements
+                            ! outside the j loop (but for now, following old structure)
+
+                
+             elseif (i=nmlon) then
+
+                
+             else  
+                jcol_s(rowcnt_s(ij)+1:rowcnt_s(ij)+10,ij) = (/ &
+                     (im-1)*nmlat_T1+jS-1,(im-1)*nmlat_T1+jS,(im-1)*nmlat_T1+jS+1, &
+                     (i-1)*nmlat_T1+jS-1,(i-1)*nmlat_T1+jS,(i-1)*nmlat_T1+jS+1,(i-1)*nmlat_T1+jN, &
+                     (ip-1)*nmlat_T1+jS-1,(ip-1)*nmlat_T1+jS,(ip-1)*nmlat_T1+jS+1/)
+                nzval_s(rowcnt_s(ij)+1:rowcnt_s(ij)+10,ij) = (/ &
+                     coef_s(6,jS,i),coef_s(5,jS,i),coef_s(4,jS,i), &
+                     coef_s(7,jS,i),coef_s(9,jS,i)-bij(j,i),coef_s(3,jS,i),bij(j,i), &
+                     coef_s(8,jS,i),coef_s(1,jS,i),coef_s(2,jS,i)/)
+        endif
+        rowcnt(ij) = rowcnt(ij)+10
+
+! note that coef has the direction switched 
+                
+             endif   
+
+             
+             !North Hemisphere
+             ! note that coef has the direction switched in the NH
+             jN = nmlat_T1-j+1
+             ij = (nmlon*m) + (jN-m) + ((i-1)*nmlat_task(lat_rank))
+
+             if (i==1) then !would be better for perf to have these if statements
+                            ! outside the j loop (but for now, following old structure)
+
+                
+             elseif (i=nmlon) then
+
+                
+             else  
+
+                
+             endif   
+
+
+             
+          enddo ! end j loop through latitudes
+       
+
+       enddo !end i loop through longitudes
+
+    endif ! end of REGION BETWEEN POLES AND latm_JT
+
+
+    !---------------------------------------!   
+          
+    !latm_JT
+    if (mlat0 <= latm_JT .and. mlat1 >= latm_JT) then ! I own latm_JT
+
+       !TO DO (j=latmJT)
+       
     endif
+    ! between latm_JT and equator (nmlat_h)
+    if (mlat0 > latm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > latm_JT .and. mlat0 \= nmlat_h) then
+
+
+    !TO DO
+    
+    endif
+    !equator
+    !we could check in the process row, but if we own to the equator then it will be mlat1
+    if (mlat_1 == nmlat_h) then !I own equator
+
+       ! TO DO
+       
+    endif
+       
+!------------------------    
 ! set up poles
     j = 1
 
