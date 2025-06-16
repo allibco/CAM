@@ -40,8 +40,7 @@ module dist_solver_module
     !integer,dimension(12*nmlat_T1*nmlon) :: colind,rowind
     !real(kind=rp),dimension(12*nmlat_T1*nmlon) :: values_csr,values_csc
     !real(kind=rp),dimension(nmlat_h,nmlon) :: bij_full
-    !real(kind=rp),dimension(2,nmlat_h,nmlon) :: pot_hl_full,fac_hl_full
-    !real(kind=rp),dimension(10,2,nmlat_h,nmlon) :: coef_ns_full
+    !real(kind=rp),dimension(2,nmlat_h,nmlon) :: pot_hl_full,fac_hl_    !real(kind=rp),dimension(10,2,nmlat_h,nmlon) :: coef_ns_full
     !real(kind=rp),dimension(10,nmlat_T1,nmlon) :: coef_full
     !real(kind=rp),dimension(2,nmlat_h,0:nmlon+1) :: fac_hl_2,pot_2
     !real(kind=rp),dimension(nmlat_T1*nmlon) :: rhs,z,pot_hl_f,sol
@@ -179,7 +178,7 @@ module dist_solver_module
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
          nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
-         lat_size, lon_size, task_lat_offset
+         lat_size, lon_size, task_lat_offset, ij_start, ij_stop
     
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -206,17 +205,19 @@ module dist_solver_module
     real(kind=rp),dimension(nmlon+2) :: nzval1
 
     ! other rows have at most 12 elements
-    !we want the indexes to be ranges of rows....
-    !TO DO
-    integer,dimension(12,mygrid_size) :: jcol_n, jcol_s
-    real(kind=rp),dimension(12,mygrid_size) :: nzval_n, nzval_s
-
+    !we want the indexes to be the global ranges of rows....
+    integer,dimension(12,ij_start_s:ij_stop_s) :: jcol_s
+    real(kind=rp),dimension(12,ij_start_s:ij_stop_s) :: nzval_s
+    
+    integer,dimension(12,ij_start_n:ij_stop_n) :: jcol_n
+    real(kind=rp),dimension(12,ij_start_n:ij_stop_n) :: nzval_n 
+    
     !global size (might not need this?)
     nlonlat = nmlat_T1*nmlon
 
     !initialize
-    rowcnt_S = 0
-    rowcnt_N = 0
+    rowcnt_s = 0
+    rowcnt_n = 0
     
 !_______________    
 
@@ -247,7 +248,7 @@ module dist_solver_module
     ! about the processor grid
 
     ! procs will set up rows for their domain in the southern hemisphere and nothern hemisphere
-    ! we'll keep in two different arrays to combine when we assemble the CSR matric
+    ! we'll keep in two different arrays to combine when we assemble the CSR matricx
     ! each proc has to have a continguous block od rows, so we'll have to apply a permutation
     
     ! Set up matrix with loops through the following regions:
@@ -269,6 +270,8 @@ module dist_solver_module
        ! there are no c6,c7,c8 values at the south pole
 
        if (lon_rank == 0) then !I also own i=1 (special case)
+
+
           !TODO
 
 
@@ -285,22 +288,30 @@ module dist_solver_module
        !South pole - other longitudes (i/=1)
        do i = loop_start_i, loop_stop_i   
           !calculate matrix row for South
-          m = task_lat_offset[lat_rank] ! this will be 0 here at j=1
           jS=j
-          ij = (nmlon*m) + (jS-m) + ((i-1)*nmlat_task(lat_rank))
-
-          !TO DO - fix these
-          jcol_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/(1-1)*nmlat_T1+j,(i-1)*nmlat_T1+j/)
-          nzval_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/-1,1/)
+          ij = calc_grid_ij(i,jS,lat_rank)
+          
+          !connection to pole (jS=1)
+          jcol_s(rowcnt_s(ij)+1,ij) = jS  !this will be 1
+          nzval_s(rowcnt_s(ij)+1,ij) = -1
+          !center (ij)
+          jcol_s(rowcnt_s(ij)+2,ij) = ij
+          nzval_s(rowcnt_s(ij)+2,ij) = 1
+          !increase row count for ij
           rowcnt_s(ij) = rowcnt_s(ij)+2
+
+          !old code for reference
+          !jcol_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/(1-1)*nmlat_T1+j,(i-1)*nmlat_T1+j/)
+          !nzval_s(rowcnt_s(ij)+1:rowcnt_s(ij)+2,ij) = (/-1,1/)
+          !rowcnt_s(ij) = rowcnt_s(ij)+2
        enddo
+       
        ! North pole
        loop_start_i = mlon0
        do i = loop_start_i, loop_stop_i   
           !calculate matrix row for North
-          m = task_lat_offset[lat_rank] ! this will be 0 here at j=1
           jN = nmlat_T1-j+1
-          ij = (nmlon*m) + (jN-m) + ((i-1)*nmlat_task(lat_rank))
+          ij = calc_grid_ij(i,jN,lat_rank)
 
           !TO DO: fix these
           rowcnt_n(ij) = rowcnt_n(ij)+1
@@ -411,6 +422,8 @@ module dist_solver_module
        
     endif
        
+
+!!!OLD CODE
 !------------------------    
 ! set up poles
     j = 1
@@ -948,5 +961,53 @@ module dist_solver_module
     enddo
 
   endfunction unravel
-!-----------------------------------------------------------------------
+  !-----------------------------------------------------------------------
+  ! find the coef matrix row number for the grid location  i,j in south
+  pure function calc_grid_ij_s(i,j,my_latrank) return(ij)
+    
+    use params_module,only:nmlon,nmlat
+    use mpi_module, only:nmlat_task,task_lat_offset
+
+
+    integer, intent(in) :: i,j,my_lat_rank
+    integer, intent(out):: ij
+    
+    integer:: m, my_numlat
+
+    my_numlat = nmlat_task(my_latrank)
+    m = task_lat_offset(my_latrank)
+
+    ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+    
+  endfunction calc_grid_ij_s
+    
+  !-----------------------------------------------------------------------
+
+    ! find the coef matrix row number for the grid location  i,j in north
+  pure function calc_grid_ij_n(i,j,my_latrank) return(ij)
+    
+    use params_module,only:nmlon,nmlat_T1
+    use mpi_module, only:nmlat_task,task_lat_offset,lat_size
+
+
+    integer, intent(in) :: i,j,my_latrank
+    integer, intent(out):: ij
+    
+    integer:: m, my_numlat
+
+    my_numlat = nmlat_task(my_latrank)
+    !if i am in the task row that includes equator, then
+    ! subtract 1 from num_lat
+    if (my_latrank == lat_size - 1 ) then
+       my_numlat = my_numlat - 1
+    endif
+    !m is different in the in the north hemisphere
+    m = nmlat_T1 - task_lat_offset(my_latrank) - my_numlat
+
+    ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+    
+  endfunction calc_grid_ij_n
+    
+  !-----------------------------------------------------------------------
+
 endmodule dist_solver_module

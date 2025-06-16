@@ -2,6 +2,7 @@
 module mpi_module
 
   use prec, only: rp
+  use dist_solver_module, only:  calc_grid_ij
 #ifdef PARALLEL
   use MPI
   use iso_fortran_env, only: real32,real64
@@ -13,7 +14,8 @@ module mpi_module
     mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
     lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
-    nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0
+    nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
+    ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
@@ -84,7 +86,7 @@ module mpi_module
 
     integer, intent(in) :: nmlat_in, nmlon_in
 
-    integer :: i, j, rnk, rnki, rnkj
+    integer :: i, j, rnk, rnki, rnkj, mlat0_n, mlat1_n
 
     allocate(nmlat_task(0:lat_size-1))
     allocate(nmlon_task(0:lon_size-1))
@@ -159,6 +161,16 @@ module mpi_module
     do j = 1, lon_size-1
        task_lon_offset(j) = task_lon_offset(j-1) + nmlon_task(j-1)       
 
+!matrix row start and stops
+       ij_start_s = calc_grid_ij_s(mlon0,mlat0,lat_rank)
+       ij_stop_s = calc_grid_ij_s(mlon1,mlat1,lat_rank)
+
+       !adjust j for n hemisphere
+       !TO DO - verify
+       mlat0_n = nmlat_T1 - mlat0 + 1
+       mlat1_n =  nmlat_T1 - mlat1 + 1
+       ij_start_n = calc_grid_ij_n(mlon0,mlat0_n,lat_rank)
+       ij_stop_n = calc_grid_ij_n(mlon1,mlat1_n,lat_rank)
 
        
 ! halos
