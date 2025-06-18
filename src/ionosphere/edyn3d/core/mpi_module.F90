@@ -156,21 +156,23 @@ module mpi_module
 
 !calc offset for lat to faciliate matrix creation
     do i = 1, lat_size-1
-       task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)       
-!calc offset for lon to faciliate matrix creation
+       task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)
+    enddo
+    !calc offset for lon to faciliate matrix creation
+    !TO DO: we might not need this
     do j = 1, lon_size-1
        task_lon_offset(j) = task_lon_offset(j-1) + nmlon_task(j-1)       
-
+    enddo
 !matrix row start and stops
-       ij_start_s = calc_grid_ij_s(mlon0,mlat0,lat_rank)
-       ij_stop_s = calc_grid_ij_s(mlon1,mlat1,lat_rank)
+    ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
+    ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
 
-       !adjust j for n hemisphere
-       !TO DO - verify
-       mlat0_n = nmlat_T1 - mlat0 + 1
-       mlat1_n =  nmlat_T1 - mlat1 + 1
-       ij_start_n = calc_grid_ij_n(mlon0,mlat0_n,lat_rank)
-       ij_stop_n = calc_grid_ij_n(mlon1,mlat1_n,lat_rank)
+    !adjust j for n hemisphere
+    mlat0_n = nmlat_T1 - mlat0 + 1
+    mlat1_n =  nmlat_T1 - mlat1 + 1
+    !now mlat0_n will be bigger than mlat1_n in nirth hemisphere
+    ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
+    ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
 
        
 ! halos
