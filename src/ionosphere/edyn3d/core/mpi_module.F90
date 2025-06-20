@@ -391,6 +391,17 @@ module mpi_module
        call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
 
+       !now copy to output
+       !for root 0
+       do concurrent (i = mlon0:mlon1)
+          varout(i) = varin(i)
+       enddo
+       if (lon_size > 1) then
+          is = mlon0_task(1)
+          do concurrent (i = is:nmlon)
+             varout(i) = recvbuf(i)
+          enddo
+       endif
        
     elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root
 
@@ -410,18 +421,7 @@ module mpi_module
 
     endif
 
-    
-    !now copy to output
-    !for root 0
-    do concurrent (i = mlon0:mlon1)
-       varout(i) = varin(i)
-    enddo
-    if (lon_size > 1) then
-       is = mlon0_task(1)
-       do concurrent (i = is:nmlon)
-          varout(i) = recvbuf(i)
-       enddo
-    endif
+   
 #else
     do concurrent (i = mlon0:mlon1)
        varout(i) = varin(i)
