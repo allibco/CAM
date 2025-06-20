@@ -288,6 +288,10 @@ module dist_solver_module
        j = 1
        ! there are no c6,c7,c8 values at the south pole
 
+       !do communication for coef(3,1,i) here so that root proc can complete
+       !it's row below
+
+       
        if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
           i=1
           counter = counter + 1
@@ -303,7 +307,8 @@ module dist_solver_module
           nzval1(counter) = bijSum
 
           ! this processor ownly owns the coef(3,1,i) for i <= mlond1!
-          ! (TO DO needs to get the rest from procs in this row!)
+          ! (needs to get the rest from procs in this row! done above)
+          !TODO (fix)
           do isub = 2,nmlon
              ! Sum_i=1^nmlon C3(i,1) Phi(i,2)
              ! lhs(ij,(isub-1)*nmlat_T1+j+1) = coef(3,j,isub)
@@ -801,8 +806,7 @@ module dist_solver_module
     endif !equator
        
 
-!!!OLD CODE - needs updating
-    ! are my cols in ascending order (may not be at the proc boundaries)
+!!!TO DO OLD CODE - needs updating
     ! permute so that H& S rows are contiguous
     
     rowptr(1) = 1
@@ -995,67 +999,74 @@ module dist_solver_module
     integer:: m, my_numlat, jS
 
 
-    if (j <= nmlat_h) then !south hemi or equator
+    if (mpi_size == 1) then
+      ij = (i-1)*nmlat_T1+j
 
-       !if j is in ghost layer for the calling proc, then adjust my_latrank
-       if (j == mlat1 + 1) then
-          my_latrank  = my_latrank + 1
-       elseif (j == mlat0 -1) then
-          my_latrank  = my_latrank - 1
-       endif
-       if (my_latrank < 0 .OR. my_latrank >= lat_size) then
-          write(6,"Error in calc_grid_ij")
-       endif
+   else
 
-       !num of latitude points in proc parition    
-       my_numlat = nmlat_task(my_latrank)
-       
-       !adjust if i is on edge of global domain
-       if (i == 0) then
-          i = nmlon
-       elseif (i == nmlon+1)
-          i = 1
-       endif
-       
-       m = task_lat_offset(my_latrank)
- 
-    else !north hemi
+       if (j <= nmlat_h) then !south hemi or equator
 
-       !need to know if j is in the ghost point for the
-       !calling proc (and adjust my_latrank )
+          !if j is in ghost layer for the calling proc, then adjust my_latrank
+          if (j == mlat1 + 1) then
+             my_latrank  = my_latrank + 1
+          elseif (j == mlat0 -1) then
+             my_latrank  = my_latrank - 1
+          endif
+          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
+             write(6,"Error in calc_grid_ij")
+          endif
           
-       jS = nmlat_T1 -j +1
-       if (jS == mlat1 + 1) then
-          my_latrank  = my_latrank + 1
-       elseif (jS == mlat0 -1) then
-          my_latrank  = my_latrank - 1
-       endif
-       if (my_latrank < 0 .OR. my_latrank >= lat_size) then
-          write(6,"Error in calc_grid_ij")
-       endif
-        
-       !num of latitude points in proc parition    
-       my_numlat = nmlat_task(my_latrank)
+          !num of latitude points in proc parition    
+          my_numlat = nmlat_task(my_latrank)
        
-       !adjust if i is on edge of global domain
-       if (i == 0) then
-          i = nmlon
-       elseif (i == nmlon+1)
-          i = 1
-       endif
+          !adjust if i is on edge of global domain
+          if (i == 0) then
+             i = nmlon
+          elseif (i == nmlon+1)
+             i = 1
+          endif
+          
+          m = task_lat_offset(my_latrank)
+ 
+       else !north hemi
+
+          !need to know if j is in the ghost point for the
+          !calling proc (and adjust my_latrank )
+          
+          jS = nmlat_T1 -j +1
+          if (jS == mlat1 + 1) then
+             my_latrank  = my_latrank + 1
+          elseif (jS == mlat0 -1) then
+             my_latrank  = my_latrank - 1
+          endif
+          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
+             write(6,"Error in calc_grid_ij")
+          endif
+          
+          !num of latitude points in proc parition    
+          my_numlat = nmlat_task(my_latrank)
+          
+          !adjust if i is on edge of global domain
+          if (i == 0) then
+             i = nmlon
+          elseif (i == nmlon+1)
+             i = 1
+          endif
        
-       !if i am in the task row that includes equator, then
-       ! subtract 1 from num_lat (becuz don't count equator
-       ! twice)
-       if (my_latrank == lat_size - 1 ) then
-          my_numlat = my_numlat - 1
-       endif
+          !if i am in the task row that includes equator, then
+          ! subtract 1 from num_lat (becuz don't count equator
+          ! twice)
+          if (my_latrank == lat_size - 1 ) then
+             my_numlat = my_numlat - 1
+          endif
        
-       !m is different in the in the north hemisphere
-       m = nmlat_T1 - task_lat_offset(my_latrank) - my_numlat
-    endif
+          !m is different in the in the north hemisphere
+          m = nmlat_T1 - task_lat_offset(my_latrank) - my_numlat
+       endif
     
-    ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+       ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+
+    endif !end morethan one proc
     
   endfunction calc_grid_ij
   !-----------------------------------------------------------------------

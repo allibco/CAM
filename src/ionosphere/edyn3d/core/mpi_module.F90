@@ -363,7 +363,7 @@ module mpi_module
 
 #ifdef PARALLEL
     integer :: error, cnt, myrequest, tag, rs, re
-    integer, dimension(1:lon_size) :: request  
+    integer, dimension(1:lon_size-1) :: requests  
     real(kind=rp), dimension(maxmlon) :: sendbuf
     real(kind=rp), dimension(nmlon) :: recvbuf
  
@@ -382,10 +382,16 @@ module mpi_module
           
           call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
                i, tag, dynamo_world, &
-               request(i), ierror)
+               requests(i), ierror)
           if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
        enddo
-          
+
+
+       !now wait to receive all data
+       call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+
+       
     elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root
 
        cnt = mlon1-mlon0+1
@@ -398,12 +404,13 @@ module mpi_module
             myrequest, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
 
+
+       call MPI_WAIT(myrequest, MPI_STATUS_IGNORE, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Wait', ierror)
+
     endif
 
-    !do the waiting (only subset of procs)
-    !call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
-    !if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
-
+    
     !now copy to output
     !for root 0
     do concurrent (i = mlon0:mlon1)
