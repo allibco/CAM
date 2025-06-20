@@ -65,7 +65,7 @@ module dist_solver_module
     mlon0 = mlond0+1
     mlon1 = mlond1-1
 
-    !number of grid points I own (no halo)
+    !number of grid points I own (not incl halo)
     !these should be the same
     !mygrid_size = (mlat1-mlat0+1)*(mlon1-mlon0+1)
     mygrid_size = nmlat_task(lat_rank)*nmlon_task(lon_rank)
@@ -81,6 +81,7 @@ module dist_solver_module
        coef_s(ic,j,i) = coef_ns(ic,1,j,i) !south
        coef_n(ic,j,i) = coef_ns(ic,2,j,i) ! north (note: row = nmlat_T1-j+1) 
     enddo
+
 
 ! construct LHS matrix in CSR format
     call dist_construct_lhs(mygrid_size,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
@@ -200,10 +201,12 @@ module dist_solver_module
     integer,dimension(mygrid_size) :: rowcnt_s, rowcnt_n
 
     
-! the first row has most elements (nmlon+2)
-!TO DO - handle this special case (only 1 processor does this_
+    ! the first row has most elements (nmlon+2)
+    !special case (only 1 processor does this_
     integer,dimension(nmlon+2) :: jcol1
     real(kind=rp),dimension(nmlon+2) :: nzval1
+    integer :: counter
+
 
     ! other rows have at most 12 elements
     !we want the indexes to be the global ranges of rows....
@@ -219,7 +222,22 @@ module dist_solver_module
     !initialize
     rowcnt_s = 0
     rowcnt_n = 0
-    
+
+    jcol1 = 0
+    nzval1 = 0.0
+
+
+    !the proc that owns j=1,i=1  needs  coef(3,j=1,isub)
+    !for isub=2:nmlon, but only owns 2:mlon1
+    !so we need to communicate within proc lat_rank = 0
+
+    !do i need to check lat rank here also? maybe for filling sendbuf
+    !if lat_rank == 0 then
+    !gather_lon_1d(varin) result(varout)
+
+       !TO DO
+
+    endif
 !_______________    
 
     ! i, j, ij are all global indices - each task has a subset of the grid
@@ -248,7 +266,7 @@ module dist_solver_module
     ! so now calculating ij is bit more involved (compared to serial) and we need info
     ! about the processor grid
 
-    ! procs will set up rows for their domain in the southern hemisphere and nothern hemisphere
+    ! procs will set up rows for their domain in the southern hemisphere and northern hemisphere
     ! we'll keep in two different arrays to combine when we assemble the CSR matricx
     ! each proc has to have a continguous block od rows, so we'll have to apply a permutation
     
@@ -270,12 +288,33 @@ module dist_solver_module
        j = 1
        ! there are no c6,c7,c8 values at the south pole
 
-       if (lon_rank == 0) then !I also own i=1 (special case)
+       if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
+          i=1
+          counter = counter + 1
+          jcol1(counter) = calc_grid_ij(i,j,0) !this will be 1
+          nzval1(counter) = sum(coef_s(9,j,:))-bijSum
 
+          counter = counter + 1
+          jcol1(counter) = calc_grid_ij(i,j+1,0) 
+          nzval1(counter) = coef_s(3,j,i)
 
-          !TODO
+          counter = counter + 1
+          jcol1(counter) = calc_grid_ij(i,nmlat_T1,0)    
+          nzval1(counter) = bijSum
 
+          ! this processor ownly owns the coef(3,1,i) for i <= mlond1!
+          ! (TO DO needs to get the rest from procs in this row!)
+          do isub = 2,nmlon
+             ! Sum_i=1^nmlon C3(i,1) Phi(i,2)
+             ! lhs(ij,(isub-1)*nmlat_T1+j+1) = coef(3,j,isub)
 
+             jcol1(isub+2) = (isub-1)*nmlat_T1+j+1
+             nzval1(isub+2) = coef(3,j,isub)
+             jcol1(isub+2) = cal_row_ij(isub,j+1,0)
+          enddo
+          rowcnt_s(1) = nmlon+2
+
+          !TO DO: not sorted
           
           !get ready for next loop
           loop_start_i = 2
@@ -301,6 +340,9 @@ module dist_solver_module
           !increase row count for ij
           rowcnt_s(ij) = rowcnt_s(ij)+2
 
+          !sort by col indices
+          call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
+          
        enddo
        
        ! North pole: for each i, set Phi(i,nmlat_T1) = phi_pol
@@ -315,6 +357,10 @@ module dist_solver_module
           ! TO DO: verify this (doesn't make intuive sense to me)
           jcol_n(rowcnt(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
           nzval_n(rowcnt(ij),ij) = 1
+
+          !sort by col indices
+          call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
+          
           
        enddo
        
@@ -387,6 +433,10 @@ module dist_solver_module
              jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jS+1, lat_rank)
              nzval_s(rowcnt_s(ij),ij)= coef_s(2,j,i)
 
+             !sort by col indices
+             call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
+          
+             
              !!!!!!!!!!North Hemisphere
              ! note that coef has the direction switched in the NH
              ij = calc_grid_ij(i,jN,lat_rank)
@@ -434,6 +484,9 @@ module dist_solver_module
              jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN+1, lat_rank)
              nzval_n(rowcnt_n(ij),ij)= coef_n(8,j,i)
 
+             !sort by col indices
+             call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
+             
           enddo ! end j loop through latitudes
        enddo !end i loop through longitudes
     endif ! end of REGION BETWEEN POLES AND latm_JT
@@ -473,7 +526,6 @@ module dist_solver_module
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
           nzval_s(rowcnt_s(ij),ij)= coef_n(6,j,i)
 
-          
           !coef 7 (i, j-1)
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS-1, lat_rank)
@@ -481,7 +533,7 @@ module dist_solver_module
           !coef 9 (i, j) ! should be 1
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS, lat_rank)
-          nzval_s(rowcnt_s(ij),ij)= coef_s(9,j,i)-bij(j,i)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(9,j,i)
           !coef 3 (i, j+1)
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS+1, lat_rank)
@@ -509,10 +561,14 @@ module dist_solver_module
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
           nzval_s(rowcnt_s(ij),ij)= coef_n(8,j,i)
+
+          !sort by col indices
+          call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
+          
           
           !!Northern Hemi
 
-          !extra connection to SoUth at 6
+          !extra connection to South at 6
           !      lhs(ij,(im-1)*nmlat_T1+jS-1) = coef(6,jS,i)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
@@ -542,7 +598,7 @@ module dist_solver_module
           !coef 9 (i, j)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN, lat_rank)
-          nzval_n(rowcnt_n(ij),ij)= coef_n(9,j,i) - bij(j,i)
+          nzval_n(rowcnt_n(ij),ij)= coef_n(9,j,i) 
           !coef 7 (i, j+1)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN+1, lat_rank)
@@ -566,30 +622,186 @@ module dist_solver_module
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN+1, lat_rank)
           nzval_n(rowcnt_n(ij),ij)= coef_n(8,j,i)
 
-      
+          !sort by col indices
+          call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
           
-       
+          
        enddo !end of loop through longitude
-
+       !only 1 latitude
+       
     endif
     
-    ! between latm_JT and equator (nmlat_h) REGION
+    ! between latm_JT and equator (nmlat_h) REGION (symmetric solution?)
     if (mlat0 > latm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > latm_JT .and. mlat0 \= nmlat_h) then
 
+        !loop through the longitudes in my grid
+       do i = mlon0, mlon1
 
-    !TO DO
+          !loop through relavent latitudes
+          loop_start_j = max(mlat0, latm_JT+1)
+          loop_end_j = min(mlat1, nmlat-h)
+          
+          do j = loop_start_j, loop_end_j            
+             !!!!!!!South Hemishere
+             jS=j
+             jN = nmlat_T1-j+1
+             ij = calc_grid_ij(i,jS,lat_rank)
+
+             !coef 6 (i-1, j-1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(6,j,i)
+             !coef 5 (i-1, j)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(5,j,i)
+             !coef 4 (i-1, j+1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS+1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(4,j,i)
+
+             !coef 7 (i, j-1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS-1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(7,j,i)
+             !coef 9 (i, j) ! should be 1
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(9,j,i)
+             !coef 3 (i, j+1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jS+1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(3,j,i)
+
+             !coef 8 (i+1, j-1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jS-1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(8,j,i)
+             !coef 1 (i+1, j)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jS, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(1,j,i)
+             !coef 2 (i+1, j+1)
+             rowcnt_s(ij) = rowcnt_s(ij)+1
+             jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jS+1, lat_rank)
+             nzval_s(rowcnt_s(ij),ij)= coef_s(2,j,i)
+
+
+             !sort by col indices
+             call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
+          
+             
+             !!!!!!!!!!!!North hemisphere (coef direction switched)
+             ij = calc_grid_ij(i,jN,lat_rank)
+
+             !coef 4 (i-1, j-1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN-1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(4,j,i)
+             !coef 5 (i-1, j)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(5,j,i)
+             !coef 6 (i-1, j+1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(6,j,i)
+
+             !coef 3 (i, j-1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN-1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(3,j,i)
+             !coef 9 (i, j)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(9,j,i) 
+             !coef 7 (i, j+1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN+1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(7,j,i)
+             
+             !coef 2 (i+1, j-1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN-1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(2,j,i)
+             !coef 1 (i+1, j)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(1,j,i)
+             !coef 8 (i+1, j+1)
+             rowcnt_n(ij) = rowcnt_n(ij)+1
+             jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN+1, lat_rank)
+             nzval_n(rowcnt_n(ij),ij)= coef_n(8,j,i)
+
+             !sort by col indices
+             call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
+             
+          enddo !latitudes (j)
+
+       enddo !longitudes (i)
     
-    endif
+    endif !  between latm_JT and equator
+
     !equator REGION
     !we could check in the process row, but if we own to the equator then it will be mlat1
-    if (mlat_1 == nmlat_h) then !I own equator
+    if (mlat1 == nmlat_h) then !I own the equator
 
-       ! TO DO
+       !add this to the south data: jcol_s and nzval_s
+       j = nmlat_h       
+
+       !loop through the longitudes in my grid
+       do i = mlon0, mlon1
+          ij = calc_grid_ij(i,j,lat_rank)
+
+          !coef 6 (i-1, j-1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, j-1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(6,j,i)
+          !coef 5 (i-1, j)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, j, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(5,j,i)
+          !coef 4 (i-1, j+1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, j+1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(4,j,i)
+
+          !coef 7 (i, j-1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, j-1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(7,j,i)
+          !coef 9 (i, j) ! should be 1
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, j, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(9,j,i)
+          !coef 3 (i, j+1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, j+1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(3,j,i)
+          
+          !coef 8 (i+1, j-1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, j-1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(8,j,i)
+          !coef 1 (i+1, j)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, j, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(1,j,i)
+          !coef 2 (i+1, j+1)
+          rowcnt_s(ij) = rowcnt_s(ij)+1
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, j+1, lat_rank)
+          nzval_s(rowcnt_s(ij),ij)= coef_s(2,j,i)
+
+          !sort by col indices
+          call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
+          
+          
+       enddo ! longitudes
        
-    endif
+    endif !equator
        
 
-!!!OLD CODE
+!!!OLD CODE - needs updating
     ! are my cols in ascending order (may not be at the proc boundaries)
     ! permute so that H& S rows are contiguous
     
@@ -767,8 +979,10 @@ module dist_solver_module
   ! find the coef matrix row number for the grid location  i,j
   ! this works for north and south
   ! j can be in north or south
-  ! note that my_latrank could be calculated from j, but it would be a
-  ! lookup in mlat0_task() and the calling processor should know this info
+  ! j should be in north or south hemisphere
+  ! my_lantrank is the position of the *calling* processor
+  ! we do not calc my_latrank  from j, because this is how we determine
+  !if j lives on the calling processor
   pure function calc_grid_ij(i,j,my_latrank) return(ij)
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
@@ -781,9 +995,7 @@ module dist_solver_module
     integer:: m, my_numlat, jS
 
 
-     
-  
-    if (j <= nmlat_h) then !south hemi
+    if (j <= nmlat_h) then !south hemi or equator
 
        !if j is in ghost layer for the calling proc, then adjust my_latrank
        if (j == mlat1 + 1) then
@@ -806,10 +1018,12 @@ module dist_solver_module
        endif
        
        m = task_lat_offset(my_latrank)
-
+ 
     else !north hemi
 
-       !if j is in ghost layer for the calling proc, then adjust my_latrank
+       !need to know if j is in the ghost point for the
+       !calling proc (and adjust my_latrank )
+          
        jS = nmlat_T1 -j +1
        if (jS == mlat1 + 1) then
           my_latrank  = my_latrank + 1
@@ -831,7 +1045,8 @@ module dist_solver_module
        endif
        
        !if i am in the task row that includes equator, then
-       ! subtract 1 from num_lat
+       ! subtract 1 from num_lat (becuz don't count equator
+       ! twice)
        if (my_latrank == lat_size - 1 ) then
           my_numlat = my_numlat - 1
        endif
@@ -844,5 +1059,52 @@ module dist_solver_module
     
   endfunction calc_grid_ij
   !-----------------------------------------------------------------------
+
+ subroutine insert_sort(array_i, array_r, len)
+   ! this is only an ok sorting approach for small arrays
+   ! since its O(n^2)
+   !LIMITED to 12 in length
+   ! sorting by the int array but moving the reals 
+   ! then removes zeros
+     integer, intent(inout) :: array_i(12)
+     real(kind=rp), intent(inout) :: array_r(12)
+     integer, intent(inout) :: len
+
+     integer :: i, j, temp_i, z
+     real(kind=rp) :: temp_r
+     integer :: keep(9)
+
+     do i=2,len
+       temp_i = array_i(i)
+       temp_r = array_r(i)
+       do j=i-1,1,-1
+          if (array_i(j).le.temp_i) exit
+          array_i(j+1) = array_i(j)
+          array_r(j+1) = array_r(j)
+       enddo
+       array_i(j+1) = temp_i
+       array_r(j+1) = temp_r
+    enddo
+
+    !now remove zeros
+    keep = 1
+    do i=1,len
+       if (array_r(i) ==  0.0) then
+          keep(i) = 0
+       endif
+    enddo
+    z = 0
+    do i=1,len
+       if (keep(i) == 1) then
+          z = z+1
+          array_i(z) = array_i(i)
+          array_r(z) = array_r(i)
+       endif
+    enddo
+    len = z
+
+    endsubroutine insert_sort
+
+!-----------------------------------------------------------------------------
   
 endmodule dist_solver_module

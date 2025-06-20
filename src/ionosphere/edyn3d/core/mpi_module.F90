@@ -154,7 +154,7 @@ module mpi_module
       mlon1_task(rnk) = mlon0_task(rnk) + nmlon_task(rnki) - 1
     enddo
 
-!calc offset for lat to faciliate matrix creation
+    !calc offset for lat to faciliate matrix creation
     do i = 1, lat_size-1
        task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)
     enddo
@@ -163,14 +163,19 @@ module mpi_module
     do j = 1, lon_size-1
        task_lon_offset(j) = task_lon_offset(j-1) + nmlon_task(j-1)       
     enddo
-!matrix row start and stops
+    
+    !matrix row start and stops
+    !s hemi
     ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
     ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
-
+    !n hemi
     !adjust j for n hemisphere
     mlat0_n = nmlat_T1 - mlat0 + 1
     mlat1_n =  nmlat_T1 - mlat1 + 1
-    !now mlat0_n will be bigger than mlat1_n in nirth hemisphere
+    if (mlat1_n == nmlat-h) then !equator
+       mlat1_n  = mlat1_n + 1
+    endif
+    !now mlat0_n will be bigger than mlat1_n in north hemisphere
     ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
     ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
 
@@ -342,6 +347,82 @@ module mpi_module
 #endif
 
   endsubroutine sync_mlon_5d
+
+!-----------------------------------------------------------------------
+  function gather_lon_1d(varin) result(varout)
+    ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
+    
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    real(kind=rp), dimension(mlon0:mlon1), intent(in) :: varin
+    real(kind=rp), dimension(nmlon) :: varout
+
+    integer :: i
+
+#ifdef PARALLEL
+    integer :: error, cnt, myrequest, tag, rs, re
+    integer, dimension(1:lon_size) :: request  
+    real(kind=rp), dimension(maxmlon) :: sendbuf
+    real(kind=rp), dimension(nmlon) :: recvbuf
+ 
+    tag = 34
+    
+    ! load to work array
+    sendbuf=0.0
+   
+    ! gather data to 0 from proc_row 0
+    if (mpi_rank == 0 .and. lon_size > 1 ) then ! receive from other procs in row
+
+       do i = 1:lon_size -1
+          rs = mlon0_task(i)
+          re = mlon1_task(i)
+          cnt = re-rs+1
+          
+          call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
+               i, tag, dynamo_world, &
+               request(i), ierror)
+          if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+       enddo
+          
+    elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root
+
+       cnt = mlon1-mlon0+1
+       do concurrent (i = 1:cnt)
+          sendbuf(i) = varin(i+mlon0-1)
+       enddo
+       
+       call MPI_Isend(sendbuf, cnt, mpi_rp, &
+            root, tag, dynamo_world, &
+            myrequest, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    endif
+
+    !do the waiting (only subset of procs)
+    !call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
+    !if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+
+    !now copy to output
+    !for root 0
+    do concurrent (i = mlon0:mlon1)
+       varout(i) = varin(i)
+    enddo
+    if (lon_size > 1) then
+       is = mlon0_task(1)
+       do concurrent (i = is:nmlon)
+          varout(i) = recvbuf(i)
+       enddo
+    endif
+#else
+    do concurrent (i = mlon0:mlon1)
+       varout(i) = varin(i)
+    enddo
+#endif
+    
+
+  
 !-----------------------------------------------------------------------
   function gather_mlon_3d(varin, m, n) result(varout)
 
