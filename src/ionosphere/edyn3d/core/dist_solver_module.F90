@@ -169,7 +169,7 @@ module dist_solver_module
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------
-  pure subroutine dist_construct_lhs(mygrid_size,bij,coef_s, coef_n,rowptr,colind,values)
+  pure subroutine dist_construct_lhs(mygrid_size,bij,coef_s, coef_n,rowptr,colind, values)
 ! construct LHS matrix (CSR format - block row format for each task)
 
 ! need to set where the two hemispheres are connected
@@ -198,7 +198,6 @@ module dist_solver_module
     real(kind=rp),parameter :: bijSum = 0
     integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip
     integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
-    integer,dimension(mygrid_size) :: rowcnt_s, rowcnt_n
 
     
     ! the first row has most elements (nmlon+2)
@@ -215,8 +214,13 @@ module dist_solver_module
     
     integer,dimension(12,ij_start_n:ij_stop_n) :: jcol_n
     real(kind=rp),dimension(12,ij_start_n:ij_stop_n) :: nzval_n 
+
+    integer,dimension(ij_start_s:ij_stop_s) :: rowcnt_s
+    integer,dimension(ij_start_n:ij_stop_n) :: rowcnt_n
     
-    !global size (might not need this?)
+    real(kind=rp),dimension(nmlon) :: coef3_j1_buf
+
+    !global size 
     nlonlat = nmlat_T1*nmlon
 
     !initialize
@@ -225,19 +229,9 @@ module dist_solver_module
 
     jcol1 = 0
     nzval1 = 0.0
+    coef3_j1_buf = 0.0
 
-
-    !the proc that owns j=1,i=1  needs  coef(3,j=1,isub)
-    !for isub=2:nmlon, but only owns 2:mlon1
-    !so we need to communicate within proc lat_rank = 0
-
-    !do i need to check lat rank here also? maybe for filling sendbuf
-    !if lat_rank == 0 then
-    !gather_lon_1d(varin) result(varout)
-
-       !TO DO
-
-    endif
+    
 !_______________    
 
     ! i, j, ij are all global indices - each task has a subset of the grid
@@ -290,8 +284,15 @@ module dist_solver_module
 
        !do communication for coef(3,1,i) here so that root proc can complete
        !it's row below
+       !gather_lon_1d()
 
-       
+       !the proc that owns j=1,i=1 (proc 0)  needs  coef(3,j=1,isub)
+       !for isub=2:nmlon, but only owns 2:mlon1
+       !so we need to communicate within proc lat_rank = 0 and gather to
+       ! proc 0 (check scalabiliyt here at large proc counts)
+       coef3_j1_buf = gather_lon_1d(coef(3,j,mlon0:mlon1))
+
+       counter = 0
        if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
           i=1
           counter = counter + 1
@@ -306,20 +307,21 @@ module dist_solver_module
           jcol1(counter) = calc_grid_ij(i,nmlat_T1,0)    
           nzval1(counter) = bijSum
 
-          ! this processor ownly owns the coef(3,1,i) for i <= mlond1!
+          ! this processor only owns the coef(3,1,i) for i <= mlond1!
           ! (needs to get the rest from procs in this row! done above)
-          !TODO (fix)
           do isub = 2,nmlon
              ! Sum_i=1^nmlon C3(i,1) Phi(i,2)
              ! lhs(ij,(isub-1)*nmlat_T1+j+1) = coef(3,j,isub)
-
-             jcol1(isub+2) = (isub-1)*nmlat_T1+j+1
-             nzval1(isub+2) = coef(3,j,isub)
-             jcol1(isub+2) = cal_row_ij(isub,j+1,0)
+             !jcol1(isub+2) = (isub-1)*nmlat_T1+j+1
+             !nzval1(isub+2) = coef(3,j,isub)
+             counter = counter +1
+             jcol1(counter) =  calc_grid_ij(isub,j+1)
+             nzval1(counter) = coef3_j1_buf(isub)
           enddo
-          rowcnt_s(1) = nmlon+2
 
-          !TO DO: not sorted
+          rowcnt_s(1) = counter !should be = nmlon+2
+          
+          !jcol1 will be sorted already
           
           !get ready for next loop
           loop_start_i = 2
@@ -800,15 +802,19 @@ module dist_solver_module
           !sort by col indices
           call insert_sort(jcol_s(:,ij),nzval_s(:,ij),rowcnt_s(ij))
           
-          
        enddo ! longitudes
        
     endif !equator
        
 
-!!!TO DO OLD CODE - needs updating
-    ! permute so that H& S rows are contiguous
+!!!TO DO
+!now each proc has rowcnt_s, jcol_s, nzval_s
+!              rowcnt_n, jcol_n, nzval_n
+! jcol and nzval contain up to 12 entries per grid point, except for grid point 1
+! my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
+! permute so that N & S rows are contiguous
+!just swap rows in A and rhs b, not x (cols stay the same)    
     rowptr(1) = 1
     do i = 2,nlonlat+1
       rowptr(i) = rowptr(i-1)+rowcnt(i-1)
@@ -984,7 +990,7 @@ module dist_solver_module
   ! this works for north and south
   ! j can be in north or south
   ! j should be in north or south hemisphere
-  ! my_lantrank is the position of the *calling* processor
+  ! my_latrank is the position of the *calling* processor
   ! we do not calc my_latrank  from j, because this is how we determine
   !if j lives on the calling processor
   pure function calc_grid_ij(i,j,my_latrank) return(ij)

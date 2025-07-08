@@ -15,7 +15,8 @@ module mpi_module
     lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
-    ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0
+    ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0, &
+    csr_start=0, csr_stop=0
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
@@ -36,6 +37,8 @@ module mpi_module
     integer :: ierror
     integer :: color, npes_host
 
+    integer ::
+    
     if (rp == real32) then
       mpi_rp = MPI_REAL4
     elseif (rp == real64) then
@@ -94,6 +97,7 @@ module mpi_module
     nmlat_task = 0
     nmlon_task = 0
 
+    ! AB: is this needed? I think it is not used for the dist version
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
     allocate(mlon0_task(0:mpi_size-1))
@@ -136,7 +140,8 @@ module mpi_module
        mlon1 = mlon0 + nmlon_task(lon_rank) - 1
     endif
 
-! each process keeps a record of the lat-lon decomposition
+    ! each process keeps a record of the lat-lon decomposition
+    ! AB: i don't think we need these 4 arrays for the dist version
     do concurrent (rnk = 0:mpi_size-1)
       rnkj = rnk / lon_size
       rnki = modulo(rnk, lon_size)
@@ -179,8 +184,14 @@ module mpi_module
     ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
     ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
 
-       
-! halos
+    !after we permute the matrix to have each proc to contiguous rows
+    !each proc needs to know where there global counting is
+    !total grid points
+    mysize = (ij_stop_s -ij_start_s + 1) + (ij_stop_n -ij_start_n + 1)
+    !TO DO
+    
+    
+    ! halos
     mlatd0 = mlat0 - 1
     mlatd1 = mlat1 + 1
     mlond0 = mlon0 - 1
@@ -351,7 +362,7 @@ module mpi_module
 !-----------------------------------------------------------------------
   function gather_lon_1d(varin) result(varout)
     ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
-    
+    ! this could be genearlized to have any root proc and any proc row (Or column)
 #ifdef PARALLEL
     use MPI
 #endif
@@ -392,10 +403,11 @@ module mpi_module
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
 
        !now copy to output
-       !for root 0
+       !for myself (root 0)
        do concurrent (i = mlon0:mlon1)
           varout(i) = varin(i)
        enddo
+       !from all other procs
        if (lon_size > 1) then
           is = mlon0_task(1)
           do concurrent (i = is:nmlon)
@@ -418,7 +430,7 @@ module mpi_module
 
        call MPI_WAIT(myrequest, MPI_STATUS_IGNORE, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Wait', ierror)
-
+       
     endif
 
    
