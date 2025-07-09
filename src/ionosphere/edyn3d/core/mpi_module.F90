@@ -20,7 +20,7 @@ module mpi_module
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
-    task_lat_offset, task_lon_offset
+    task_lat_offset, task_grid_size, task, csr_starts
 
   interface gather_mag ! gather magnetic fields
     module procedure gather_mag_2d, gather_mag_3d, gather_mag_4d, gather_mag_5d
@@ -97,14 +97,17 @@ module mpi_module
     nmlat_task = 0
     nmlon_task = 0
 
-    ! AB: is this needed? I think it is not used for the dist version
+    ! AB: the first 4 aren't needed for the dist version
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
     allocate(mlon0_task(0:mpi_size-1))
     allocate(mlon1_task(0:mpi_size-1))
+    
+    allocate(task_grid_size(0:mpi_size-1))
+    allocate(csr_starts(0:mpi_size))
 
+    
     allocate(task_lat_offset(0:lat_size-1))
-    allocate(task_lon_offset(0:lon_size-1))
 
     mlat0_task = 1
     mlon0_task = 1
@@ -112,7 +115,6 @@ module mpi_module
     mlon1_task = -1
 
     task_lat_offset = 0
-    task_lon_offset = 0
     
     nmlat = nmlat_in
     nmlon = nmlon_in
@@ -141,8 +143,9 @@ module mpi_module
     endif
 
     ! each process keeps a record of the lat-lon decomposition
-    ! AB: i don't think we need these 4 arrays for the dist version
+    ! AB: i don't think we need these 4 arrays for the dist version 
     do concurrent (rnk = 0:mpi_size-1)
+      !position on proc grid 
       rnkj = rnk / lon_size
       rnki = modulo(rnk, lon_size)
 
@@ -158,18 +161,13 @@ module mpi_module
       enddo
       mlon1_task(rnk) = mlon0_task(rnk) + nmlon_task(rnki) - 1
     enddo
-
+        
     !calc offset for lat to faciliate matrix creation
     do i = 1, lat_size-1
        task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)
     enddo
-    !calc offset for lon to faciliate matrix creation
-    !TO DO: we might not need this
-    do j = 1, lon_size-1
-       task_lon_offset(j) = task_lon_offset(j-1) + nmlon_task(j-1)       
-    enddo
     
-    !matrix row start and stops
+    !initial matrix row start and stops
     !s hemi
     ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
     ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
@@ -188,8 +186,12 @@ module mpi_module
     !each proc needs to know where there global counting is
     !total grid points
     mysize = (ij_stop_s -ij_start_s + 1) + (ij_stop_n -ij_start_n + 1)
-    !TO DO
-    
+    !do an allgather (don't want to use the 4 arrays above as those will be deleted: mlat0_task, etc.)
+    task_grid_size = all_gather_int(mysize)
+    task_csr_starts(0) = 1
+    do i = 0, mpi_size-1
+       task_csr_starts(i+1) = task_csr_starts(i) + task_grid_size(i) 
+    enddo
     
     ! halos
     mlatd0 = mlat0 - 1
@@ -360,6 +362,38 @@ module mpi_module
   endsubroutine sync_mlon_5d
 
 !-----------------------------------------------------------------------
+
+function all_gather_int(intin) result(intarrayout)
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    integer, intent(in) :: intin
+
+    integer, dimension(0:mpi_size-1) :: intarrayout
+
+
+#ifdef PARALLEL
+    integer :: ierror, cnt
+
+    cnt = 1
+    call MPI_Allgather(sendbuf, cnt, MPI_INTEGER, &
+        intarrayout, cnt, MPI_INTEGER, dynamo_world, ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+
+#else
+
+    intarrayout(0) = intin
+
+#endif
+    
+
+  endfunction all_gather_int
+
+    
+  
+!-----------------------------------------------------------------------
   function gather_lon_1d(varin) result(varout)
     ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
     ! this could be genearlized to have any root proc and any proc row (Or column)
@@ -440,8 +474,8 @@ module mpi_module
     enddo
 #endif
     
+  endfunction gather_lon_1d
 
-  
 !-----------------------------------------------------------------------
   function gather_mlon_3d(varin, m, n) result(varout)
 

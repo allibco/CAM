@@ -17,7 +17,8 @@ module dist_solver_module
     
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:read_fac
-    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,nmlat_task,nmlon_task
+    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,&
+         nmlat_task,nmlon_task, task_grid_size
 
 
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
@@ -34,16 +35,7 @@ module dist_solver_module
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(out) :: pot
     
     integer,parameter :: root = 0
-    integer :: nlonlat,mlat0,mlat1,mlon0,mlon1,i,j,isn,ic,nnz
-
-    !integer,dimension(nmlat_T1*nmlon+1) :: rowptr,colptr
-    !integer,dimension(12*nmlat_T1*nmlon) :: colind,rowind
-    !real(kind=rp),dimension(12*nmlat_T1*nmlon) :: values_csr,values_csc
-    !real(kind=rp),dimension(nmlat_h,nmlon) :: bij_full
-    !real(kind=rp),dimension(2,nmlat_h,nmlon) :: pot_hl_full,fac_hl_    !real(kind=rp),dimension(10,2,nmlat_h,nmlon) :: coef_ns_full
-    !real(kind=rp),dimension(10,nmlat_T1,nmlon) :: coef_full
-    !real(kind=rp),dimension(2,nmlat_h,0:nmlon+1) :: fac_hl_2,pot_2
-    !real(kind=rp),dimension(nmlat_T1*nmlon) :: rhs,z,pot_hl_f,sol
+    integer :: nlonlat,mlat0,mlat1,mlon0,mlon1,i,j,isn,ic,nnz, nnz_est
 
     integer,dimension(:), allocatable :: rowptr
     integer,dimension(:), allocatable :: colind
@@ -66,15 +58,18 @@ module dist_solver_module
     mlon1 = mlond1-1
 
     !number of grid points I own (not incl halo)
-    !these should be the same
-    !mygrid_size = (mlat1-mlat0+1)*(mlon1-mlon0+1)
-    mygrid_size = nmlat_task(lat_rank)*nmlon_task(lon_rank)
+    mygrid_size = task_grid_size(mpi_rank)
 
     !allocate space for rowptr,colind,values_csr
-    !double for both hemispheres
-    allocate(rowptr(2*mygrid_size+1))
-    allocate(colind(12*2*mygrid_size))
-    allocate(values_csr(12*2*mygrid_size))
+    ! Alli: why *12? seems like 10 is max?
+    allocate(rowptr(mygrid_size+1))
+    if (mpi_rank == 1) then
+       nnz_est = (mygrid_size-1)*12 + (nmlon + 2)
+    else
+       nnz_est = mygrid_size*12
+    endif
+    allocate(colind(nnz_est))
+    allocate(values_csr(nnz_est))
     
 ! for now, split two hemispheres (keep halo pts)
     do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, ic = 1:10)
@@ -84,7 +79,7 @@ module dist_solver_module
 
 
 ! construct LHS matrix in CSR format
-    call dist_construct_lhs(mygrid_size,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
+    call dist_construct_lhs(mygrid_size,nnz_est, bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
 ! RHS is dense
@@ -169,26 +164,28 @@ module dist_solver_module
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------
-  pure subroutine dist_construct_lhs(mygrid_size,bij,coef_s, coef_n,rowptr,colind, values)
+  pure subroutine dist_construct_lhs(mygrid_size, nnz_est,bij,coef_s, coef_n,rowptr,colind, values)
 ! construct LHS matrix (CSR format - block row format for each task)
 
 ! need to set where the two hemispheres are connected
 ! This is not in the 9-point stencil but needs to be done manually
 
+!mygrid_size is the total number of rid point (N & S hemi)
+    
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
          nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
          lat_size, lon_size, task_lat_offset, ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s
+         ij_start_s, ij_stop_s, task_csr_starts
     
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
-    integer,dimension(2*mygrid_size),intent(out) :: rowptr
-    integer,dimension(12*2*mygrid_size),intent(out) :: colind
-    real(kind=rp),dimension(12*2*mygrid_size),intent(out) :: values
+    integer,dimension(mygrid_size+1),intent(out) :: rowptr
+    integer,dimension(nnz_est),intent(out) :: colind
+    real(kind=rp),dimension(nnz_est),intent(out) :: values
 
 !mlatd0 and mlond0 can be 0    
 !mlatd1 and mlond1 can be nmlat+1 and nmlon+1
@@ -196,7 +193,7 @@ module dist_solver_module
     
 ! if two hemispheres are uncoupled at high latitudes, set bijSum to zero
     real(kind=rp),parameter :: bijSum = 0
-    integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip
+    integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip, k, cnt
     integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
 
     
@@ -811,27 +808,72 @@ module dist_solver_module
 !now each proc has rowcnt_s, jcol_s, nzval_s
 !              rowcnt_n, jcol_n, nzval_n
 ! jcol and nzval contain up to 12 entries per grid point, except for grid point 1
-! my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
+! which is in jcol1 and nzval1
+!my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
 ! permute so that N & S rows are contiguous
 !just swap rows in A and rhs b, not x (cols stay the same)    
-    rowptr(1) = 1
-    do i = 2,nlonlat+1
-      rowptr(i) = rowptr(i-1)+rowcnt(i-1)
-    enddo
 
-    do j = 1,nmlon+2
-      colind(j) = jcol1(j)
-      values(j) = nzval1(j)
-    enddo
+    !CHECK: might need to change to 0-based indexing
+    !first southern hemisphere rows
+    if (mpi_rank > 0) then !don't own row 1
+       rowptr(1) = 1
+       row_counter = 1
+       nnz = 0
+       !loop through grid pts/ matrix rows in souther hemisphere
+       do ij = ij_start_s, ij_stop_s
+          cnt = rowcnt_s(ij)
+          do k = 1, cnt
+             nnz = nnz + 1
+             colind(nnz) = jcol_s(k,ij)
+             values(nnz) = nzval_s(k,ij)
+          enddo
+          rowptr(row_counter + 1) = nnz + 1
+          row_counter = row_counter + 1
+       enddo
+     else ! I own row 1 (grid point i=1, j=1)
+       rowptr(1) = 1
+       row_counter = 1
+       nnz = 0
+       ! first row seperately
+       cnt = rowcnt_s(1)
+       do k = 1, cnt
+          nnz = nnz + 1
+          colind(nnz) = jcol1(k,ij)
+          values(nnz) = nzval1(k,ij)
+       enddo
+       row_counter = row_counter + 1
+       rowptr(row_counter) = nnz + 1
+       !now remaining rows
+        do ij = ij_start_s+1, ij_stop_s
+          cnt = rowcnt_s(ij)
+          do k = 1, cnt
+             nnz = nnz + 1
+             colind(nnz) = jcol_s(k,ij)
+             values(nnz) = nzval_s(k,ij)
+          enddo
+          row_counter = row_counter + 1
+          rowptr(row_counter) = nnz + 1
+       enddo
+    endif
+   !loop through north hemiphere (note: here we are
+    ! doing a row pertubation so we will have to do this for the rhs as well.
+    !cols will stay the same (so soln x is same order)
 
-    do i = 2,nlonlat
-      do j = 1,rowcnt(i)
-        colind(rowptr(i)+j-1) = jcol(j,i)
-        values(rowptr(i)+j-1) = nzval(j,i)
-      enddo
+    !loop through grid pts/ matrix rows in north hemisphere
+    do ij = ij_start_n, ij_stop_n
+       cnt = rowcnt_n(ij)
+       do k = 1, cnt
+          nnz = nnz + 1
+          colind(nnz) = jcol_n(k,ij)
+          values(nnz) = nzval_n(k,ij)
+       enddo
+       row_counter = row_counter + 1
+       rowptr(row_counter) = nnz + 1
     enddo
-
+       
+    !remember to check indexing and also to permute the rhs!
+    
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
   pure function dist_construct_rhs(coef_10) result(rhs)
