@@ -18,7 +18,7 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:read_fac
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,&
-         nmlat_task,nmlon_task, task_grid_size
+         nmlat_task,nmlon_task,task_grid_size
 
 
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
@@ -43,6 +43,11 @@ module dist_solver_module
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_s
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_n
 
+    !real(kind=rp),dimension(2,nmlat_h,0:nmlon+1) :: fac_hl_2,pot_2
+    !real(kind=rp),dimension(nmlat_T1*nmlon) :: rhs,z,pot_hl_f,sol
+    real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
+
+    
     integer :: ier
     integer :: mygrid_size
     
@@ -70,20 +75,25 @@ module dist_solver_module
     endif
     allocate(colind(nnz_est))
     allocate(values_csr(nnz_est))
+
+    allocate(rhs(mygrid_size))
+    allocate(z(mygrid_size))
+    allocate(pot_h1_f(mygrid_size))
+    allocate(sol(mygrid_size))
+
     
 ! for now, split two hemispheres (keep halo pts)
     do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, ic = 1:10)
        coef_s(ic,j,i) = coef_ns(ic,1,j,i) !south
-       coef_n(ic,j,i) = coef_ns(ic,2,j,i) ! north (note: row = nmlat_T1-j+1) 
+       coef_n(ic,j,i) = coef_ns(ic,2,j,i) !north (note: row = nmlat_T1-j+1) 
     enddo
 
-
-! construct LHS matrix in CSR format
-    call dist_construct_lhs(mygrid_size,nnz_est, bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
+! construct LHS matrix in Block CSR format
+    call dist_construct_lhs(mygrid_size,nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
 ! RHS is dense
-    rhs = construct_rhs(coef_full(10,:,:))
+    rhs = construct_rhs(mygrid_size,coef_full(10,:,:))
 
 ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
@@ -181,8 +191,8 @@ module dist_solver_module
     
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
-    real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
-    real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
+    real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
+    real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
     integer,dimension(mygrid_size+1),intent(out) :: rowptr
     integer,dimension(nnz_est),intent(out) :: colind
     real(kind=rp),dimension(nnz_est),intent(out) :: values
@@ -286,8 +296,8 @@ module dist_solver_module
        !the proc that owns j=1,i=1 (proc 0)  needs  coef(3,j=1,isub)
        !for isub=2:nmlon, but only owns 2:mlon1
        !so we need to communicate within proc lat_rank = 0 and gather to
-       ! proc 0 (check scalabiliyt here at large proc counts)
-       coef3_j1_buf = gather_lon_1d(coef(3,j,mlon0:mlon1))
+       ! proc 0 (check scalability here at large proc counts)
+       coef3_j1_buf = gather_lon_1d(coef_s(3,j,mlon0:mlon1))
 
        counter = 0
        if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
@@ -803,8 +813,6 @@ module dist_solver_module
        
     endif !equator
        
-
-!!!TO DO
 !now each proc has rowcnt_s, jcol_s, nzval_s
 !              rowcnt_n, jcol_n, nzval_n
 ! jcol and nzval contain up to 12 entries per grid point, except for grid point 1
@@ -876,42 +884,76 @@ module dist_solver_module
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
-  pure function dist_construct_rhs(coef_10) result(rhs)
+  pure function dist_construct_rhs(mygrid_size, coef_10_s, coef_10_n) result(rhs)
 ! construct vector RHS
-! this is different from flatten
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
+    use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
+         lat_rank, lon_rank
 
-    real(kind=rp),dimension(nmlat_T1,nmlon),intent(in) :: coef_10
-    real(kind=rp),dimension(nmlat_T1*nmlon) :: rhs
+    real(kind=rp),dimension((mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
+    real(kind=rp),dimension(mygrid_size) :: rhs
+    real(kind=rp),dimension(ij_start_s:ij_stop_s) :: rhs_s
+    real(kind=rp),dimension(ij_start_n:ij_stop_n) :: rhs_n
 
-    integer :: i,j,ij
+    integer :: i,j,ij, jN, j_start, cnt
 
-    rhs = 0
+    real(kind=rp),dimension(nmlon) :: coef10_j1_buf
 
-! set up poles, there are no c6,c7,c8 values
-    j = 1
+    
+    rhs = 0.0
+    rhs_n = 0.0
+    rhs_s = 0.0
 
-! for longitude i=1 at the south pole
-    i = 1
-    ij = (i-1)*nmlat_T1+j
-    rhs(ij) = sum(coef_10(j,:))
+    !first do j=1
+    if (lat_rank == 0) then ! I own the pole regions (j=1)
+       j=1
 
-! for each i, set Phi(i,nmlat_T1) = phi_pol at the north pole
-    do concurrent (i = 1:nmlon)
-      ij = (i-1)*nmlat_T1+nmlat_T1-j+1
-      rhs(ij) = phi_pol
+       !proc in lat_ros 0 have to share info whith proc 0
+       coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
+       
+       if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
+          ! this is mpi_rank =  0 proc
+          ! for longitude i=1 at the south pole
+          i = 1
+          ij = calc_grid_ij(i,j, lat_rank)
+          !has to get rest of row from other tasks
+          rhs_s(ij) = sum(coef10_j1_buf(:))
+       endif
+
+       ! at j=1, for each i, set Phi(i,nmlat_T1) = phi_pol at the north pole
+       do concurrent (i = mlon0:mlon1)
+          jN = nmlat_T1-j+1 !j=1, so jN= nmlat_T1
+          ij = calc_grid_ij(i,jN,lat_rank)
+          rhs_n(ij) = phi_pol
+       enddo
+       j_start = 2
+    else !don't own j=1
+       j_start = mlat0
+    endif !lat_rank = 0
+    
+    do concurrent (i = mlon0:mlon1, j = j_start:mlat1)
+       !south
+       ij = calc_grid_ij(i,j,lat_rank)
+       rhs_s(ij) = coef_10_s(j,i)
+       !north
+       jN = nmlat_T1-j+1
+       ij = calc_grid_ij(i,jN,lat_rank)
+       rhs_n(ij) = coef_10_n(j,i)
     enddo
 
-    do concurrent (i = 1:nmlon, j = 2:nmlat_h)
-      ij = (i-1)*nmlat_T1+j
-      rhs(ij) = coef_10(j,i)
-
-      ij = (i-1)*nmlat_T1+nmlat_T1-j+1
-      rhs(ij) = coef_10(nmlat_T1-j+1,i)
+    !now permute the rows so they are the same order as in matrix
+    cnt = 0
+    do ij = ij_start_s, ij_stop_s
+       cnt = cnt + 1
+       rhs(cnt) = rhs_s(ij)
     enddo
-
+    do ij = ij_start_s+1, ij_stop_s
+       cnt = cnt + 1
+       rhs(cnt) = rhs_n(ij)
+    enddo
+     
   endfunction dist_construct_rhs
 
 !-----------------------------------------------------------------------
