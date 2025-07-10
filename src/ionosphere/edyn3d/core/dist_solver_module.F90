@@ -44,7 +44,6 @@ module dist_solver_module
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_n
 
     !real(kind=rp),dimension(2,nmlat_h,0:nmlon+1) :: fac_hl_2,pot_2
-    !real(kind=rp),dimension(nmlat_T1*nmlon) :: rhs,z,pot_hl_f,sol
     real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
 
     
@@ -88,22 +87,25 @@ module dist_solver_module
        coef_n(ic,j,i) = coef_ns(ic,2,j,i) !north (note: row = nmlat_T1-j+1) 
     enddo
 
-! construct LHS matrix in Block CSR format
+    ! construct LHS matrix in Block CSR format
+    ! Note: rows have been permuted to be contiguous on each proc (for LHS matrix
+    ! and RHS) - solunution order is unaffected
     call dist_construct_lhs(mygrid_size,nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
-! RHS is dense
-    rhs = construct_rhs(mygrid_size,coef_full(10,:,:))
+    ! RHS in Block format
+    rhs = dist_construct_rhs(mygrid_size,coef_full(10,:,:))
 
 ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
-       z = flatten(fac_hl_full)
+
+       z = dist_flatten(mygrid_size,fac_hl)
 
     else ! input is pot_hl, fac_hl is to be calculated (output)
 
 ! A. Maute 2023/11/21: put the high latitude potential in X
 ! and then use LHS to calculate the RHS FAC
-       pot_hl_f = flatten(pot_hl_full)
+       pot_hl_f = dist_flatten(mygrid_size, pot_hl_full)
 
 ! z = matmul(lhs, pot_hl)
        z = 0
@@ -133,9 +135,6 @@ module dist_solver_module
      enddo
 
 !superlu
-     call csr_to_csc(nlonlat,nlonlat,nnz, &
-           rowptr,colind(1:nnz),values_csr(1:nnz), &
-           colptr,rowind(1:nnz),values_csc(1:nnz))
       
      call t_startf('linear_system->solve_superlu')
      sol = solve_superlu(nlonlat,nnz,colptr,rowind(1:nnz),values_csc(1:nnz),rhs)
@@ -186,8 +185,9 @@ module dist_solver_module
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
          nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
+         mlond0,mlond1, mlon0, mlon1, &
          lat_size, lon_size, task_lat_offset, ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s, task_csr_starts
+         ij_start_s, ij_stop_s
     
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -651,9 +651,9 @@ module dist_solver_module
         !loop through the longitudes in my grid
        do i = mlon0, mlon1
 
-          !loop through relavent latitudes
+          !loop through relevant latitudes
           loop_start_j = max(mlat0, latm_JT+1)
-          loop_end_j = min(mlat1, nmlat-h)
+          loop_end_j = min(mlat1, nmlat_h)
           
           do j = loop_start_j, loop_end_j            
              !!!!!!!South Hemishere
@@ -943,7 +943,7 @@ module dist_solver_module
        rhs_n(ij) = coef_10_n(j,i)
     enddo
 
-    !now permute the rows so they are the same order as in matrix
+    !now combine & permute the rows so they are the same order as in matrix
     cnt = 0
     do ij = ij_start_s, ij_stop_s
        cnt = cnt + 1
@@ -957,7 +957,7 @@ module dist_solver_module
   endfunction dist_construct_rhs
 
 !-----------------------------------------------------------------------
-  function solve_superlu_dist(n,nnz,colptr,rowind,values,rhs) result(sol)
+  function dist_solve_superlu(n,nnz,colptr,rowind,values,rhs) result(sol)
     use iso_c_binding,only:c_int,c_long_long,c_double
 
     integer,intent(in) :: n,nnz
@@ -1007,44 +1007,82 @@ module dist_solver_module
     call c_fortran_dgssv(iopt, n, nnz, nrhs, &
       values, rowind, colptr, sol, n, f_factors, info)
 
-  endfunction solve_superlu_dist
+  endfunction dist_solve_superlu
 
 !-----------------------------------------------------------------------
-  pure function flatten(fin) result(fout)
+  pure function dist_flatten(mygrid_size, fin) result(fout)
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
 ! northern/southern hemispheres are either separate or averaged
 ! based on their latitude ranges (high-lat, transition, low-lat, equator)
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
+    use mpi_module, only:lat_rank, mlat0, mlat1, &
+         mlon0, mlon1, mlatd0, mlatd11, mlomd0, mlond1, &
+         ij_start_n, ij_stop_n, &
+         ij_start_s, ij_stop_s
+    
+    real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
+    real(kind=rp),dimension(mygrid_size) :: fout
 
-    real(kind=rp),dimension(2,nmlat_h,nmlon),intent(in) :: fin
-    real(kind=rp),dimension(nmlat_T1*nmlon) :: fout
-
-    integer :: i,j,ij
+    real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fout_s
+    real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fout_n
+    integer :: i,j,ij, loop_start_j, loop_end_j, jS, jN, cnt
     real(kind=rp) :: avg
 
-! from pole to latm_JT, two hemispheres are uncoupled
-    do concurrent (i = 1:nmlon, j = 1:jlatm_JT)
-      ij = (i-1)*nmlat_T1+j
-      fout(ij) = fin(1,j,i)
+    if (mlat0<latJT) then
+       ! from pole to latm_JT, two hemispheres are uncoupled
+       ! my longitudes
+       loop_start_j = mlat0
+       loop_end_j = min(mlat1, latm_JT)
 
-      ij = (i-1)*nmlat_T1+nmlat_T1-j+1
-      fout(ij) = fin(2,j,i)
+       do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_end_j)
+          !south
+          jS=j
+          ij = calc_grid_ij(i,jS,lat_rank)
+          fout_s(ij) = fin(1,j,i)
+          
+          !north
+          jN = nmlat_T1-j+1
+          ij = calc_grid_ij(i,jN,lat_rank)
+          fout_n(ij) = fin(2,j,i)
+
+       enddo
+    endif
+    
+    if ((mlat0 > latm_JT) .or. (mlat1 > latm_JT)) then
+       ! from latm_JT to equator, symmetric solution
+       loop_start_j = max(mlat0, latm_JT+1)
+       loop_end_j = mlat1
+
+       do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_end_j)
+          avg = (fin(1,j,i)+fin(2,j,i))/2
+
+          !south
+          jS=j
+          ij = calc_grid_ij(i,jS,lat_rank)
+          fout_s(ij) = avg
+
+          !north
+          jN = nmlat_T1-j+1
+          ij = calc_grid_ij(i,jN,lat_rank)
+          fout_n(ij) = avg
+       enddo
+    endif
+
+    !now combine & permute the rows so they are the same order as in matrix
+    cnt = 0
+    do ij = ij_start_s, ij_stop_s
+       cnt = cnt + 1
+       fout(cnt) = fout_s(ij)
     enddo
-
-! from latm_JT to equator, symmetric solution
-    do concurrent (i = 1:nmlon, j = jlatm_JT+1:nmlat_h)
-      avg = (fin(1,j,i)+fin(2,j,i))/2
-
-      ij = (i-1)*nmlat_T1+j
-      fout(ij) = avg
-
-      ij = (i-1)*nmlat_T1+nmlat_T1-j+1
-      fout(ij) = avg
+    do ij = ij_start_s+1, ij_stop_s
+       cnt = cnt + 1
+       fout(cnt) = fout_n(ij)
     enddo
-
-  endfunction flatten
+    
+       
+  endfunction dist_flatten
 !-----------------------------------------------------------------------
   pure function unravel(fin) result(fout)
 ! reorder 1D vector (RHS) into 2D fields (lat-lon)
