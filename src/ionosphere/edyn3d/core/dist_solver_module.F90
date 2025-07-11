@@ -89,7 +89,7 @@ module dist_solver_module
 
     ! construct LHS matrix in Block CSR format
     ! Note: rows have been permuted to be contiguous on each proc (for LHS matrix
-    ! and RHS) - solunution order is unaffected
+    ! and RHS) - solution order is unaffected
     call dist_construct_lhs(mygrid_size,nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
@@ -105,8 +105,10 @@ module dist_solver_module
 
 ! A. Maute 2023/11/21: put the high latitude potential in X
 ! and then use LHS to calculate the RHS FAC
-       pot_hl_f = dist_flatten(mygrid_size, pot_hl_full)
+       pot_hl_f = dist_flatten(mygrid_size, pot_hl)
 
+!FIX THIS (need a parallel matmult - might be able to move to creating the lhs code
+! to avoid some communication)
 ! z = matmul(lhs, pot_hl)
        z = 0
        do i = 1,nlonlat
@@ -115,11 +117,12 @@ module dist_solver_module
           enddo
        enddo
 
-! no need for correction since it is from the divergence of horizontal current
 
+!FIX THIS       
 ! reconstruct 2D distribution of FAC based on z
        fac_hl_2(:,:,1:nmlon) = unravel(z)
 
+!FIX THIS       
 ! add periodic points
         do j = 1,nmlat_h
           do isn = 1,2
@@ -129,8 +132,9 @@ module dist_solver_module
         enddo
      endif !FAC
 
-! add FAC forcing to RHS
-     do i = 1,nlonlat
+     ! add FAC forcing to RHS
+     !(these are both "permuted")
+     do i = 1,mygrid_size
         rhs(i) = rhs(i)+z(i)
      enddo
 
@@ -1084,7 +1088,7 @@ module dist_solver_module
        
   endfunction dist_flatten
 !-----------------------------------------------------------------------
-  pure function unravel(fin) result(fout)
+  pure function dist_unravel(fin) result(fout)
 ! reorder 1D vector (RHS) into 2D fields (lat-lon)
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
@@ -1094,6 +1098,9 @@ module dist_solver_module
 
     integer :: i,j,isn,ij
 
+    !unpermute then unravel
+
+    
     do concurrent (i = 1:nmlon, j = 1:nmlat_h, isn = 1:2)
       if (isn == 1) then
         ij = (i-1)*nmlat_T1+j
@@ -1103,7 +1110,7 @@ module dist_solver_module
       fout(isn,j,i) = fin(ij)
     enddo
 
-  endfunction unravel
+  endfunction dist_unravel
   
    
   !-----------------------------------------------------------------------
