@@ -103,13 +103,14 @@ module dist_solver_module
 
     else ! input is pot_hl, fac_hl is to be calculated (output)
 
-! A. Maute 2023/11/21: put the high latitude potential in X
-! and then use LHS to calculate the RHS FAC
+       !FIX THIS - shouldn't permute before the matvec
+       ! A. Maute 2023/11/21: put the high latitude potential in X
+       ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(mygrid_size, pot_hl)
 
-!FIX THIS (need a parallel matmult - might be able to move to creating the lhs code
-! to avoid some communication)
-! z = matmul(lhs, pot_hl)
+       !FIX THIS (need a parallel matmult - might be able to move to creating the lhs code
+       ! to avoid some communication)
+       ! z = matmul(lhs, pot_hl)
        z = 0
        do i = 1,nlonlat
           do j = rowptr(i),rowptr(i+1)-1
@@ -117,13 +118,11 @@ module dist_solver_module
           enddo
        enddo
 
+       ! reconstruct 2D distribution of FAC based on z
+       fac_hl_2(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-!FIX THIS       
-! reconstruct 2D distribution of FAC based on z
-       fac_hl_2(:,:,1:nmlon) = unravel(z)
-
-!FIX THIS       
-! add periodic points
+       !FIX THIS       
+       ! add periodic points
         do j = 1,nmlat_h
           do isn = 1,2
             fac_hl_2(isn,j,0) = fac_hl_2(isn,j,nmlon)
@@ -953,7 +952,7 @@ module dist_solver_module
        cnt = cnt + 1
        rhs(cnt) = rhs_s(ij)
     enddo
-    do ij = ij_start_s+1, ij_stop_s
+    do ij = ij_start_n, ij_stop_n
        cnt = cnt + 1
        rhs(cnt) = rhs_n(ij)
     enddo
@@ -1025,10 +1024,11 @@ module dist_solver_module
          mlon0, mlon1, mlatd0, mlatd11, mlomd0, mlond1, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s
-    
+
+    integer, intent(in) :: mygrid_size
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size) :: fout
-
+    
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fout_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fout_n
     integer :: i,j,ij, loop_start_j, loop_end_j, jS, jN, cnt
@@ -1080,34 +1080,58 @@ module dist_solver_module
        cnt = cnt + 1
        fout(cnt) = fout_s(ij)
     enddo
-    do ij = ij_start_s+1, ij_stop_s
+    do ij = ij_start_n, ij_stop_n
        cnt = cnt + 1
        fout(cnt) = fout_n(ij)
     enddo
     
        
   endfunction dist_flatten
+
+! TO DO: should flattena nd unravel be taking in ghostcells - not used?
+
 !-----------------------------------------------------------------------
-  pure function dist_unravel(fin) result(fout)
+  pure function dist_unravel(mygrid_size, fin) result(fout)
 ! reorder 1D vector (RHS) into 2D fields (lat-lon)
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
+    use mpi_module, only:lat_rank, mlat0, mlat1, &
+         mlon0, mlon1, &
+         ij_start_n, ij_stop_n, &
+         ij_start_s, ij_stop_s
 
-    real(kind=rp),dimension(nmlat_T1*nmlon),intent(in) :: fin
-    real(kind=rp),dimension(2,nmlat_h,nmlon) :: fout
+    integer, intent(in) :: mygrid_size
+    real(kind=rp),dimension(mygrid_size),intent(in) :: fin
+    real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout
 
-    integer :: i,j,isn,ij
-
-    !unpermute then unravel
-
+    integer :: i,j,isn,ij, cnt, jS, jN
+    real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fin_s
+    real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fin_n
+ 
+    !first unpermute
+    cnt = 0
+    do ij = ij_start_s, ij_stop_s
+       cnt = cnt + 1
+       fin_s(ij) = fin(cnt)
+    enddo
+    do ij = ij_start_n, ij_stop_n
+       cnt = cnt + 1
+       fin_n(ij) = fin(cnt)
+    enddo
     
-    do concurrent (i = 1:nmlon, j = 1:nmlat_h, isn = 1:2)
-      if (isn == 1) then
-        ij = (i-1)*nmlat_T1+j
-      else
-        ij = (i-1)*nmlat_T1+nmlat_T1-j+1
-      endif
-      fout(isn,j,i) = fin(ij)
+    !now unravel
+    do concurrent (i = mlon:mlon1, j = mlat0:mlat1)
+      !south
+       isn = 1
+       jS = j
+       ij = calc_grid(i,jN,lat_rank)
+       fout(isn,j,i) = fin_s(ij)
+
+       !north
+       isn = 2
+       jN = nmlat_T1-j+1
+       ij = calc_grid(i,jN,lat_rank)
+       fout(isn,j,i) = fin_n(ij)
     enddo
 
   endfunction dist_unravel
@@ -1206,7 +1230,7 @@ module dist_solver_module
   endfunction calc_grid_ij
   !-----------------------------------------------------------------------
 
- subroutine insert_sort(array_i, array_r, len)
+  subroutine insert_sort(array_i, array_r, len)
    ! this is only an ok sorting approach for small arrays
    ! since its O(n^2)
    !LIMITED to 12 in length
@@ -1249,7 +1273,7 @@ module dist_solver_module
     enddo
     len = z
 
-    endsubroutine insert_sort
+  endsubroutine insert_sort
 
 !-----------------------------------------------------------------------------
   
