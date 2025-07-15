@@ -16,11 +16,12 @@ module mpi_module
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
     ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0, &
-    csr_start=0, csr_stop=0
+    csr_start=0, csr_stop=0, mpi_partner, partner_gridsize, mygrid_size
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
-    task_lat_offset, task_grid_size, task, csr_starts
+    task_lat_offset
+  !, task_grid_size, perm_task_grid_size 
 
   interface gather_mag ! gather magnetic fields
     module procedure gather_mag_2d, gather_mag_3d, gather_mag_4d, gather_mag_5d
@@ -65,15 +66,25 @@ module mpi_module
 #endif
 
 ! factorize MPI process number to the nearest two numbers
+    !do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
+    !  lon_size = mpi_size / lat_size
+    !  if (lon_size*lat_size == mpi_size) exit ! lon_size >= lat_size
+    !enddo
+
+    !Modified for distributed version, lon_size must be an even number
+    !BEST RESULTS when mpi_size = 1, 2, or is divisible by 4.  if we would allow lat_size >=lon_size, then
+    !we could say divisible by 2)
+    ! Check if mpi_size is valid for even lon_size constraint
+    if (mpi_size /= 1 .and. mpi_size /= 2 .and. mod(mpi_size, 4) /= 0) then
+       write(6,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2'
+       write(6,*) 'Current mpi_size =', mpi_size
+    endif
+    
     do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
       lon_size = mpi_size / lat_size
-      if (lon_size*lat_size == mpi_size) exit ! lon_size >= lat_size
+      if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 2) exit ! lon_size >= lat_size
     enddo
-!!$    do lon_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
-!!$      lat_size = mpi_size / lon_size
-!!$      if (lat_size*lon_size == mpi_size) exit ! lon_size >= lat_size
-!!$    enddo
-
+   
 ! stack along latitudes first then longitudes
 ! (lat_size=3)
 !  8  9 10 11
@@ -103,10 +114,9 @@ module mpi_module
     allocate(mlon0_task(0:mpi_size-1))
     allocate(mlon1_task(0:mpi_size-1))
     
+    !for dist
     allocate(task_grid_size(0:mpi_size-1))
-    allocate(csr_starts(0:mpi_size))
-
-    
+    allocate(perm_task_grid_size(0:mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
 
     mlat0_task = 1
@@ -166,6 +176,21 @@ module mpi_module
     do i = 1, lat_size-1
        task_lat_offset(i) = task_lat_offset(i-1) + nmlat_task(i-1)
     enddo
+
+
+    !Find partner for distributed grid (0,1), (2,3), (3,4) etc.
+    if (mpi_size > 1) then
+       if (mod(mpi_rank, 2) == 0) then
+          !Number is even or zero'
+          mpi_partner = mpi_rank + 1
+       else
+          !Number is odd'
+          mpi_partner = mpi_rank - 1
+       endif
+    else
+       mpi_partner = 0
+    endif
+
     
     !initial matrix row start and stops
     !s hemi
@@ -186,13 +211,25 @@ module mpi_module
     !each proc needs to know where there global counting is
     !total grid points
     mysize = (ij_stop_s -ij_start_s + 1) + (ij_stop_n -ij_start_n + 1)
+
     !do an allgather (don't want to use the 4 arrays above as those will be deleted: mlat0_task, etc.)
-    task_grid_size = all_gather_int(mysize)
-    task_csr_starts(0) = 1
-    do i = 0, mpi_size-1
-       task_csr_starts(i+1) = task_csr_starts(i) + task_grid_size(i) 
-    enddo
+    !task_grid_size = all_gather_int(mysize)
+
+    mysize_n =  (ij_stop_n -ij_start_n + 1)
+    mysize_s = (ij_stop_s -ij_start_s + 1)
     
+    !get partner sizes and then my grid size for block csr matrix
+    !for each partner pair, even owns s hemi and odd owns north hemi
+    if (mod(mpi_rank,2) == 0) then !even, own south, send north
+       partner_gridsize = partner_exchange(mysize_n)
+       mygrid_size =  mysize_s + partner_gridsize
+    else !odd, own north, send south
+       partner_gridsize = partner_exchange(mysize_s)
+       mygrid_size =  mysize_n + partner_gridsize
+    endif
+    
+
+    endif
     ! halos
     mlatd0 = mlat0 - 1
     mlatd1 = mlat1 + 1
@@ -213,6 +250,51 @@ module mpi_module
 #endif
 
   endsubroutine finalize
+
+ !-----------------------------------------------------------------------
+
+function partner_exchange_int(intin) result(intout)
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    integer, intent(in) :: intin
+    integer, intent(out) :: intout
+    integer :: send_request, recv_request
+    integer :: status(MPI_STATUS_SIZE)
+
+#ifdef PARALLEL
+    integer :: ierror, tag = 88
+
+    !post receive
+    call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
+         dynamo_world, recv_request, ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+
+    !post send
+    call MPI_Isend(intin, cnt, MPI_INTEGER, mpi_partner, tag, &
+         dynamo_world, send_request, ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    ! Wait for send to complete
+    call MPI_Wait(send_request, status, ierr)
+    
+    ! Wait for receive to complete
+    call MPI_Wait(recv_request, status, ierr)
+
+    
+
+#else
+
+    intout = intin
+
+#endif
+    
+endfunction all_gather_int
+
+    
+
 !-----------------------------------------------------------------------
   subroutine sync_mlat_5d(var, l, m, n)
 ! longitude halo points are not included
@@ -388,8 +470,7 @@ function all_gather_int(intin) result(intarrayout)
 
 #endif
     
-
-  endfunction all_gather_int
+endfunction all_gather_int
 
     
   
@@ -398,7 +479,7 @@ function all_gather_int(intin) result(intarrayout)
     ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
     ! this could be genearlized to have any root proc and any proc row (Or column)
 #ifdef PARALLEL
-    use MPI
+    use MP
 #endif
 
     real(kind=rp), dimension(mlon0:mlon1), intent(in) :: varin

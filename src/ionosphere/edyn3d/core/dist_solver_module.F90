@@ -55,19 +55,14 @@ module dist_solver_module
     ! global matrix size
     nlonlat = nmlat_T1*nmlon 
 
-    !proc domain extents without halo pts
-    mlat0 = mlatd0+1
-    mlat1 = mlatd1-1
-    mlon0 = mlond0+1
-    mlon1 = mlond1-1
+    !proc domain extents without halo pts (these are global: mlat0, mlon0, mlat1, mlon1)
 
-    !number of grid points I own (not incl halo)
-    mygrid_size = task_grid_size(mpi_rank)
+    !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
     !allocate space for rowptr,colind,values_csr
     ! Alli: why *12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
-    if (mpi_rank == 1) then
+    if (mpi_rank == 0) then ! make rom for dense row
        nnz_est = (mygrid_size-1)*12 + (nmlon + 2)
     else
        nnz_est = mygrid_size*12
@@ -90,7 +85,7 @@ module dist_solver_module
     ! construct LHS matrix in Block CSR format
     ! Note: rows have been permuted to be contiguous on each proc (for LHS matrix
     ! and RHS) - solution order is unaffected
-    call dist_construct_lhs(mygrid_size,nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
+    call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
     ! RHS in Block format
@@ -176,7 +171,7 @@ module dist_solver_module
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------
-  pure subroutine dist_construct_lhs(mygrid_size, nnz_est,bij,coef_s, coef_n,rowptr,colind, values)
+  pure subroutine dist_construct_lhs(nnz_est,bij,coef_s, coef_n,rowptr,colind, values)
 ! construct LHS matrix (CSR format - block row format for each task)
 
 ! need to set where the two hemispheres are connected
@@ -208,7 +203,7 @@ module dist_solver_module
     real(kind=rp),parameter :: bijSum = 0
     integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip, k, cnt
     integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
-
+    integer :: nnz_s, nnz_n, row_counter_s, row_counter_n
     
     ! the first row has most elements (nmlon+2)
     !special case (only 1 processor does this_
@@ -822,68 +817,70 @@ module dist_solver_module
 ! which is in jcol1 and nzval1
 !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
-! permute so that N & S rows are contiguous
-!just swap rows in A and rhs b, not x (cols stay the same)    
 
     !CHECK: might need to change to 0-based indexing
     !first southern hemisphere rows
     if (mpi_rank > 0) then !don't own row 1
-       rowptr(1) = 1
-       row_counter = 1
-       nnz = 0
+       rowptr_s(1) = 1
+       row_counter_s = 1
+       nnz_s = 0
        !loop through grid pts/ matrix rows in souther hemisphere
        do ij = ij_start_s, ij_stop_s
           cnt = rowcnt_s(ij)
           do k = 1, cnt
-             nnz = nnz + 1
-             colind(nnz) = jcol_s(k,ij)
-             values(nnz) = nzval_s(k,ij)
+             nnz_s = nnz_s + 1
+             colind_s(nnz_s) = jcol_s(k,ij)
+             values_s(nnz_s) = nzval_s(k,ij)
           enddo
-          rowptr(row_counter + 1) = nnz + 1
-          row_counter = row_counter + 1
+          rowptr_s(row_counter_s + 1) = nnz + 1
+          row_counter_s = row_counter_s + 1
        enddo
      else ! I own row 1 (grid point i=1, j=1)
-       rowptr(1) = 1
-       row_counter = 1
-       nnz = 0
+       rowptr_s(1) = 1
+       row_counter_s = 1
+       nnz_s = 0
        ! first row seperately
        cnt = rowcnt_s(1)
        do k = 1, cnt
-          nnz = nnz + 1
-          colind(nnz) = jcol1(k,ij)
-          values(nnz) = nzval1(k,ij)
+          nnz_s = nnz_s + 1
+          colind_s(nnz_s) = jcol1(k,ij)
+          values_s(nnz_s) = nzval1(k,ij)
        enddo
-       row_counter = row_counter + 1
-       rowptr(row_counter) = nnz + 1
+       row_counter_s = row_counter_s + 1
+       rowptr_s(row_counter_s) = nnz_s + 1
        !now remaining rows
         do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
           do k = 1, cnt
-             nnz = nnz + 1
-             colind(nnz) = jcol_s(k,ij)
-             values(nnz) = nzval_s(k,ij)
+             nnz_s = nnz_s + 1
+             colind_s(nnz_s) = jcol_s(k,ij)
+             values_s(nnz_s) = nzval_s(k,ij)
           enddo
-          row_counter = row_counter + 1
-          rowptr(row_counter) = nnz + 1
+          row_counter_s = row_counter_s + 1
+          rowptr_s(row_counter_s) = nnz_s + 1
        enddo
     endif
-   !loop through north hemiphere (note: here we are
-    ! doing a row pertubation so we will have to do this for the rhs as well.
-    !cols will stay the same (so soln x is same order)
+    
+    !loop through north hemiphere
+    rowptr_n(1) = 1
+    row_counter_n = 1
+    nnz_n = 0
 
     !loop through grid pts/ matrix rows in north hemisphere
     do ij = ij_start_n, ij_stop_n
        cnt = rowcnt_n(ij)
        do k = 1, cnt
-          nnz = nnz + 1
-          colind(nnz) = jcol_n(k,ij)
-          values(nnz) = nzval_n(k,ij)
+          nnz_n = nnz_n + 1
+          colind_n(nnz_n) = jcol_n(k,ij)
+          values_n(nnz_n) = nzval_n(k,ij)
        enddo
-       row_counter = row_counter + 1
-       rowptr(row_counter) = nnz + 1
+       row_counter_n = row_counter_n + 1
+       rowptr_n(row_counter_n) = nnz_n + 1
     enddo
        
-    !remember to check indexing and also to permute the rhs!
+
+    ! now swap hemisphere data with partner
+    
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
