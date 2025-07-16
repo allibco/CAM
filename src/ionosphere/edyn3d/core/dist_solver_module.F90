@@ -5,6 +5,9 @@ module dist_solver_module
 
   implicit none
 
+  !ths does not incl the dense row at the pole
+  integer, parameter : MAX_NNZ=12
+  
   contains
 !-----------------------------------------------------------------------
   subroutine dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, &
@@ -60,12 +63,12 @@ module dist_solver_module
     !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
     !allocate space for rowptr,colind,values_csr
-    ! Alli: why *12? seems like 10 is max?
+    ! Alli: why does MAX_NNZ=12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
     if (mpi_rank == 0) then ! make rom for dense row
-       nnz_est = (mygrid_size-1)*12 + (nmlon + 2)
+       nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
     else
-       nnz_est = mygrid_size*12
+       nnz_est = mygrid_size*MAX_NNZ
     endif
     allocate(colind(nnz_est))
     allocate(values_csr(nnz_est))
@@ -185,15 +188,15 @@ module dist_solver_module
          nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
          mlond0,mlond1, mlon0, mlon1, &
          lat_size, lon_size, task_lat_offset, ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s
+         ij_start_s, ij_stop_s, partner_hgridsize
     
     integer,intent(in) :: mygrid_size
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
     real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
     real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
-    integer,dimension(mygrid_size+1),intent(out) :: rowptr
-    integer,dimension(nnz_est),intent(out) :: colind
-    real(kind=rp),dimension(nnz_est),intent(out) :: values
+    integer,dimension(mygrid_size+1),intent(out) :: my_rowptr
+    integer,dimension(nnz_est),intent(out) :: my_colind
+    real(kind=rp),dimension(nnz_est),intent(out) :: my_values
 
 !mlatd0 and mlond0 can be 0    
 !mlatd1 and mlond1 can be nmlat+1 and nmlon+1
@@ -212,18 +215,23 @@ module dist_solver_module
     integer :: counter
 
 
-    ! other rows have at most 12 elements
+    ! other rows have at most MAX_NNZ elements
     !we want the indexes to be the global ranges of rows....
-    integer,dimension(12,ij_start_s:ij_stop_s) :: jcol_s
-    real(kind=rp),dimension(12,ij_start_s:ij_stop_s) :: nzval_s
+    integer,dimension(MAX_NNZ,ij_start_s:ij_stop_s) :: jcol_s
+    real(kind=rp),dimension(MAX_NNZ,ij_start_s:ij_stop_s) :: nzval_s
     
-    integer,dimension(12,ij_start_n:ij_stop_n) :: jcol_n
-    real(kind=rp),dimension(12,ij_start_n:ij_stop_n) :: nzval_n 
+    integer,dimension(MAX_NNZ,ij_start_n:ij_stop_n) :: jcol_n
+    real(kind=rp),dimension(MAX_NNZ,ij_start_n:ij_stop_n) :: nzval_n 
 
     integer,dimension(ij_start_s:ij_stop_s) :: rowcnt_s
     integer,dimension(ij_start_n:ij_stop_n) :: rowcnt_n
     
     real(kind=rp),dimension(nmlon) :: coef3_j1_buf
+
+    !get hemisphere partner info
+    integer, dimension(partner_hgridsize+1) :: partner_rowptr
+    real(kind=rp),dimension(partner_hgridsize*MAX_NNZ) :: partner_values
+    integer, dimension(partner_hgridsize*MAX_NNZ) :: partner_cols
 
     !global size 
     nlonlat = nmlat_T1*nmlon
@@ -813,7 +821,7 @@ module dist_solver_module
        
 !now each proc has rowcnt_s, jcol_s, nzval_s
 !              rowcnt_n, jcol_n, nzval_n
-! jcol and nzval contain up to 12 entries per grid point, except for grid point 1
+! jcol and nzval contain up to MAX_NNZ entries per grid point, except for grid point 1
 ! which is in jcol1 and nzval1
 !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
@@ -877,10 +885,63 @@ module dist_solver_module
        row_counter_n = row_counter_n + 1
        rowptr_n(row_counter_n) = nnz_n + 1
     enddo
-       
+
+    !now get my block of the csr matrix (my_rowptr, my_values, my_colind)
+    my_rowptr(1) = 1
 
     ! now swap hemisphere data with partner
-    
+    if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+       call partner_exchange_hemisphere(MAX_NNZ, rowptr_n, values_n, colind_n, &
+         partner_rowptr, partner_values, partner_cols)
+       !my south
+       do concurrent i = 2,row_counter_s + 1
+          my_rowptr(i) = rowptr_s(i)
+       enddo
+       nnz_s = my_rowptr(row_counter_s + 1)
+       do concurrent i=1,nnz_s
+          my_colind(i) = colind_s(i)
+          my_values(i) = values_s(i)
+       enddo
+
+       !partner has north
+       do i = 1,  partner_hgridsize
+          cnt = partner_rowptr(i+1) - partner_rowptr(i)
+          my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter + i) + cnt
+       enddo
+       !CHECK mygrid_size = row_counter_s + partner_hgridsize
+       nnz_n = my_rowptr(mygrid_size + 1)
+       do concurrent i = 1, nnz_n
+          my_colind(nnz_s + i) = partner_cols(i)
+          my_values(nnz_s + i) = partner_values(i)
+       enddo
+       
+    else !odd, own north, **send south**
+       call partner_exchange_hemisphere(MAX_NNZ, rowptr_s, values_s, my_colind_s, &
+         partner_rowptr, partner_values, partner_cols)
+
+       !partner has south
+       do concurrent i = 2, partner_hgridsize + 1
+          my_rowptr(i) = partner_rowptr(i)
+       enddo
+       nnz_s = my_rowptr(partner_hgridsize + 1)
+       do concurrent i=1,nnz_s
+          my_colind(i) = partner_cols(i)
+          my_values(i) = partner_values(i)
+       enddo
+
+       !my north
+       do i = 1, row_counter_n
+          cnt = rowptr_n(i+1) - rowptr_n(i)
+          my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize+1)+cnt
+       enddo
+       nnz_n = my_rowptr(mygrid_size + 1)
+       do concurrent i = 1, nnz_n
+          my_colind(nnz_s+ i) = colind_n(i)
+          my_values(nnz_s+i) = values_n(i)
+       enddo
+       
+    endif
+
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
@@ -1230,11 +1291,11 @@ module dist_solver_module
   subroutine insert_sort(array_i, array_r, len)
    ! this is only an ok sorting approach for small arrays
    ! since its O(n^2)
-   !LIMITED to 12 in length
+   !LIMITED to MAX_NNZ in length
    ! sorting by the int array but moving the reals 
    ! then removes zeros
-     integer, intent(inout) :: array_i(12)
-     real(kind=rp), intent(inout) :: array_r(12)
+     integer, dimension(MAX_NNZ), intent(inout) :: array_i
+     real(kind=rp), dimension(MAX_NNZ), intent(inout) :: array_r
      integer, intent(inout) :: len
 
      integer :: i, j, temp_i, z
