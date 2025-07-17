@@ -91,7 +91,7 @@ module dist_solver_module
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
-    ! RHS in Block format
+    ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(mygrid_size,coef_full(10,:,:))
 
 ! determine FAC forcing (dense)
@@ -101,13 +101,11 @@ module dist_solver_module
 
     else ! input is pot_hl, fac_hl is to be calculated (output)
 
-       !FIX THIS - shouldn't permute before the matvec
        ! A. Maute 2023/11/21: put the high latitude potential in X
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(mygrid_size, pot_hl)
 
-       !FIX THIS (need a parallel matmult - might be able to move to creating the lhs code
-       ! to avoid some communication)
+       !TO DO (need a parallel matmult)
        ! z = matmul(lhs, pot_hl)
        z = 0
        do i = 1,nlonlat
@@ -116,6 +114,7 @@ module dist_solver_module
           enddo
        enddo
 
+       !FIX THIS
        ! reconstruct 2D distribution of FAC based on z
        fac_hl_2(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
@@ -130,7 +129,7 @@ module dist_solver_module
      endif !FAC
 
      ! add FAC forcing to RHS
-     !(these are both "permuted")
+     !(these are both hemisphere swapped for contiguous rows already
      do i = 1,mygrid_size
         rhs(i) = rhs(i)+z(i)
      enddo
@@ -1132,7 +1131,7 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd11, mlomd0, mlond1, &
          ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s
+         ij_start_s, ij_stop_s, partner_hgridsize
 
     integer, intent(in) :: mygrid_size
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
@@ -1183,21 +1182,42 @@ module dist_solver_module
        enddo
     endif
 
-    !now combine & permute the rows so they are the same order as in matrix
-    cnt = 0
-    do ij = ij_start_s, ij_stop_s
-       cnt = cnt + 1
-       fout(cnt) = fout_s(ij)
-    enddo
-    do ij = ij_start_n, ij_stop_n
-       cnt = cnt + 1
-       fout(cnt) = fout_n(ij)
-    enddo
-    
+    if (mpi_size == 1) then
+    !now combine & the rows so they are the same order as in matrix
+       cnt = 0
+       do ij = ij_start_s, ij_stop_s
+          cnt = cnt + 1
+          fout(cnt) = fout_s(ij)
+       enddo
+       do ij = ij_start_n, ij_stop_n
+          cnt = cnt + 1
+          fout(cnt) = fout_n(ij)
+       enddo
+    else
+       !now do partner hemisphere exchange for continguous rows
+       !for N and S hemi, the even proc rows go first to maintain grid order
+       !(so the south owning process)
+       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+          cnt = 0
+          do ij = ij_start_s, ij_stop_s
+             cnt = cnt + 1
+             fout(cnt) = fout_s(ij)
+          enddo
+          i_start = my_hgridsize + 1
+          call partner_exchange_hemisphere_vec(fout(1:my_hgridsize), fout(istart:istart+partner_hgridsize))
+          
+       else !odd, own north, **send south**
+          cnt = partner_hgridsize
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             fout(cnt) = fout_n(ij)
+          enddo
+          i_start = partner_hgridsize + 1
+          call partner_exchange_hemisphere_vec(fout(istart:istart+my_hgridsize), fout(1:partner_hgridsize))
+       endif
+    endif
        
   endfunction dist_flatten
-
-! TO DO: should flattena nd unravel be taking in ghostcells - not used?
 
 !-----------------------------------------------------------------------
   pure function dist_unravel(mygrid_size, fin) result(fout)
@@ -1207,7 +1227,7 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s
+         ij_start_s, ij_stop_s, lat_rank, partner_hgridsize
 
     integer, intent(in) :: mygrid_size
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
@@ -1216,33 +1236,70 @@ module dist_solver_module
     integer :: i,j,isn,ij, cnt, jS, jN
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fin_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fin_n
- 
-    !first unpermute
-    cnt = 0
-    do ij = ij_start_s, ij_stop_s
-       cnt = cnt + 1
-       fin_s(ij) = fin(cnt)
-    enddo
-    do ij = ij_start_n, ij_stop_n
-       cnt = cnt + 1
-       fin_n(ij) = fin(cnt)
-    enddo
+    real(kind=rp),dimension(partner_hgridsize) :: buffer
     
-    !now unravel
-    do concurrent (i = mlon:mlon1, j = mlat0:mlat1)
-      !south
-       isn = 1
-       jS = j
-       ij = calc_grid(i,jN,lat_rank)
-       fout(isn,j,i) = fin_s(ij)
-
+    !divide into hemispheres
+    !!
+    !do ij = ij_start_s, ij_stop_s
+    !   cnt = cnt + 1
+    !   fin_s(ij) = fin(cnt)
+    !enddo
+    !do ij = ij_start_n, ij_stop_n
+    !   cnt = cnt + 1
+    !   fin_n(ij) = fin(cnt)
+    !enddo
+    
+    !first reverse the hemisphere swap
+    if (mod(mpi_rank,2) == 0) then !even, own south, **send north** back to partner
+       !south
+       isn=1
+       cnt = 0
+       do ij = ij_start_s, ij_stop_s
+          cnt = cnt + 1
+          fin_s(ij) = fin(cnt)
+       enddo
+       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+          jS = j
+          ij =  calc_grid_ij(i,jS,lat_rank)
+          fout(isn,j,i) = fin_s(ij)
+       enddo
+       !send north info to partner and receive my north data
+       isn=2
+       do i=1, partner_hgridsize
+          buffer(i) = fin(cnt + i)
+       enddo
+       call partner_exchange_hemisphere_vec(buffer, fin_n)
+       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+          jN = nmlat_T1-j+1
+          ij =  calc_grid_ij(i,jN,lat_rank)
+          fout(isn,j,i) = fin_n(ij)
+       enddo    
+    else !odd, so own north, send south back to partner
+       !south
+       isn=1
+       do i=1, partner_hgridsize
+          buffer(i) = fin(i)
+       enddo
+       call partner_exchange_hemisphere_vec(buffer, fin_s)
+       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+          jS = j
+          ij =  calc_grid_ij(i,jS,lat_rank)
+          fout(isn,j,i) = fin_s(ij)
+       enddo
        !north
-       isn = 2
-       jN = nmlat_T1-j+1
-       ij = calc_grid(i,jN,lat_rank)
-       fout(isn,j,i) = fin_n(ij)
-    enddo
-
+       isn=2
+       cnt = partner_hgridsize
+       do ij = ij_start_n, ij_stop_n
+          cnt = cnt + 1
+          fin_n(ij) = fin(cnt)
+       enddo
+       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+          jN = nmlat_T1-j+1
+          ij =  calc_grid_ij(i,jN,lat_rank)
+          fout(isn,j,i) = fin_n(ij)
+       enddo
+    endif !end north
+       
   endfunction dist_unravel
   
    
