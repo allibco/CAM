@@ -294,16 +294,19 @@ function partner_exchange_int(intin) result(intout)
     
 endfunction partner_exchange_int
 
- !-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
 
-subroutine partner_exchange_hemisphere(nnz, my_rowptr, my_values, my_cols, &
+subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
      partner_rowptr, partner_values, partner_cols)
-  
+
+
+!the south pole dense row does not get sent (it's owned by rank 0)  
 
 #ifdef PARALLEL
     use MPI
 #endif
-
+    integer, intent(in) :: nnz
+    
     integer, dimension(my_hgridsize+1), intent(in) :: my_rowptr
     integer, dimension(my_hgridsize*nnz), intent(in) :: my_cols
     real(kind=rp), dimension(my_hgridsize*nnz), intent(in) :: my_values
@@ -312,7 +315,8 @@ subroutine partner_exchange_hemisphere(nnz, my_rowptr, my_values, my_cols, &
     integer, dimension(partner_hgridsize*nnz), intent(out) :: partner_cols
     real(kind=rp), dimension(partner_hgridsize*nnz), intent(out) :: partner_values
 
-    integer :: i, nnz
+    
+    integer :: i
     
 #ifdef PARALLEL
 
@@ -333,15 +337,15 @@ subroutine partner_exchange_hemisphere(nnz, my_rowptr, my_values, my_cols, &
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     !recv from my partner
-    call MPI_Irecv(partner_rowptr, partner_hgridsize + 1, MPI_INTEGER, sender_rank, &
+    call MPI_Irecv(partner_rowptr, partner_hgridsize + 1, MPI_INTEGER, mpi_partner, &
          200, dynamo_world, recv_request(1), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
-    call MPI_Irecv(partner_cols,partner_hgridsize*nnz, MPI_INTEGER, sender_rank, &
+    call MPI_Irecv(partner_cols,partner_hgridsize*nnz, MPI_INTEGER, mpi_partner, &
          201, dynamo_world, recv_request(2), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
-    call MPI_Irecv(partner_values, partner_hgridsize*nnz, mpi_rp, sender_rank, &
+    call MPI_Irecv(partner_values, partner_hgridsize*nnz, mpi_rp, mpi_partner, &
          202, dynamo_world, recv_request(3), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
        
@@ -368,8 +372,55 @@ subroutine partner_exchange_hemisphere(nnz, my_rowptr, my_values, my_cols, &
 #endif
     
     
-endsubroutine partner_exchange_hemisphere
+endsubroutine partner_exchange_hemisphere_mat
+!-----------------------------------------------------------------------
+
+subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
+  
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    real(kind=rp), dimension(my_hgridsize), intent(in) :: my_values
+    real(kind=rp), dimension(partner_hgridsize), intent(out) :: partner_values
+
     
+#ifdef PARALLEL
+
+    integer ierr
+    integer :: send_request, recv_request
+
+    !send to my partner
+   
+    call MPI_Isend(my_values, my_hgridsize, mpi_rp, mpi_partner, 400, dynamo_world, &
+         send_request, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+    !recv from my partner
+    call MPI_Irecv(partner_values, partner_hgridsize, mpi_rp, mpi_partner, &
+         401, dynamo_world, recv_request, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+       
+    ! Wait for my send to complete
+    call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+
+    !Wait for my recv
+    call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    
+#else
+!serial
+    do concurrent i =1, my_hgridsize 
+       partner_values(i) = my_values(i)
+    enddo
+    
+#endif
+    
+    
+endsubroutine partner_exchange_hemisphere_vec
+        
 !-----------------------------------------------------------------------
   subroutine sync_mlat_5d(var, l, m, n)
 ! longitude halo points are not included

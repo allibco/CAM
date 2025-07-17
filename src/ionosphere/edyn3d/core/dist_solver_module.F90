@@ -86,8 +86,8 @@ module dist_solver_module
     enddo
 
     ! construct LHS matrix in Block CSR format
-    ! Note: rows have been permuted to be contiguous on each proc (for LHS matrix
-    ! and RHS) - solution order is unaffected
+    ! Note: rows are contiguous on each proc (for LHS matrix
+    ! and RHS) 
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     nnz = rowptr(nlonlat+1)-1
 
@@ -886,15 +886,69 @@ module dist_solver_module
        rowptr_n(row_counter_n) = nnz_n + 1
     enddo
 
-    !now get my block of the csr matrix (my_rowptr, my_values, my_colind)
-    my_rowptr(1) = 1
 
-    ! now swap hemisphere data with partner
-    if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
-       call partner_exchange_hemisphere(MAX_NNZ, rowptr_n, values_n, colind_n, &
-         partner_rowptr, partner_values, partner_cols)
-       !my south
-       do concurrent i = 2,row_counter_s + 1
+    if (mpi_size > 0) then
+       !now get my block of the csr matrix (my_rowptr, my_values, my_colind)
+       my_rowptr(1) = 1
+
+       ! now swap hemisphere data with partner
+       !for N and S hemi, the even proc rows go first to maintain grid order
+       !(so the south owning process)
+       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+          call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
+               partner_rowptr, partner_values, partner_cols)
+          !my south (goes first)
+          do concurrent i = 2,row_counter_s + 1
+             my_rowptr(i) = rowptr_s(i)
+          enddo
+          nnz_s = my_rowptr(row_counter_s + 1)
+          do concurrent i=1,nnz_s
+             my_colind(i) = colind_s(i)
+             my_values(i) = values_s(i)
+          enddo
+          
+          !partner has north
+          do i = 1,  partner_hgridsize
+             cnt = partner_rowptr(i+1) - partner_rowptr(i)
+             my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter + i) + cnt
+          enddo
+          !north proc's data goes second
+          !CHECK mygrid_size = row_counter_s + partner_hgridsize
+          nnz_n = my_rowptr(mygrid_size + 1)
+          do concurrent i = 1, nnz_n
+             my_colind(nnz_s + i) = partner_cols(i)
+             my_values(nnz_s + i) = partner_values(i)
+          enddo
+          
+       else !odd, own north, **send south**
+          call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, my_colind_s, &
+               partner_rowptr, partner_values, partner_cols)
+          
+          !partner has south - partner's data goes first
+          do concurrent i = 2, partner_hgridsize + 1
+             my_rowptr(i) = partner_rowptr(i)
+          enddo
+          nnz_s = my_rowptr(partner_hgridsize + 1)
+          do concurrent i=1,nnz_s
+             my_colind(i) = partner_cols(i)
+             my_values(i) = partner_values(i)
+          enddo
+          
+          !my north - goes second
+          do i = 1, row_counter_n
+             cnt = rowptr_n(i+1) - rowptr_n(i)
+             my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize+1)+cnt
+          enddo
+          nnz_n = my_rowptr(mygrid_size + 1)
+          do concurrent i = 1, nnz_n
+             my_colind(nnz_s+ i) = colind_n(i)
+             my_values(nnz_s+i) = values_n(i)
+          enddo
+          
+       endif
+    else !one task
+       !south 
+       do concurrent i = 1,row_counter_s + 1
           my_rowptr(i) = rowptr_s(i)
        enddo
        nnz_s = my_rowptr(row_counter_s + 1)
@@ -902,37 +956,10 @@ module dist_solver_module
           my_colind(i) = colind_s(i)
           my_values(i) = values_s(i)
        enddo
-
-       !partner has north
-       do i = 1,  partner_hgridsize
-          cnt = partner_rowptr(i+1) - partner_rowptr(i)
-          my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter + i) + cnt
-       enddo
-       !CHECK mygrid_size = row_counter_s + partner_hgridsize
-       nnz_n = my_rowptr(mygrid_size + 1)
-       do concurrent i = 1, nnz_n
-          my_colind(nnz_s + i) = partner_cols(i)
-          my_values(nnz_s + i) = partner_values(i)
-       enddo
-       
-    else !odd, own north, **send south**
-       call partner_exchange_hemisphere(MAX_NNZ, rowptr_s, values_s, my_colind_s, &
-         partner_rowptr, partner_values, partner_cols)
-
-       !partner has south
-       do concurrent i = 2, partner_hgridsize + 1
-          my_rowptr(i) = partner_rowptr(i)
-       enddo
-       nnz_s = my_rowptr(partner_hgridsize + 1)
-       do concurrent i=1,nnz_s
-          my_colind(i) = partner_cols(i)
-          my_values(i) = partner_values(i)
-       enddo
-
-       !my north
+       !north
        do i = 1, row_counter_n
           cnt = rowptr_n(i+1) - rowptr_n(i)
-          my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize+1)+cnt
+          my_rowptr(row_counter_s +1 + i) = my_rowptr(row_counter_s + i) + cnt
        enddo
        nnz_n = my_rowptr(mygrid_size + 1)
        do concurrent i = 1, nnz_n
@@ -941,7 +968,6 @@ module dist_solver_module
        enddo
        
     endif
-
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
@@ -951,17 +977,17 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
-         lat_rank, lon_rank
+         lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
+         ih_start_s, ij_stop_s, ij_start_n, ij_stop_n
 
     real(kind=rp),dimension((mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: rhs_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: rhs_n
 
-    integer :: i,j,ij, jN, j_start, cnt
+    integer :: i,j,ij, jN, j_start, cnt, i_start
 
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
-
     
     rhs = 0.0
     rhs_n = 0.0
@@ -971,7 +997,7 @@ module dist_solver_module
     if (lat_rank == 0) then ! I own the pole regions (j=1)
        j=1
 
-       !proc in lat_ros 0 have to share info whith proc 0
+       !proc in lat_rows 0 have to share info whith proc 0
        coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
        
        if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
@@ -1004,16 +1030,41 @@ module dist_solver_module
        rhs_n(ij) = coef_10_n(j,i)
     enddo
 
-    !now combine & permute the rows so they are the same order as in matrix
-    cnt = 0
-    do ij = ij_start_s, ij_stop_s
-       cnt = cnt + 1
-       rhs(cnt) = rhs_s(ij)
-    enddo
-    do ij = ij_start_n, ij_stop_n
-       cnt = cnt + 1
-       rhs(cnt) = rhs_n(ij)
-    enddo
+    if (mpi_size > 1) then
+       !now do partner hemisphere exchange for continguous rows
+       
+       !for N and S hemi, the even proc rows go first to maintain grid order
+       !(so the south owning process)
+       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+          cnt = 0
+          do ij = ij_start_s, ij_stop_s
+             cnt = cnt + 1
+             rhs(cnt) = rhs_s(ij)
+          enddo
+          i_start = my_hgridsize + 1
+          call partner_exchange_hemisphere_vec(rhs(1:my_hgridsize), rhs(istart:istart+partner_hgridsize))
+          
+       else !odd, own north, **send south**
+          cnt = partner_hgridsize
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             rhs(cnt) = rhs_n(ij)
+          enddo
+          i_start = partner_hgridsize + 1
+          call partner_exchange_hemisphere_vec(rhs(istart:istart+my_hgridsize), rhs(1:partner_hgridsize))
+          
+       endif
+     else !mpi_size = 1
+        cnt = 0
+        do ij = ij_start_s, ij_stop_s
+           cnt = cnt + 1
+           rhs(cnt) = rhs_s(ij)
+        enddo
+        do ij = ij_start_n, ij_stop_n
+           cnt = cnt + 1
+           rhs(cnt) = rhs_n(ij)
+        enddo
+     endif
      
   endfunction dist_construct_rhs
 
