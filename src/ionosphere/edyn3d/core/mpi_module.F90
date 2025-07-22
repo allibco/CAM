@@ -16,13 +16,12 @@ module mpi_module
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
     ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0, &
-    csr_start=0, csr_stop=0, mpi_partner, partner_hgridsize, my_hgridsize, &
+    mpi_partner, partner_hgridsize, my_hgridsize, &
     mygrid_size
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
-    task_lat_offset
-  !, task_grid_size, perm_task_grid_size 
+    task_lat_offset, task_csr_rowstarts 
 
   interface gather_mag ! gather magnetic fields
     module procedure gather_mag_2d, gather_mag_3d, gather_mag_4d, gather_mag_5d
@@ -77,7 +76,7 @@ module mpi_module
     !we could say divisible by 2)
     ! Check if mpi_size is valid for even lon_size constraint
     if (mpi_size /= 1 .and. mpi_size /= 2 .and. mod(mpi_size, 4) /= 0) then
-       write(6,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2'
+       write(6,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2 (OR THERE WILL BE PROBLEMS)'
        write(6,*) 'Current mpi_size =', mpi_size
     endif
     
@@ -116,8 +115,8 @@ module mpi_module
     allocate(mlon1_task(0:mpi_size-1))
     
     !for dist
-    allocate(task_grid_size(0:mpi_size-1))
-    allocate(perm_task_grid_size(0:mpi_size-1))
+    allocate(task_csr_rowstarts(0:mpi_size))
+    allocate(task_mygrid_size(0:mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
 
     mlat0_task = 1
@@ -208,14 +207,8 @@ module mpi_module
     ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
     ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
 
-    !after we permute the matrix to have each proc to contiguous rows
-    !each proc needs to know where there global counting is
-    !total grid points
-    mysize = (ij_stop_s -ij_start_s + 1) + (ij_stop_n -ij_start_n + 1)
-
-    !do an allgather (don't want to use the 4 arrays above as those will be deleted: mlat0_task, etc.)
-    !task_grid_size = all_gather_int(mysize)
-
+   
+    !sizes in each hemisphere
     mysize_n =  (ij_stop_n -ij_start_n + 1)
     mysize_s = (ij_stop_s -ij_start_s + 1)
     
@@ -230,9 +223,38 @@ module mpi_module
        my_hgridsize = mysize_n
        mygrid_size =  mysize_n + partner_hgridsize
     endif
-    
 
+    !now we need to calculate the rowstarts for the csr martix
+    !do an allgather to get each procs grid size
+    task_mygrid_size = all_gather_int(mygrid_size)
+
+    !now rowstarts - set all to zero
+    task_csr_rowstarts = 0
+    !south hemisphere is even, then northern is odd, so for 6 tasks
+    ! the order of block rows:
+    !1
+    !3
+    !5
+    !4
+    !2
+    !0
+    !south (even)
+    cnt = 0
+    do i=0, mpi_size-1, 2
+       cnt = cnt + 1
+       task_csr_rowstarts[cnt] = task_csr_rowstarts[cnt-1] &
+            + task_mygrid_size[i]
+    enddo
+    !north 
+    if (mpi_size > 1) then !mpi_size is even
+       do i= mpi_size-1, 1, -2
+          cnt = cnt + 1
+          task_csr_rowstarts[cnt] = task_csr_rowstarts[cnt-1] &
+               + task_mygrid_size[i]
+       enddo
     endif
+       
+    
     ! halos
     mlatd0 = mlat0 - 1
     mlatd1 = mlat1 + 1

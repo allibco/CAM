@@ -65,7 +65,7 @@ module dist_solver_module
     !allocate space for rowptr,colind,values_csr
     ! Alli: why does MAX_NNZ=12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
-    if (mpi_rank == 0) then ! make rom for dense row
+    if (mpi_rank == 0) then ! make room for dense row
        nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
     else
        nnz_est = mygrid_size*MAX_NNZ
@@ -89,7 +89,8 @@ module dist_solver_module
     ! Note: rows are contiguous on each proc (for LHS matrix
     ! and RHS) 
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
-    nnz = rowptr(nlonlat+1)-1
+    !need nnz for solver
+    nnz = rowptr(mygrid_size+1)-1
 
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(mygrid_size,coef_full(10,:,:))
@@ -114,12 +115,11 @@ module dist_solver_module
           enddo
        enddo
 
-       !FIX THIS
+ 
        ! reconstruct 2D distribution of FAC based on z
        fac_hl_2(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       !FIX THIS       
-       ! add periodic points
+       ! TO DO add periodic points AND GHOST POINTS?
         do j = 1,nmlat_h
           do isn = 1,2
             fac_hl_2(isn,j,0) = fac_hl_2(isn,j,nmlon)
@@ -129,51 +129,57 @@ module dist_solver_module
      endif !FAC
 
      ! add FAC forcing to RHS
-     !(these are both hemisphere swapped for contiguous rows already
+     !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
         rhs(i) = rhs(i)+z(i)
      enddo
 
-!superlu
+!superlu 
       
      call t_startf('linear_system->solve_superlu')
-     sol = solve_superlu(nlonlat,nnz,colptr,rowind(1:nnz),values_csc(1:nnz),rhs)
+     sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
 
 ! reconstruct 2D distribution of potential based on the solution
-     pot_2(:,:,1:nmlon) = unravel(sol)
+     pot_2(:,:,1:nmlon) = dist_unravel(sol)
 
-! periodic points
+! TO DO periodic points AND GHOST POINTS
      do j = 1,nmlat_h
         do isn = 1,2
           pot_2(isn,j,0) = pot_2(isn,j,nmlon)
           pot_2(isn,j,nmlon+1) = pot_2(isn,j,1)
         enddo
      enddo
+
+
+     !TO DO - fac_hl and pot (including ghost)
+
+
+     
   
+     !OLD CODE -
+     !call mpi_barrier (dynamo_world, ier)
 
-     call mpi_barrier (dynamo_world, ier)
+    !call t_startf('linear_system->bcast_3d')
+    !if (.not. read_fac) then
+    !   call bcast_3d(fac_hl_2,2,nmlat_h,nmlon+2,root)
 
-    call t_startf('linear_system->bcast_3d')
-    if (.not. read_fac) then
-       call bcast_3d(fac_hl_2,2,nmlat_h,nmlon+2,root)
+    !   do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
+    !    fac_hl(isn,j,i) = fac_hl_2(isn,j,i)
+    !  enddo
+    !endif
 
-       do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
-        fac_hl(isn,j,i) = fac_hl_2(isn,j,i)
-      enddo
-    endif
+    !call bcast_3d(pot_2,2,nmlat_h,nmlon+2,root)
+    !do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
+    !  pot(isn,j,i) = pot_2(isn,j,i)
+    !enddo
+    !call t_stopf('linear_system->bcast_3d')
 
-    call bcast_3d(pot_2,2,nmlat_h,nmlon+2,root)
-    do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
-      pot(isn,j,i) = pot_2(isn,j,i)
-    enddo
-    call t_stopf('linear_system->bcast_3d')
-
-    call t_stopf('dist_linear_system')
+    !call t_stopf('dist_linear_system')
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------
-  pure subroutine dist_construct_lhs(nnz_est,bij,coef_s, coef_n,rowptr,colind, values)
+  pure subroutine dist_construct_lhs(nnz_est,bij,coef_s, coef_n,my_rowptr,my_colind, my_values)
 ! construct LHS matrix (CSR format - block row format for each task)
 
 ! need to set where the two hemispheres are connected
@@ -1068,56 +1074,142 @@ module dist_solver_module
   endfunction dist_construct_rhs
 
 !-----------------------------------------------------------------------
-  function dist_solve_superlu(n,nnz,colptr,rowind,values,rhs) result(sol)
-    use iso_c_binding,only:c_int,c_long_long,c_double
+  function dist_solve_superlu(n_global, n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
 
-    integer,intent(in) :: n,nnz
-    integer(kind=c_int),dimension(n+1),intent(in) :: colptr
-    integer(kind=c_int),dimension(nnz),intent(in) :: rowind
-    real(kind=c_double),dimension(nnz),intent(in) :: values
-    real(kind=rp),dimension(n),intent(in) :: rhs
-    real(kind=rp),dimension(n) :: sol
+#include "superlu_dist_config.fh"
+
+    use superlu_mod
+    !use iso_c_binding,only:c_int,c_long_long,c_double
+    use mpi_module,only: lat_size,lon_size,dynamo_world,&
+         task_csr_rowstarts, mpi_rank
+    
+    integer,intent(in) :: n_loc,nnz_loc, n_global
+    !integer(kind=c_int),dimension(n+1),intent(in) :: colptr
+    !integer(kind=c_int),dimension(nnz),intent(in) :: rowind
+    !real(kind=c_double),dimension(nnz),intent(in) :: values
+    integer,dimension(n_loc+1),intent(in) :: colptr
+    integer,dimension(nnz_loc),intent(in) :: rowind
+    real dimension(nnz_loc),intent(in) :: values
+
+    real(kind=rp),dimension(n_loc),intent(in) :: rhs
+    real(kind=rp),dimension(n_loc) :: sol
 
 ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
-    integer :: i,iopt,info
+    integer :: i,iopt,info, first_row
     integer(kind=c_long_long) :: f_factors
+    real(kind=rp) :: berr
+    
+    integer(superlu_ptr) :: grid
+    integer(superlu_ptr) :: options
+    integer(superlu_ptr) :: ScalePermstruct
+    integer(superlu_ptr) :: LUstruct
+    integer(superlu_ptr) :: SOLVEstruct
+    integer(superlu_ptr) :: A
+    integer(superlu_ptr) :: stat
+      
+    ! Create Fortran handles for the C structures used in SuperLU_DIST
+    call f_create_gridinfo_handle(grid)
+    call f_create_options_handle(options)
+    call f_dcreate_ScalePerm_handle(ScalePermstruct)
+    call f_dcreate_LUstruct_handle(LUstruct)
+    call f_dcreate_SOLVEstruct_handle(SOLVEstruct)
+    call f_create_SuperMatrix_handle(A)
+    call f_create_SuperLUStat_handle(stat)
+      
+    ! Initialize the SuperLU_DIST process grid
+    !i'll use the same layout as the dynamo
+    nprow = lat_size
+    npcol = lon_size
+    call f_superlu_gridinit(dynamo_world, nprow, npcol, grid)
 
-    interface
-      subroutine c_fortran_dgssv(iopt,n,nnz,nrhs, &
-        values,rowind,colptr,b,ldb,f_factors,info) &
-        bind(c,name='c_fortran_dgssv_')
-        use iso_c_binding,only:c_int,c_long_long,c_double
-        integer(kind=c_int) :: iopt,n,nnz,nrhs,ldb,info
-        real(kind=c_double),dimension(nnz) :: values
-        integer(kind=c_int),dimension(nnz) :: rowind
-        integer(kind=c_int),dimension(n+1) :: colptr
-        real(kind=c_double),dimension(ldb) :: b
-        integer(kind=c_long_long) :: f_factors
-      endsubroutine c_fortran_dgssv
-    endinterface
+    ! Bail out if I do not belong in the grid. 
+    call get_GridInfo(grid, iam=mpi_rank)
+    if ( mpi_rank >= nprow * npcol ) then 
+       go to 100
+    endif
+    !if ( mpi_rank == 0 ) then 
+    !   write(*,*) ' Process grid ', nprow, ' X ', npcol
+    !endif
 
-    do concurrent (i = 1:n)
-      sol(i) = rhs(i)
+    !these are 0-based already (setup in mpi_module)
+    first_row = task_csr_rowstarts(mpi_rank) 
+
+    !colind are 1-based - change to 0-based
+    do concurrent (i = 1:nnz)
+       colind[i] = colind[i]-1
     enddo
+    !rowptr are 1-based - change to 0-based
+    do concurrent (i=1:n_loc + 1)
+       rowptr[i] = rowptr[i] - 1
+    
+    !create the distributed compressed row matrix pointed to by the F90 handle A
+    ! matrix type parameters
+    ! SLU_NR_loc  /* distributed compressed row format  */ 
+    ! SLU_D     /* double */
+    ! SLU_GE,    /* general */
 
-! first, factorize the matrix, the factors are stored in *f_factors* handle
-    iopt = 1
-    call c_fortran_dgssv(iopt, n, nnz, nrhs, &
-      values, rowind, colptr, sol, n, f_factors, info)
-    write(6,"('INFO from LU decomposition = ',i4)") info
+    call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+         values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
 
-! second, solve the system using the existing factors
-    iopt = 2
-    call c_fortran_dgssv(iopt, n, nnz, nrhs, &
-      values, rowind, colptr, sol, n, f_factors, info)
-    write(6,"('INFO from triangular solve = ',i4)") info
+    ! Setup the right hand side
+    do concurrent (i = 1:n_loc)
+       sol(i) = rhs(i)
+    enddo
+    nrhs = 1
 
-! last, free the storage allocated inside SuperLU
-    iopt = 3
-    call c_fortran_dgssv(iopt, n, nnz, nrhs, &
-      values, rowind, colptr, sol, n, f_factors, info)
+    ! Set the default input options
+    call f_set_default_options(options)
+    
+    ! Modify one or more options?
+    
+    !With both of these, you're telling SuperLU to perform factorization with
+    ! no reordering at all, keeping your matrix structure exactly as provided.
+    !This disables column reordering
+    call set_superlu_options(options,ColPerm=NATURAL)
+    ! this disables row permutations (faster and better if reusing
+    ! sparsity pattern - as long as diag entries are not small)
+    call set_superlu_options(options,RowPerm=NOROWPERM)
+    
+    ! Initialize ScalePermstruct and LUstruct
+    call get_SuperMatrix(A,nrow=n_global,ncol=n_global)
+    call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+    call f_dLUstructInit(n_global, n_global, LUstruct)
+    
+    ! Initialize the statistics variables
+    call f_PStatInit(stat)
+    
+    !TO DO: should rows and cols be 0-based?
+    
+    ! Call the linear equation solver (writes over rhs (sol))
+    call f_pdgssvx(options, A, ScalePermstruct, sol, mygrid_size, nrhs, &
+         grid, LUstruct, SOLVEstruct, berr, stat, info)
+    
+    if (info == 0 .and. mpi_rank == 0) then
+       write (*,*) 'Backward error: ', berr
+    else
+       write(*,*) 'INFO from f_pdgssvx = ', info
+    endif
+    
+    ! Deallocate the storage allocated by SuperLU_DIST
+    call f_PStatFree(stat)
+    call f_Destroy_SuperMat_Store_dist(A)
+    call f_dScalePermstructFree(ScalePermstruct)
+    call f_dDestroy_LU_SOLVE_struct(options, n_global, grid, LUstruct, SOLVEstruct)
+    
+      ! Release the SuperLU process grid
+100 call f_superlu_gridexit(grid)
 
+    ! Deallocate the C structures pointed to by the Fortran handles
+    call f_destroy_gridinfo_handle(grid)
+    call f_destroy_options_handle(options)
+    call f_destroy_ScalePerm_handle(ScalePermstruct)
+    call f_destroy_LUstruct_handle(LUstruct)
+    call f_destroy_SOLVEstruct_handle(SOLVEstruct)
+    call f_destroy_SuperMatrix_handle(A)
+    call f_destroy_SuperLUStat_handle(stat)
+
+    
   endfunction dist_solve_superlu
 
 !-----------------------------------------------------------------------
