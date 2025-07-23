@@ -21,7 +21,8 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:read_fac
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,&
-         nmlat_task,nmlon_task,task_grid_size
+         nmlat_task,nmlon_task,task_grid_size,&
+         sync_mlat_5d, sync_mlon_5d
 
 
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
@@ -46,7 +47,6 @@ module dist_solver_module
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_s
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_n
 
-    !real(kind=rp),dimension(2,nmlat_h,0:nmlon+1) :: fac_hl_2,pot_2
     real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
 
     
@@ -79,7 +79,7 @@ module dist_solver_module
     allocate(sol(mygrid_size))
 
     
-! for now, split two hemispheres (keep halo pts)
+    ! for now, split two hemispheres (keep halo pts)
     do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, ic = 1:10)
        coef_s(ic,j,i) = coef_ns(ic,1,j,i) !south
        coef_n(ic,j,i) = coef_ns(ic,2,j,i) !north (note: row = nmlat_T1-j+1) 
@@ -95,7 +95,7 @@ module dist_solver_module
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(mygrid_size,coef_full(10,:,:))
 
-! determine FAC forcing (dense)
+    ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
        z = dist_flatten(mygrid_size,fac_hl)
@@ -106,6 +106,7 @@ module dist_solver_module
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(mygrid_size, pot_hl)
 
+       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
        !TO DO (need a parallel matmult)
        ! z = matmul(lhs, pot_hl)
        z = 0
@@ -114,18 +115,15 @@ module dist_solver_module
              z(i) = z(i)+values_csr(j)*pot_hl_f(colind(j))
           enddo
        enddo
-
- 
+       !!!!!!!!!!!   
+       
        ! reconstruct 2D distribution of FAC based on z
-       fac_hl_2(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
+       fac_hl(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       ! TO DO add periodic points AND GHOST POINTS?
-        do j = 1,nmlat_h
-          do isn = 1,2
-            fac_hl_2(isn,j,0) = fac_hl_2(isn,j,nmlon)
-            fac_hl_2(isn,j,nmlon+1) = fac_hl_2(isn,j,1)
-          enddo
-        enddo
+       !get ghost/halo points
+       call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
+       call sync_mlon_3d(fac_hl, 2)
+       
      endif !FAC
 
      ! add FAC forcing to RHS
@@ -134,48 +132,22 @@ module dist_solver_module
         rhs(i) = rhs(i)+z(i)
      enddo
 
-!superlu 
-      
+     !superlu 
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
 
-! reconstruct 2D distribution of potential based on the solution
-     pot_2(:,:,1:nmlon) = dist_unravel(sol)
 
-! TO DO periodic points AND GHOST POINTS
-     do j = 1,nmlat_h
-        do isn = 1,2
-          pot_2(isn,j,0) = pot_2(isn,j,nmlon)
-          pot_2(isn,j,nmlon+1) = pot_2(isn,j,1)
-        enddo
-     enddo
+     ! reconstruct 2D distribution of potential based on the solution
+     pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
+     !get ghost/halo points
+     call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
+     call sync_mlon_3d(pot, 2)
 
 
-     !TO DO - fac_hl and pot (including ghost)
-
-
+     !pot and fac_hl are ready to return (updated grid + halo)
      
-  
-     !OLD CODE -
-     !call mpi_barrier (dynamo_world, ier)
-
-    !call t_startf('linear_system->bcast_3d')
-    !if (.not. read_fac) then
-    !   call bcast_3d(fac_hl_2,2,nmlat_h,nmlon+2,root)
-
-    !   do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
-    !    fac_hl(isn,j,i) = fac_hl_2(isn,j,i)
-    !  enddo
-    !endif
-
-    !call bcast_3d(pot_2,2,nmlat_h,nmlon+2,root)
-    !do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, isn = 1:2, j>=1 .and. j<=nmlat_h)
-    !  pot(isn,j,i) = pot_2(isn,j,i)
-    !enddo
-    !call t_stopf('linear_system->bcast_3d')
-
-    !call t_stopf('dist_linear_system')
+     call t_stopf('dist_linear_system')
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------

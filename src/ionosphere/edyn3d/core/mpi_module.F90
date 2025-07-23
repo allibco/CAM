@@ -590,7 +590,155 @@ endsubroutine partner_exchange_hemisphere_vec
 #endif
 
   endsubroutine sync_mlon_5d
+!-----------------------------------------------------------------------
+  subroutine sync_mlat_3d(var, n)
+! longitude halo points are not included
 
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    integer, intent(in) ::  n
+    real(kind=rp), dimension(n, mlatd0:mlatd1, mlon0:mlon1), intent(inout) :: var
+
+#ifdef PARALLEL
+    integer :: below, above, cnt, i, nc, ierror
+    integer, dimension(4) :: request
+    real(kind=rp), dimension(n, maxmlon) :: &
+      send_to_below, send_to_above, recv_from_below, recv_from_above
+
+! find the rank of adjacent processes
+    if (lat_rank == 0) then
+      below = MPI_PROC_NULL
+    else
+      below = mpi_rank - lon_size
+    endif
+
+    if (lat_rank == lat_size-1) then
+      above = MPI_PROC_NULL
+    else
+      above = mpi_rank + lon_size
+    endif
+
+    cnt = n * maxmlon
+
+! load to work array
+    do concurrent (i = 1:mlon1-mlon0+1, nc = 1:n)
+      send_to_below(nc, i) = var(nc, mlat0, i+mlon0-1)
+      send_to_above(nc, i) = var(nc, mlat1, i+mlon0-1)
+    enddo
+
+! sync in latitude
+    call MPI_Isend(send_to_below, cnt, mpi_rp, &
+      below, 0, dynamo_world, request(1), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    call MPI_Isend(send_to_above, cnt, mpi_rp, &
+      above, 1, dynamo_world, request(2), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    call MPI_Irecv(recv_from_above, cnt, mpi_rp, &
+      above, 0, dynamo_world, request(3), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+
+    call MPI_Irecv(recv_from_below, cnt, mpi_rp, &
+      below, 1, dynamo_world, request(4), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+
+! wait for sync to complete
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+
+! unpack to model fields
+    if (lat_rank /= 0) then
+      do concurrent (i = mlon0:mlon1, nc = 1:n)
+        var(nc, mlatd0, i) = recv_from_below(nc, i-mlon0+1)
+      enddo
+    endif
+
+    if (lat_rank /= lat_size-1) then
+      do concurrent (i = mlon0:mlon1, nc = 1:n)
+        var(nc, mlatd1, i) = recv_from_above(nc, i-mlon0+1)
+      enddo
+    endif
+#endif
+
+  endsubroutine sync_mlat_3d
+  !-----------------------------------------------------------------------
+
+  subroutine sync_mlon_3d(var, n)
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    integer, intent(in) ::  n
+    real(kind=rp), dimension( n, mlatd0:mlatd1, mlond0:mlond1), intent(inout) :: var
+
+    integer :: j, nc
+
+#ifdef PARALLEL
+    integer :: left, right, cnt, ierror
+    integer, dimension(4) :: request
+    real(kind=rp), dimension( n, maxmlat+4) :: &
+      send_to_left, send_to_right, recv_from_left, recv_from_right
+
+! find the rank of adjacent processes
+    if (lon_rank == 0) then
+      left = mpi_rank - 1 + lon_size
+    else
+      left = mpi_rank - 1
+    endif
+
+    if (lon_rank == lon_size-1) then
+      right = mpi_rank + 1 - lon_size
+    else
+      right = mpi_rank + 1
+    endif
+
+    cnt = n * (maxmlat + 4)
+
+! load to work array
+    do concurrent (j = 1:mlatd1-mlatd0+1, nc = 1:n)
+      send_to_left(lc, mc, nc, j) = var(nc, j+mlatd0-1, mlon0)
+      send_to_right(lc, mc, nc, j) = var(nc, j+mlatd0-1, mlon1)
+    enddo
+
+! sync in longitude
+    call MPI_Isend(send_to_left, cnt, mpi_rp, &
+      left, 0, dynamo_world, request(1), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    call MPI_Isend(send_to_right, cnt, mpi_rp, &
+      right, 1, dynamo_world, request(2), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+
+    call MPI_Irecv(recv_from_right, cnt, mpi_rp, &
+      right, 0, dynamo_world, request(3), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+
+    call MPI_Irecv(recv_from_left, cnt, mpi_rp, &
+      left, 1, dynamo_world, request(4), ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+
+! wait for sync to complete
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
+    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+
+! unpack to model fields
+    do concurrent (j = mlatd0:mlatd1, nc = 1:n)
+      var(nc, j, mlond0) = recv_from_left(nc, j-mlatd0+1)
+      var(nc, j, mlond1) = recv_from_right(nc, j-mlatd0+1)
+    enddo
+#else
+    do concurrent (j = mlatd0:mlatd1, nc = 1:n)
+      var(nc, j, mlond0) = var(nc, j, mlon1)
+      var(nc, j, mlond1) = var(nc, j, mlon0)
+    enddo
+#endif
+
+  endsubroutine sync_mlon_3d
+!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 
 function all_gather_int(intin) result(intarrayout)
