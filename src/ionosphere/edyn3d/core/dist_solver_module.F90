@@ -110,11 +110,13 @@ module dist_solver_module
        !TO DO (need a parallel matmult)
        ! z = matmul(lhs, pot_hl)
        z = 0
-       do i = 1,nlonlat
-          do j = rowptr(i),rowptr(i+1)-1
-             z(i) = z(i)+values_csr(j)*pot_hl_f(colind(j))
-          enddo
-       enddo
+       !do i = 1,nlonlat
+       !   do j = rowptr(i),rowptr(i+1)-1
+       !      z(i) = z(i)+values_csr(j)*pot_hl_f(colind(j))
+       !   enddo
+       !enddo
+       !!!!!!!!!!!! TEMP for testing everything else
+                    
        !!!!!!!!!!!   
        
        ! reconstruct 2D distribution of FAC based on z
