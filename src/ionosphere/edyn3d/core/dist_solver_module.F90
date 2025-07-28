@@ -18,13 +18,13 @@ module dist_solver_module
 ! if potential is read in, pot_hl is used, fac_hl is output
 
     
-    use params_module,only:nmlat_h,nmlat_T1,nmlon
-    use cons_module,only:read_fac
-    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank,&
-         nmlat_task,nmlon_task,task_grid_size,&
-         sync_mlat_5d, sync_mlon_5d
-
-
+    use params_module, only:nmlat_h,nmlat_T1,nmlon
+    use cons_module, only:read_fac
+    use mpi_module, only: mpi_rank,dynamo_world,lat_rank,lon_rank,&
+                          nmlat_task,nmlon_task,mygrid_size,&
+                          sync_mlat_5d, sync_mlon_5d,& 
+                          sync_mlat_3d, sync_mlon_3d
+    
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
 ! nmlat_h => # mag latitudes in one hemisphere
 ! nmlon => num of mag longitudes
@@ -159,17 +159,16 @@ module dist_solver_module
 ! need to set where the two hemispheres are connected
 ! This is not in the 9-point stencil but needs to be done manually
 
-!mygrid_size is the total number of rid point (N & S hemi)
     
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
-         nmlat_task,nmlon_task, mlatd0, mlatd1, mlat0, mlat1, &
-         mlond0,mlond1, mlon0, mlon1, &
-         lat_size, lon_size, task_lat_offset, ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s, partner_hgridsize
+         nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
+         mlond0,mlond1,mlon0,mlon1, &
+         lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
+         ij_start_s,ij_stop_s,partner_hgridsize
     
-    integer,intent(in) :: mygrid_size
+    integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
     real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_s
     real(kind=rp),dimension(9,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_n
@@ -631,7 +630,7 @@ module dist_solver_module
     endif
     
     ! between latm_JT and equator (nmlat_h) REGION (symmetric solution?)
-    if (mlat0 > latm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > latm_JT .and. mlat0 /= nmlat_h) then
+    if ((mlat0 > latm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > latm_JT .and. mlat0 /= nmlat_h)) then
 
         !loop through the longitudes in my grid
        do i = mlon0, mlon1
@@ -877,11 +876,11 @@ module dist_solver_module
           call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
                partner_rowptr, partner_values, partner_cols)
           !my south (goes first)
-          do concurrent (i = 2,row_counter_s + 1)
+          do concurrent (i = 2:row_counter_s + 1)
              my_rowptr(i) = rowptr_s(i)
           enddo
           nnz_s = my_rowptr(row_counter_s + 1)
-          do concurrent (i = 1,nnz_s)
+          do concurrent (i = 1:nnz_s)
              my_colind(i) = colind_s(i)
              my_values(i) = values_s(i)
           enddo
@@ -894,7 +893,7 @@ module dist_solver_module
           !north proc's data goes second
           !CHECK mygrid_size = row_counter_s + partner_hgridsize
           nnz_n = my_rowptr(mygrid_size + 1)
-          do concurrent (i = 1, nnz_n)
+          do concurrent (i = 1:nnz_n)
              my_colind(nnz_s + i) = partner_cols(i)
              my_values(nnz_s + i) = partner_values(i)
           enddo
@@ -904,11 +903,11 @@ module dist_solver_module
                partner_rowptr, partner_values, partner_cols)
           
           !partner has south - partner's data goes first
-          do concurrent (i = 2, partner_hgridsize + 1)
+          do concurrent (i = 2:partner_hgridsize + 1)
              my_rowptr(i) = partner_rowptr(i)
           enddo
           nnz_s = my_rowptr(partner_hgridsize + 1)
-          do concurrent (i = 1,nnz_s)
+          do concurrent (i = 1:nnz_s)
              my_colind(i) = partner_cols(i)
              my_values(i) = partner_values(i)
           enddo
@@ -919,7 +918,7 @@ module dist_solver_module
              my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize+1)+cnt
           enddo
           nnz_n = my_rowptr(mygrid_size + 1)
-          do concurrent (i = 1, nnz_n)
+          do concurrent (i = 1:nnz_n)
              my_colind(nnz_s+ i) = colind_n(i)
              my_values(nnz_s+i) = values_n(i)
           enddo
@@ -927,11 +926,11 @@ module dist_solver_module
        endif
     else !one task
        !south 
-       do concurrent (i = 1,row_counter_s + 1)
+       do concurrent (i = 1:row_counter_s + 1)
           my_rowptr(i) = rowptr_s(i)
        enddo
        nnz_s = my_rowptr(row_counter_s + 1)
-       do concurrent i=1,nnz_s
+       do concurrent (i=1:nnz_s)
           my_colind(i) = colind_s(i)
           my_values(i) = values_s(i)
        enddo
@@ -941,7 +940,7 @@ module dist_solver_module
           my_rowptr(row_counter_s +1 + i) = my_rowptr(row_counter_s + i) + cnt
        enddo
        nnz_n = my_rowptr(mygrid_size + 1)
-       do concurrent (i = 1, nnz_n)
+       do concurrent (i = 1:nnz_n)
           my_colind(nnz_s+ i) = colind_n(i)
           my_values(nnz_s+i) = values_n(i)
        enddo
