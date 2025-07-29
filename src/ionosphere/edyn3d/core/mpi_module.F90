@@ -37,7 +37,7 @@ module mpi_module
     integer :: ierror
     integer :: color, npes_host
 
-    integer ::
+
     
     if (rp == real32) then
       mpi_rp = MPI_REAL4
@@ -796,7 +796,7 @@ endfunction all_gather_int
     ! gather data to 0 from proc_row 0
     if (mpi_rank == 0 .and. lon_size > 1 ) then ! receive from other procs in row
 
-       do i = 1:lon_size -1
+       do i = 1,lon_size -1
           rs = mlon0_task(i)
           re = mlon1_task(i)
           cnt = re-rs+1
