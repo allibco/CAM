@@ -51,7 +51,7 @@ module dist_solver_module
 
     
     integer :: ier
-    integer :: mygrid_size
+
     
     call t_startf('dist_linear_system')
 
@@ -166,7 +166,8 @@ module dist_solver_module
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
-         ij_start_s,ij_stop_s,partner_hgridsize
+         ij_start_s,ij_stop_s,partner_hgridsize,&
+         calc_grid_ij, partner_exchange_hemisphere_mat
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -956,7 +957,8 @@ module dist_solver_module
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
-         ih_start_s, ij_stop_s, ij_start_n, ij_stop_n
+         ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
+         cal_grid_ij, partner_exchange_hemisphere_vec
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
@@ -1368,97 +1370,7 @@ module dist_solver_module
   endfunction dist_unravel
   
    
-  !-----------------------------------------------------------------------
-
-  ! find the coef matrix row number for the grid location  i,j
-  ! this works for north and south
-  ! j can be in north or south
-  ! j should be in north or south hemisphere
-  ! my_latrank is the position of the *calling* processor
-  ! we do not calc my_latrank  from j, because this is how we determine
-  !if j lives on the calling processor
-  pure function calc_grid_ij(i,j,my_latrank) return(ij)
-    
-    use params_module,only:nmlon,nmlat_T1, nmlat_h
-    use mpi_module, only:nmlat_task,task_lat_offset,lat_size,mlat0,mlat1
-
-
-    integer, intent(in) :: i,j,my_latrank
-    integer, intent(out):: ij
-    
-    integer:: m, my_numlat, jS
-
-
-    if (mpi_size == 1) then
-      ij = (i-1)*nmlat_T1+j
-
-   else
-
-       if (j <= nmlat_h) then !south hemi or equator
-
-          !if j is in ghost layer for the calling proc, then adjust my_latrank
-          if (j == mlat1 + 1) then
-             my_latrank  = my_latrank + 1
-          elseif (j == mlat0 -1) then
-             my_latrank  = my_latrank - 1
-          endif
-          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
-             write(6,"Error in calc_grid_ij")
-          endif
-          
-          !num of latitude points in proc parition    
-          my_numlat = nmlat_task(my_latrank)
-       
-          !adjust if i is on edge of global domain
-          if (i == 0) then
-             i = nmlon
-          elseif (i == nmlon+1) then
-             i = 1
-          endif
-          
-          m = task_lat_offset(my_latrank)
  
-       else !north hemi
-
-          !need to know if j is in the ghost point for the
-          !calling proc (and adjust my_latrank )
-          
-          jS = nmlat_T1 -j +1
-          if (jS == mlat1 + 1) then
-             my_latrank  = my_latrank + 1
-          elseif (jS == mlat0 -1) then
-             my_latrank  = my_latrank - 1
-          endif
-          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
-             write(6,"Error in calc_grid_ij")
-          endif
-          
-          !num of latitude points in proc parition    
-          my_numlat = nmlat_task(my_latrank)
-          
-          !adjust if i is on edge of global domain
-          if (i == 0) then
-             i = nmlon
-          elseif (i == nmlon+1) then
-             i = 1
-          endif
-       
-          !if i am in the task row that includes equator, then
-          ! subtract 1 from num_lat (becuz don't count equator
-          ! twice)
-          if (my_latrank == lat_size - 1 ) then
-             my_numlat = my_numlat - 1
-          endif
-       
-          !m is different in the in the north hemisphere
-          m = nmlat_T1 - task_lat_offset(my_latrank) - my_numlat
-       endif
-    
-       ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
-
-    endif !end morethan one proc
-    
-  endfunction calc_grid_ij
   !-----------------------------------------------------------------------
 
   subroutine insert_sort(array_i, array_r, len)
