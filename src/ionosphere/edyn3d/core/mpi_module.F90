@@ -302,7 +302,7 @@ function partner_exchange_int(intin) result(intout)
 
     !post send
     call MPI_Isend(intin, 1, MPI_INTEGER, mpi_partner, tag, &
-         dynamo_world, send_request, ierror)
+         dynamo_world, send_request, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     ! Wait for send to complete
@@ -1301,7 +1301,7 @@ endfunction all_gather_int
              latrank  = latrank - 1
           endif
           if (latrank < 0 .OR. latrank >= lat_size) then
-             write(6,"Error in calc_grid_ij")
+             write(6,*) "Error in calc_grid_ij"
           endif
           
           !num of latitude points in proc parition    
