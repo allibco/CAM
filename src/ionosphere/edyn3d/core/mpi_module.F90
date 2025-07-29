@@ -97,10 +97,14 @@ module mpi_module
   subroutine setup_topology(nmlat_in, nmlon_in)
 ! setup MPI decompositions in geo and mag coordinates and the connectivity matrix
 
+    use params_module, only:nmlat_h,nmlat_T1,nmlon
+    
     integer, intent(in) :: nmlat_in, nmlon_in
 
-    integer :: i, j, rnk, rnki, rnkj, mlat0_n, mlat1_n
-
+    integer :: i, j, rnk, rnki, rnkj, mlat0_n, mlat1_n, &
+               mysize_n, my_size_s, cnt
+    integer, dimension(:), allocatable :: task_my_gridsize
+    
     allocate(nmlat_task(0:lat_size-1))
     allocate(nmlon_task(0:lon_size-1))
 
@@ -199,7 +203,7 @@ module mpi_module
     !adjust j for n hemisphere
     mlat0_n = nmlat_T1 - mlat0 + 1
     mlat1_n =  nmlat_T1 - mlat1 + 1
-    if (mlat1_n == nmlat-h) then !equator
+    if (mlat1_n == nmlat_h) then !equator
        mlat1_n  = mlat1_n + 1
     endif
     !now mlat0_n will be bigger than mlat1_n in north hemisphere
@@ -214,11 +218,11 @@ module mpi_module
     !get partner sizes and then my grid size for block csr matrix
     !for each partner pair, even owns s hemi and odd owns north hemi
     if (mod(mpi_rank,2) == 0) then !even, own south, send north
-       partner_hgridsize = partner_exchange(mysize_n)
+       partner_hgridsize = partner_exchange_int(mysize_n)
        my_hgridsize = mysize_s
        mygrid_size =  mysize_s + partner_hgridsize
     else !odd, own north, send south
-       partner_hgridsize = partner_exchange(mysize_s)
+       partner_hgridsize = partner_exchange_int(mysize_s)
        my_hgridsize = mysize_n
        mygrid_size =  mysize_n + partner_hgridsize
     endif
@@ -283,8 +287,8 @@ function partner_exchange_int(intin) result(intout)
     use MPI
 #endif
 
-    integer, intent(in) :: intin
-    integer, intent(out) :: intout
+    integer,  intent(in) :: intin
+    integer :: intout
    
 #ifdef PARALLEL
     integer :: ierror, tag = 88
@@ -1245,14 +1249,11 @@ endfunction all_gather_int
   pure function calc_grid_ij(i,j,my_latrank) return(ij)
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
-    use mpi_module, only:nmlat_task,task_lat_offset,lat_size,mlat0,mlat1
-
 
     integer, intent(in) :: i,j,my_latrank
-    integer, intent(out):: ij
+    integer:: ij
     
     integer:: m, my_numlat, jS
-
 
     if (mpi_size == 1) then
       ij = (i-1)*nmlat_T1+j
