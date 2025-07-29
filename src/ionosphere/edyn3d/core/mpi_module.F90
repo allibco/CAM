@@ -297,7 +297,7 @@ function partner_exchange_int(intin) result(intout)
 
     !post receive
     call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
-         dynamo_world, recv_request, ierror)
+         dynamo_world, recv_request, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     !post send
@@ -1247,16 +1247,18 @@ endfunction all_gather_int
   ! my_latrank is the position of the *calling* processor
   ! we do not calc my_latrank  from j, because this is how we determine
   !if j lives on the calling processor
-  pure function calc_grid_ij(i,j,my_latrank) result(ij)
+  function calc_grid_ij(i_in,j_in,my_latrank) result(ij)
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
 
-    integer, intent(in) :: i,j,my_latrank
+    integer, intent(in) :: i_in,j_in,my_latrank
     integer:: ij
     
-    integer:: m, my_numlat, jS, latrank
+    integer:: m, my_numlat, jS, latrank, i, j
 
     latrank = my_latrank
+    i = i_in
+    j = j_in
     
     if (mpi_size == 1) then
       ij = (i-1)*nmlat_T1+j
