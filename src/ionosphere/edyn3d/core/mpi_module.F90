@@ -429,11 +429,11 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
        
     ! Wait for my send to complete
     call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
     !Wait for my recv
     call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
     
 #else
 !serial
