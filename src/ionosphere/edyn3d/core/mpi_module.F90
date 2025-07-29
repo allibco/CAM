@@ -102,8 +102,8 @@ module mpi_module
     integer, intent(in) :: nmlat_in, nmlon_in
 
     integer :: i, j, rnk, rnki, rnkj, mlat0_n, mlat1_n, &
-               mysize_n, my_size_s, cnt
-    integer, dimension(:), allocatable :: task_my_gridsize
+               mysize_n, mysize_s, cnt
+    integer, dimension(:), allocatable :: task_mygrid_size
     
     allocate(nmlat_task(0:lat_size-1))
     allocate(nmlon_task(0:lon_size-1))
@@ -245,15 +245,15 @@ module mpi_module
     cnt = 0
     do i=0, mpi_size-1, 2
        cnt = cnt + 1
-       task_csr_rowstarts[cnt] = task_csr_rowstarts[cnt-1] &
-            + task_mygrid_size[i]
+       task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
+            + task_mygrid_size(i)
     enddo
     !north 
     if (mpi_size > 1) then !mpi_size is even
        do i= mpi_size-1, 1, -2
           cnt = cnt + 1
-          task_csr_rowstarts[cnt] = task_csr_rowstarts[cnt-1] &
-               + task_mygrid_size[i]
+          task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
+               + task_mygrid_size(i)
        enddo
     endif
        
@@ -291,19 +291,19 @@ function partner_exchange_int(intin) result(intout)
     integer :: intout
    
 #ifdef PARALLEL
-    integer :: ierror, tag = 88
+    integer :: ierr, tag = 88
     integer :: send_request, recv_request
     integer :: status(MPI_STATUS_SIZE)
 
     !post receive
     call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
          dynamo_world, recv_request, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     !post send
-    call MPI_Isend(intin, cnt, MPI_INTEGER, mpi_partner, tag, &
+    call MPI_Isend(intin, 1, MPI_INTEGER, mpi_partner, tag, &
          dynamo_world, send_request, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     ! Wait for send to complete
     call MPI_Wait(send_request, status, ierr)
@@ -376,11 +376,11 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
        
     ! Wait for all sends to complete
     call MPI_Waitall(3, send_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
     !Wait for all recvs
     call MPI_Waitall(3, recv_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
     
 #else
@@ -703,8 +703,8 @@ endsubroutine partner_exchange_hemisphere_vec
 
 ! load to work array
     do concurrent (j = 1:mlatd1-mlatd0+1, nc = 1:n)
-      send_to_left(lc, mc, nc, j) = var(nc, j+mlatd0-1, mlon0)
-      send_to_right(lc, mc, nc, j) = var(nc, j+mlatd0-1, mlon1)
+      send_to_left(nc, j) = var(nc, j+mlatd0-1, mlon0)
+      send_to_right(nc, j) = var(nc, j+mlatd0-1, mlon1)
     enddo
 
 ! sync in longitude
@@ -759,7 +759,7 @@ function all_gather_int(intin) result(intarrayout)
     integer :: ierror, cnt
 
     cnt = 1
-    call MPI_Allgather(sendbuf, cnt, MPI_INTEGER, &
+    call MPI_Allgather(intin, cnt, MPI_INTEGER, &
         intarrayout, cnt, MPI_INTEGER, dynamo_world, ierror)
     if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
 
@@ -778,7 +778,8 @@ endfunction all_gather_int
     ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
     ! this could be genearlized to have any root proc and any proc row (Or column)
 #ifdef PARALLEL
-    use MP
+
+    use MPI
 #endif
 
     real(kind=rp), dimension(mlon0:mlon1), intent(in) :: varin
@@ -787,7 +788,7 @@ endfunction all_gather_int
     integer :: i
 
 #ifdef PARALLEL
-    integer :: error, cnt, myrequest, tag, rs, re
+    integer :: error, cnt, myrequest, tag, rs, re, is
     integer, dimension(1:lon_size-1) :: requests  
     real(kind=rp), dimension(maxmlon) :: sendbuf
     real(kind=rp), dimension(nmlon) :: recvbuf
@@ -829,7 +830,7 @@ endfunction all_gather_int
           enddo
        endif
        
-    elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root
+    elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root (0)
 
        cnt = mlon1-mlon0+1
        do concurrent (i = 1:cnt)
@@ -837,7 +838,7 @@ endfunction all_gather_int
        enddo
        
        call MPI_Isend(sendbuf, cnt, mpi_rp, &
-            root, tag, dynamo_world, &
+            0, tag, dynamo_world, &
             myrequest, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
 
@@ -1246,15 +1247,17 @@ endfunction all_gather_int
   ! my_latrank is the position of the *calling* processor
   ! we do not calc my_latrank  from j, because this is how we determine
   !if j lives on the calling processor
-  pure function calc_grid_ij(i,j,my_latrank) return(ij)
+  pure function calc_grid_ij(i,j,my_latrank) result(ij)
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
 
     integer, intent(in) :: i,j,my_latrank
     integer:: ij
     
-    integer:: m, my_numlat, jS
+    integer:: m, my_numlat, jS, latrank
 
+    latrank = my_latrank
+    
     if (mpi_size == 1) then
       ij = (i-1)*nmlat_T1+j
 
@@ -1262,18 +1265,18 @@ endfunction all_gather_int
 
        if (j <= nmlat_h) then !south hemi or equator
 
-          !if j is in ghost layer for the calling proc, then adjust my_latrank
+          !if j is in ghost layer for the calling proc, then adjust latrank
           if (j == mlat1 + 1) then
-             my_latrank  = my_latrank + 1
+             latrank  = latrank + 1
           elseif (j == mlat0 -1) then
-             my_latrank  = my_latrank - 1
+             latrank  = latrank - 1
           endif
-          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
-             write(6,"Error in calc_grid_ij")
+          if (latrank < 0 .OR. latrank >= lat_size) then
+             write(6,*) "Error in calc_grid_ij"
           endif
           
           !num of latitude points in proc parition    
-          my_numlat = nmlat_task(my_latrank)
+          my_numlat = nmlat_task(latrank)
        
           !adjust if i is on edge of global domain
           if (i == 0) then
@@ -1282,25 +1285,25 @@ endfunction all_gather_int
              i = 1
           endif
           
-          m = task_lat_offset(my_latrank)
+          m = task_lat_offset(latrank)
  
        else !north hemi
 
           !need to know if j is in the ghost point for the
-          !calling proc (and adjust my_latrank )
+          !calling proc (and adjust latrank )
           
           jS = nmlat_T1 -j +1
           if (jS == mlat1 + 1) then
-             my_latrank  = my_latrank + 1
+             latrank  = latrank + 1
           elseif (jS == mlat0 -1) then
-             my_latrank  = my_latrank - 1
+             latrank  = latrank - 1
           endif
-          if (my_latrank < 0 .OR. my_latrank >= lat_size) then
+          if (latrank < 0 .OR. latrank >= lat_size) then
              write(6,"Error in calc_grid_ij")
           endif
           
           !num of latitude points in proc parition    
-          my_numlat = nmlat_task(my_latrank)
+          my_numlat = nmlat_task(latrank)
           
           !adjust if i is on edge of global domain
           if (i == 0) then
@@ -1312,12 +1315,12 @@ endfunction all_gather_int
           !if i am in the task row that includes equator, then
           ! subtract 1 from num_lat (becuz don't count equator
           ! twice)
-          if (my_latrank == lat_size - 1 ) then
+          if (latrank == lat_size - 1 ) then
              my_numlat = my_numlat - 1
           endif
        
           !m is different in the in the north hemisphere
-          m = nmlat_T1 - task_lat_offset(my_latrank) - my_numlat
+          m = nmlat_T1 - task_lat_offset(latrank) - my_numlat
        endif
     
        ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
