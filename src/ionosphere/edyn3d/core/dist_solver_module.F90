@@ -162,13 +162,13 @@ module dist_solver_module
     
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
-    use mpi_module,only:mpi_rank,dynamo_world,lat_rank,lon_rank, &
+    use mpi_module,only:mpi_rank,mpi_size,dynamo_world,lat_rank,lon_rank, &
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
          ij_start_s,ij_stop_s,partner_hgridsize,my_hgridsize, &
          calc_grid_ij, partner_exchange_hemisphere_mat, &
-         gather_lon_1d
+         gather_lon_1d, mygrid_size
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -841,8 +841,8 @@ module dist_solver_module
        cnt = rowcnt_s(1)
        do k = 1, cnt
           nnz_s = nnz_s + 1
-          colind_s(nnz_s) = jcol1(k,ij)
-          values_s(nnz_s) = nzval1(k,ij)
+          colind_s(nnz_s) = jcol1(k)
+          values_s(nnz_s) = nzval1(k)
        enddo
        row_counter_s = row_counter_s + 1
        rowptr_s(row_counter_s) = nnz_s + 1
@@ -900,7 +900,7 @@ module dist_solver_module
           !partner has north
           do i = 1,  partner_hgridsize
              cnt = partner_rowptr(i+1) - partner_rowptr(i)
-             my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter + i) + cnt
+             my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter_s + i) + cnt
           enddo
           !north proc's data goes second
           !CHECK mygrid_size = row_counter_s + partner_hgridsize
@@ -911,7 +911,7 @@ module dist_solver_module
           enddo
           
        else !odd, own north, **send south**
-          call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, my_colind_s, &
+          call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, colind_s, &
                partner_rowptr, partner_values, partner_cols)
           
           !partner has south - partner's data goes first
@@ -967,9 +967,10 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
-         lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
+         mlon0, mlon1, lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
-         calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size
+         calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size, &
+         gather_lon_1d
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
