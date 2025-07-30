@@ -98,13 +98,13 @@ module dist_solver_module
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
-       z = dist_flatten(mygrid_size,fac_hl)
+       z = dist_flatten(fac_hl)
 
     else ! input is pot_hl, fac_hl is to be calculated (output)
 
        ! A. Maute 2023/11/21: put the high latitude potential in X
        ! and then use LHS to calculate the RHS FAC
-       pot_hl_f = dist_flatten(mygrid_size, pot_hl)
+       pot_hl_f = dist_flatten(pot_hl)
 
        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
        !TO DO (need a parallel matmult)
@@ -120,7 +120,7 @@ module dist_solver_module
        !!!!!!!!!!!   
        
        ! reconstruct 2D distribution of FAC based on z
-       fac_hl(mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
+       fac_hl(2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
        !get ghost/halo points
        call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
@@ -1061,7 +1061,7 @@ module dist_solver_module
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer,dimension(n_loc+1),intent(in) :: rowptr
     integer,dimension(nnz_loc),intent(in) :: colind
-    real,dimension(nnz_loc),intent(in) :: values
+    real(kind=rp),dimension(nnz_loc),intent(in) :: values
 
     real(kind=rp),dimension(n_loc),intent(in) :: rhs
     real(kind=rp),dimension(n_loc) :: sol
@@ -1184,7 +1184,7 @@ module dist_solver_module
   endfunction dist_solve_superlu
 
 !-----------------------------------------------------------------------
-  pure function dist_flatten(mygrid_size_in, fin) result(fout)
+  pure function dist_flatten(fin) result(fout)
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
 ! northern/southern hemispheres are either separate or averaged
 ! based on their latitude ranges (high-lat, transition, low-lat, equator)
@@ -1194,7 +1194,7 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s, partner_hgridsize
+         ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size
 
     integer, intent(in) :: mygrid_size_in
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
@@ -1283,14 +1283,15 @@ module dist_solver_module
   endfunction dist_flatten
 
 !-----------------------------------------------------------------------
-  pure function dist_unravel(mygrid_size, fin) result(fout)
+  pure function dist_unravel(fin) result(fout)
 ! reorder 1D vector (RHS) into 2D fields (lat-lon)
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s, lat_rank, partner_hgridsize
+         ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
+         mygrid_size
 
     integer, intent(in) :: mygrid_size
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
