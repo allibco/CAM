@@ -34,7 +34,7 @@ module mpi_module
     integer, intent(in) :: npes_edyn3d
 
 #ifdef PARALLEL
-    integer :: ierror
+    integer :: ierr
     integer :: color, npes_host
 
 
@@ -47,16 +47,16 @@ module mpi_module
       stop 'unknown real precision'
     endif
 
-    call mpi_comm_size(mpi_comm_host, npes_host, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_size', ierror)
+    call mpi_comm_size(mpi_comm_host, npes_host, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Comm_size', ierr)
 
     mpi_size = min(npes_host,npes_edyn3d)
 
-    call MPI_Comm_rank(mpi_comm_host, mpi_rank, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_rank', ierror)
+    call MPI_Comm_rank(mpi_comm_host, mpi_rank, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Comm_rank', ierr)
 
     color = mpi_rank/mpi_size
-    call mpi_comm_split(mpi_comm_host, color, mpi_rank, dynamo_world, ierror)
+    call mpi_comm_split(mpi_comm_host, color, mpi_rank, dynamo_world, ierr)
 
 #else
     mpi_rp = rp
@@ -271,10 +271,10 @@ module mpi_module
 #ifdef PARALLEL
     use MPI
 
-    integer :: ierror
+    integer :: ierr
 
-    call MPI_Finalize(ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Finalize', ierror)
+    call MPI_Finalize(ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Finalize', ierr)
 #endif
 
   endsubroutine finalize
@@ -458,7 +458,7 @@ endsubroutine partner_exchange_hemisphere_vec
     real(kind=rp), dimension(l, m, n, mlatd0:mlatd1, mlon0:mlon1), intent(inout) :: var
 
 #ifdef PARALLEL
-    integer :: below, above, cnt, i, lc, mc, nc, ierror
+    integer :: below, above, cnt, i, lc, mc, nc, ierr
     integer, dimension(4) :: request
     real(kind=rp), dimension(l, m, n, maxmlon) :: &
       send_to_below, send_to_above, recv_from_below, recv_from_above
@@ -486,24 +486,24 @@ endsubroutine partner_exchange_hemisphere_vec
 
 ! sync in latitude
     call MPI_Isend(send_to_below, cnt, mpi_rp, &
-      below, 0, dynamo_world, request(1), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      below, 0, dynamo_world, request(1), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Isend(send_to_above, cnt, mpi_rp, &
-      above, 1, dynamo_world, request(2), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      above, 1, dynamo_world, request(2), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Irecv(recv_from_above, cnt, mpi_rp, &
-      above, 0, dynamo_world, request(3), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      above, 0, dynamo_world, request(3), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     call MPI_Irecv(recv_from_below, cnt, mpi_rp, &
-      below, 1, dynamo_world, request(4), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      below, 1, dynamo_world, request(4), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
 ! wait for sync to complete
-    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 ! unpack to model fields
     if (lat_rank /= 0) then
@@ -533,7 +533,7 @@ endsubroutine partner_exchange_hemisphere_vec
     integer :: j, lc, mc, nc
 
 #ifdef PARALLEL
-    integer :: left, right, cnt, ierror
+    integer :: left, right, cnt, ierr
     integer, dimension(4) :: request
     real(kind=rp), dimension(l, m, n, maxmlat+4) :: &
       send_to_left, send_to_right, recv_from_left, recv_from_right
@@ -561,24 +561,24 @@ endsubroutine partner_exchange_hemisphere_vec
 
 ! sync in longitude
     call MPI_Isend(send_to_left, cnt, mpi_rp, &
-      left, 0, dynamo_world, request(1), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      left, 0, dynamo_world, request(1), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Isend(send_to_right, cnt, mpi_rp, &
-      right, 1, dynamo_world, request(2), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      right, 1, dynamo_world, request(2), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Irecv(recv_from_right, cnt, mpi_rp, &
-      right, 0, dynamo_world, request(3), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      right, 0, dynamo_world, request(3), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     call MPI_Irecv(recv_from_left, cnt, mpi_rp, &
-      left, 1, dynamo_world, request(4), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      left, 1, dynamo_world, request(4), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
 ! wait for sync to complete
-    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 ! unpack to model fields
     do concurrent (j = mlatd0:mlatd1, nc = 1:n, mc = 1:m, lc = 1:l)
@@ -605,7 +605,7 @@ endsubroutine partner_exchange_hemisphere_vec
     real(kind=rp), dimension(n, mlatd0:mlatd1, mlon0:mlon1), intent(inout) :: var
 
 #ifdef PARALLEL
-    integer :: below, above, cnt, i, nc, ierror
+    integer :: below, above, cnt, i, nc, ierr
     integer, dimension(4) :: request
     real(kind=rp), dimension(n, maxmlon) :: &
       send_to_below, send_to_above, recv_from_below, recv_from_above
@@ -633,24 +633,24 @@ endsubroutine partner_exchange_hemisphere_vec
 
 ! sync in latitude
     call MPI_Isend(send_to_below, cnt, mpi_rp, &
-      below, 0, dynamo_world, request(1), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      below, 0, dynamo_world, request(1), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Isend(send_to_above, cnt, mpi_rp, &
-      above, 1, dynamo_world, request(2), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      above, 1, dynamo_world, request(2), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Irecv(recv_from_above, cnt, mpi_rp, &
-      above, 0, dynamo_world, request(3), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      above, 0, dynamo_world, request(3), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     call MPI_Irecv(recv_from_below, cnt, mpi_rp, &
-      below, 1, dynamo_world, request(4), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      below, 1, dynamo_world, request(4), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
 ! wait for sync to complete
-    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 ! unpack to model fields
     if (lat_rank /= 0) then
@@ -681,7 +681,7 @@ endsubroutine partner_exchange_hemisphere_vec
     integer :: j, nc
 
 #ifdef PARALLEL
-    integer :: left, right, cnt, ierror
+    integer :: left, right, cnt, ierr
     integer, dimension(4) :: request
     real(kind=rp), dimension( n, maxmlat+4) :: &
       send_to_left, send_to_right, recv_from_left, recv_from_right
@@ -709,24 +709,24 @@ endsubroutine partner_exchange_hemisphere_vec
 
 ! sync in longitude
     call MPI_Isend(send_to_left, cnt, mpi_rp, &
-      left, 0, dynamo_world, request(1), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      left, 0, dynamo_world, request(1), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Isend(send_to_right, cnt, mpi_rp, &
-      right, 1, dynamo_world, request(2), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+      right, 1, dynamo_world, request(2), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     call MPI_Irecv(recv_from_right, cnt, mpi_rp, &
-      right, 0, dynamo_world, request(3), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      right, 0, dynamo_world, request(3), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
     call MPI_Irecv(recv_from_left, cnt, mpi_rp, &
-      left, 1, dynamo_world, request(4), ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+      left, 1, dynamo_world, request(4), ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
 ! wait for sync to complete
-    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    call MPI_Waitall(4, request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 ! unpack to model fields
     do concurrent (j = mlatd0:mlatd1, nc = 1:n)
@@ -756,12 +756,12 @@ function all_gather_int(intin) result(intarrayout)
 
 
 #ifdef PARALLEL
-    integer :: ierror, cnt
+    integer :: ierr, cnt
 
     cnt = 1
     call MPI_Allgather(intin, cnt, MPI_INTEGER, &
-        intarrayout, cnt, MPI_INTEGER, dynamo_world, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+        intarrayout, cnt, MPI_INTEGER, dynamo_world, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
 
 #else
 
@@ -808,14 +808,14 @@ endfunction all_gather_int
           
           call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
                i, tag, dynamo_world, &
-               requests(i), ierror)
-          if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+               requests(i), ierr)
+          if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
        enddo
 
 
        !now wait to receive all data
-       call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+       call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
        !now copy to output
        !for myself (root 0)
@@ -839,12 +839,12 @@ endfunction all_gather_int
        
        call MPI_Isend(sendbuf, cnt, mpi_rp, &
             0, tag, dynamo_world, &
-            myrequest, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+            myrequest, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
 
-       call MPI_WAIT(myrequest, MPI_STATUS_IGNORE, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Wait', ierror)
+       call MPI_WAIT(myrequest, MPI_STATUS_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
        
     endif
 
@@ -871,7 +871,7 @@ endfunction all_gather_int
     integer :: i, mc, nc
 
 #ifdef PARALLEL
-    integer :: cnt, rnki, i0, i1, ierror
+    integer :: cnt, rnki, i0, i1, ierr
     integer, dimension(0:lon_size*2-1) :: request
     real(kind=rp), dimension(m, n, maxmlon) :: sendbuf
     real(kind=rp), dimension(m, n, maxmlon, 0:lon_size-1) :: recvbuf
@@ -887,18 +887,18 @@ endfunction all_gather_int
     do rnki = 0, lon_size-1
       call MPI_Isend(sendbuf, cnt, mpi_rp, &
         lat_rank*lon_size + rnki, 0, dynamo_world, &
-        request(rnki), ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Isend', ierror)
+        request(rnki), ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
       call MPI_Irecv(recvbuf(:, :, :, rnki), cnt, mpi_rp, &
         lat_rank*lon_size + rnki, 0, dynamo_world, &
-        request(lon_size+rnki), ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierror)
+        request(lon_size+rnki), ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
     enddo
 
 ! wait for gather to complete
-    call MPI_Waitall(lon_size*2, request, MPI_STATUSES_IGNORE, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierror)
+    call MPI_Waitall(lon_size*2, request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 ! reconstruct longitude rings
     do concurrent (rnki = 0:lon_size-1)
@@ -929,7 +929,7 @@ endfunction all_gather_int
     integer :: i, j
 
 #ifdef PARALLEL
-    integer :: cnt, rnk, i0, i1, j0, j1, ierror
+    integer :: cnt, rnk, i0, i1, j0, j1, ierr
     real(kind=rp), dimension(maxmlat, maxmlon) :: sendbuf
     real(kind=rp), dimension(maxmlat, maxmlon, 0:mpi_size-1) :: recvbuf
 
@@ -942,12 +942,12 @@ endfunction all_gather_int
 
     if (root < 0) then
       call MPI_Allgather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+        recvbuf, cnt, mpi_rp, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
     else
       call MPI_Gather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, root, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Gather', ierror)
+        recvbuf, cnt, mpi_rp, root, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Gather', ierr)
     endif
 
 ! reconstruct based on lat-lon decomposition
@@ -983,7 +983,7 @@ endfunction all_gather_int
     integer :: i, j, nc
 
 #ifdef PARALLEL
-    integer :: cnt, rnk, i0, i1, j0, j1, ierror
+    integer :: cnt, rnk, i0, i1, j0, j1, ierr
     real(kind=rp), dimension(n, maxmlat, maxmlon) :: sendbuf
     real(kind=rp), dimension(n, maxmlat, maxmlon, 0:mpi_size-1) :: recvbuf
 
@@ -996,12 +996,12 @@ endfunction all_gather_int
 
     if (root < 0) then
       call MPI_Allgather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+        recvbuf, cnt, mpi_rp, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
     else
       call MPI_Gather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, root, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Gather', ierror)
+        recvbuf, cnt, mpi_rp, root, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Gather', ierr)
     endif
 
 ! reconstruct based on lat-lon decomposition
@@ -1037,7 +1037,7 @@ endfunction all_gather_int
     integer :: i, j, mc, nc
 
 #ifdef PARALLEL
-    integer :: cnt, rnk, i0, i1, j0, j1, ierror
+    integer :: cnt, rnk, i0, i1, j0, j1, ierr
     real(kind=rp), dimension(m, n, maxmlat, maxmlon) :: sendbuf
     real(kind=rp), dimension(m, n, maxmlat, maxmlon, 0:mpi_size-1) :: recvbuf
 
@@ -1050,12 +1050,12 @@ endfunction all_gather_int
 
     if (root < 0) then
       call MPI_Allgather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+        recvbuf, cnt, mpi_rp, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
     else
       call MPI_Gather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, root, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Gather', ierror)
+        recvbuf, cnt, mpi_rp, root, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Gather', ierr)
     endif
 
 ! reconstruct based on lat-lon decomposition
@@ -1091,7 +1091,7 @@ endfunction all_gather_int
     integer :: i, j, lc, mc, nc
 
 #ifdef PARALLEL
-    integer :: cnt, rnk, i0, i1, j0, j1, ierror
+    integer :: cnt, rnk, i0, i1, j0, j1, ierr
     real(kind=rp), dimension(l, m, n, maxmlat, maxmlon) :: sendbuf
     real(kind=rp), dimension(l, m, n, maxmlat, maxmlon, 0:mpi_size-1) :: recvbuf
 
@@ -1104,12 +1104,12 @@ endfunction all_gather_int
 
     if (root < 0) then
       call MPI_Allgather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierror)
+        recvbuf, cnt, mpi_rp, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
     else
       call MPI_Gather(sendbuf, cnt, mpi_rp, &
-        recvbuf, cnt, mpi_rp, root, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Gather', ierror)
+        recvbuf, cnt, mpi_rp, root, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Gather', ierr)
     endif
 
 ! reconstruct based on lat-lon decomposition
@@ -1142,7 +1142,7 @@ endfunction all_gather_int
     real(kind=rp), dimension(l, m, n), intent(inout) :: var
 
 #ifdef PARALLEL
-    integer :: cnt, lc, mc, nc, ierror
+    integer :: cnt, lc, mc, nc, ierr
     real(kind=rp), dimension(l, m, n) :: buffer
 
     cnt = l * m * n
@@ -1152,8 +1152,8 @@ endfunction all_gather_int
       buffer(lc, mc, nc) = var(lc, mc, nc)
     enddo
 
-    call MPI_Bcast(buffer, cnt, mpi_rp, root, dynamo_world, ierror)
-    if (ierror /= MPI_SUCCESS) call handle_error('MPI_Bcast', ierror)
+    call MPI_Bcast(buffer, cnt, mpi_rp, root, dynamo_world, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Bcast', ierr)
 
 ! unpack to model fields
     do concurrent (nc = 1:n, mc = 1:m, lc = 1:l)
@@ -1174,16 +1174,16 @@ endfunction all_gather_int
     real(kind=rp), dimension(n) :: varout
 
 #ifdef PARALLEL
-    integer :: ierror
+    integer :: ierr
 
     if (root < 0) then
       call MPI_Allreduce(varin, varout, n, mpi_rp, &
-        MPI_SUM, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Allreduce', ierror)
+        MPI_SUM, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allreduce', ierr)
     else
       call MPI_Reduce(varin, varout, n, mpi_rp, &
-        MPI_SUM, root, dynamo_world, ierror)
-      if (ierror /= MPI_SUCCESS) call handle_error('MPI_Reduce', ierror)
+        MPI_SUM, root, dynamo_world, ierr)
+      if (ierr /= MPI_SUCCESS) call handle_error('MPI_Reduce', ierr)
     endif
 #else
     integer :: nc
@@ -1206,12 +1206,12 @@ endfunction all_gather_int
 
 #ifdef PARALLEL
     character(len=MPI_MAX_ERROR_STRING) :: string
-    integer :: resultlen, ierror
+    integer :: resultlen, ierr
 
-    call MPI_Error_string(errorcode, string, resultlen, ierror)
+    call MPI_Error_string(errorcode, string, resultlen, ierr)
     write(6, "('MPI error encountered: ', a, ', when calling ', a, '. Finalizing...')") &
       trim(string), trim(funcname)
-    call MPI_Finalize(ierror)
+    call MPI_Finalize(ierr)
 #endif
 
   endsubroutine handle_error
