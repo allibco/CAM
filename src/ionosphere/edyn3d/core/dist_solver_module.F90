@@ -134,6 +134,15 @@ module dist_solver_module
         rhs(i) = rhs(i)+z(i)
      enddo
 
+     !colind are 1-based - change to 0-based
+     do concurrent (i = 1:nnz)
+        colind(i) = colind(i)-1
+     enddo
+     !rowptr are 1-based - change to 0-based
+     do concurrent (i=1:mygrid_size + 1)
+        rowptr(i) = rowptr(i) - 1
+     enddo
+     
      !superlu 
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
@@ -967,17 +976,18 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
-         mlon0, mlon1, lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
+         mlon0, mlon1, mlond0, mlond1, &
+         lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
          calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size, &
-         gather_lon_1d
+         gather_lon_1d, mpi_size
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: rhs_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: rhs_n
 
-    integer :: i,j,ij, jN, j_start, cnt, i_start
+    integer :: i,j,ij, jN, j_start, cnt, istart
 
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
     
@@ -1002,7 +1012,7 @@ module dist_solver_module
        endif
 
        ! at j=1, for each i, set Phi(i,nmlat_T1) = phi_pol at the north pole
-       do concurrent (i = mlon0:mlon1)
+       do i = mlon0,mlon1 
           jN = nmlat_T1-j+1 !j=1, so jN= nmlat_T1
           ij = calc_grid_ij(i,jN,lat_rank)
           rhs_n(ij) = phi_pol
@@ -1033,7 +1043,7 @@ module dist_solver_module
              cnt = cnt + 1
              rhs(cnt) = rhs_s(ij)
           enddo
-          i_start = my_hgridsize + 1
+          istart = my_hgridsize + 1
           call partner_exchange_hemisphere_vec(rhs(1:my_hgridsize), rhs(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
@@ -1042,7 +1052,7 @@ module dist_solver_module
              cnt = cnt + 1
              rhs(cnt) = rhs_n(ij)
           enddo
-          i_start = partner_hgridsize + 1
+          istart = partner_hgridsize + 1
           call partner_exchange_hemisphere_vec(rhs(istart:istart+my_hgridsize), rhs(1:partner_hgridsize))
           
        endif
@@ -1061,7 +1071,7 @@ module dist_solver_module
   endfunction dist_construct_rhs
 
 !-----------------------------------------------------------------------
-  function dist_solve_superlu(n_global, n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
+  function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
 
 #include "superlu_dist_config.fh"
 
@@ -1079,7 +1089,7 @@ module dist_solver_module
 
 ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
-    integer :: i,iopt,info, first_row
+    integer :: i,iopt,info, first_row, nprow, npcol
     real(kind=rp) :: berr
     
     integer(superlu_ptr) :: grid
@@ -1117,13 +1127,7 @@ module dist_solver_module
     !these are 0-based already (setup in mpi_module)
     first_row = task_csr_rowstarts(mpi_rank) 
 
-    !colind are 1-based - change to 0-based
-    do concurrent (i = 1:nnz)
-       colind(i) = colind(i)-1
-    enddo
-    !rowptr are 1-based - change to 0-based
-    do concurrent (i=1:n_loc + 1)
-       rowptr(i) = rowptr(i) - 1
+    !colind and rowptr should be 0-based
     
     !create the distributed compressed row matrix pointed to by the F90 handle A
     ! matrix type parameters
