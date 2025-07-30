@@ -642,13 +642,13 @@ module dist_solver_module
     endif
     
     ! between latm_JT and equator (nmlat_h) REGION (symmetric solution?)
-    if ((mlat0 > latm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > latm_JT .and. mlat0 /= nmlat_h)) then
+    if ((mlat0 > jlatm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > jlatm_JT .and. mlat0 /= nmlat_h)) then
 
         !loop through the longitudes in my grid
        do i = mlon0, mlon1
 
           !loop through relevant latitudes
-          loop_start_j = max(mlat0, latm_JT+1)
+          loop_start_j = max(mlat0, jlatm_JT+1)
           loop_stop_j = min(mlat1, nmlat_h)
           
           do j = loop_start_j, loop_stop_j            
@@ -830,7 +830,7 @@ module dist_solver_module
              colind_s(nnz_s) = jcol_s(k,ij)
              values_s(nnz_s) = nzval_s(k,ij)
           enddo
-          rowptr_s(row_counter_s + 1) = nnz + 1
+          rowptr_s(row_counter_s + 1) = nnz_s + 1
           row_counter_s = row_counter_s + 1
        enddo
      else ! I own row 1 (grid point i=1, j=1)
