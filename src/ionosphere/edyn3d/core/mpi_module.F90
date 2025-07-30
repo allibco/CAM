@@ -1247,7 +1247,7 @@ endfunction all_gather_int
   ! my_latrank is the position of the *calling* processor
   ! we do not calc my_latrank  from j, because this is how we determine
   !if j lives on the calling processor
-  function calc_grid_ij(i_in,j_in,my_latrank) result(ij)
+  pure function calc_grid_ij(i_in,j_in,my_latrank) result(ij)
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
 
