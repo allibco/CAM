@@ -1077,7 +1077,7 @@ module dist_solver_module
 
     use superlu_mod
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank
+         task_csr_rowstarts, mpi_rank, mygrid_size
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer,dimension(n_loc+1),intent(in) :: rowptr
@@ -1142,7 +1142,6 @@ module dist_solver_module
     do concurrent (i = 1:n_loc)
        sol(i) = rhs(i)
     enddo
-    nrhs = 1
 
     ! Set the default input options
     call f_set_default_options(options)
@@ -1208,7 +1207,7 @@ module dist_solver_module
     use cons_module,only:jlatm_JT
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
-         ij_start_n, ij_stop_n, &
+         ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
@@ -1219,11 +1218,11 @@ module dist_solver_module
     integer :: i,j,ij, loop_start_j, loop_stop_j, jS, jN, cnt
     real(kind=rp) :: avg
 
-    if (mlat0<latJT) then
-       ! from pole to latm_JT, two hemispheres are uncoupled
+    if (mlat0<jlat_JT) then
+       ! from pole to jlatm_JT, two hemispheres are uncoupled
        ! my longitudes
        loop_start_j = mlat0
-       loop_stop_j = min(mlat1, latm_JT)
+       loop_stop_j = min(mlat1, jlatm_JT)
 
        do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_stop_j)
           !south
