@@ -167,7 +167,8 @@ module dist_solver_module
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
          ij_start_s,ij_stop_s,partner_hgridsize,&
-         calc_grid_ij, partner_exchange_hemisphere_mat
+         calc_grid_ij, partner_exchange_hemisphere_mat, &
+         gather_lon_1d
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -958,7 +959,7 @@ module dist_solver_module
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
-         cal_grid_ij, partner_exchange_hemisphere_vec
+         calc_grid_ij, partner_exchange_hemisphere_vec
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
@@ -1054,16 +1055,12 @@ module dist_solver_module
 #include "superlu_dist_config.fh"
 
     use superlu_mod
-    !use iso_c_binding,only:c_int,c_long_long,c_double
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
-    !integer(kind=c_int),dimension(n+1),intent(in) :: colptr
-    !integer(kind=c_int),dimension(nnz),intent(in) :: rowind
-    !real(kind=c_double),dimension(nnz),intent(in) :: values
-    integer,dimension(n_loc+1),intent(in) :: colptr
-    integer,dimension(nnz_loc),intent(in) :: rowind
+    integer,dimension(n_loc+1),intent(in) :: rowptr
+    integer,dimension(nnz_loc),intent(in) :: colind
     real,dimension(nnz_loc),intent(in) :: values
 
     real(kind=rp),dimension(n_loc),intent(in) :: rhs
@@ -1112,11 +1109,11 @@ module dist_solver_module
 
     !colind are 1-based - change to 0-based
     do concurrent (i = 1:nnz)
-       colind[i] = colind[i]-1
+       colind(i) = colind(i)-1
     enddo
     !rowptr are 1-based - change to 0-based
     do concurrent (i=1:n_loc + 1)
-       rowptr[i] = rowptr[i] - 1
+       rowptr(i) = rowptr(i) - 1
     
     !create the distributed compressed row matrix pointed to by the F90 handle A
     ! matrix type parameters
@@ -1188,7 +1185,7 @@ module dist_solver_module
   endfunction dist_solve_superlu
 
 !-----------------------------------------------------------------------
-  pure function dist_flatten(mygrid_size, fin) result(fout)
+  pure function dist_flatten(mygrid_size_in, fin) result(fout)
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
 ! northern/southern hemispheres are either separate or averaged
 ! based on their latitude ranges (high-lat, transition, low-lat, equator)
@@ -1196,13 +1193,13 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module, only:lat_rank, mlat0, mlat1, &
-         mlon0, mlon1, mlatd0, mlatd11, mlomd0, mlond1, &
+         mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, partner_hgridsize
 
-    integer, intent(in) :: mygrid_size
+    integer, intent(in) :: mygrid_size_in
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
-    real(kind=rp),dimension(mygrid_size) :: fout
+    real(kind=rp),dimension(mygrid_size_in) :: fout
     
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fout_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fout_n
