@@ -355,8 +355,8 @@ module dist_solver_module
           rowcnt_n(ij) = rowcnt_n(ij)+1
           !the column will be the same i position but at j=1 (instead of j=15)
           ! TO DO: verify this (doesn't make intuive sense to me)
-          jcol_n(rowcnt(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
-          nzval_n(rowcnt(ij),ij) = 1
+          jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
+          nzval_n(rowcnt_n(ij),ij) = 1
 
           !sort by col indices
           call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
@@ -367,8 +367,8 @@ module dist_solver_module
     endif !end of loop for procs owning j=1
 
     
-    !REGION BETWEEN POLES AND latm_JT (i.e., 2:latm_JT-1)
-    if (mlat0<latm_JT) then !I own latitudes in this region
+    !REGION BETWEEN POLES AND jlatm_JT (i.e., 2:jlatm_JT-1)
+    if (mlat0<jlatm_JT) then !I own latitudes in this region
 
        !loop through the longitudes in my grid
        do i = mlon0, mlon1
@@ -379,7 +379,7 @@ module dist_solver_module
           else
              loop_start_j = mlat0
           endif
-          loop_end_j = min(mlat1, latm_JT-1)
+          loop_end_j = min(mlat1, jlatm_JT-1)
           
           do j = loop_start_j, loop_end_j            
              !!!!!!!South Hemishere
@@ -489,11 +489,11 @@ module dist_solver_module
              
           enddo ! end j loop through latitudes
        enddo !end i loop through longitudes
-    endif ! end of REGION BETWEEN POLES AND latm_JT
+    endif ! end of REGION BETWEEN POLES AND jlatm_JT
 
     !---------------------------------------!   
           
-    !latm_JT REGION- two hemispheres are coupled at j-1
+    !jlatm_JT REGION- two hemispheres are coupled at j-1
     if (mlat0 <= latm_JT .and. mlat1 >= latm_JT) then ! I own grid points at latm_JT
 
        !loop through the longitudes in my grid
@@ -1184,7 +1184,7 @@ module dist_solver_module
   endfunction dist_solve_superlu
 
 !-----------------------------------------------------------------------
-  pure function dist_flatten(fin) result(fout)
+  function dist_flatten(fin) result(fout)
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
 ! northern/southern hemispheres are either separate or averaged
 ! based on their latitude ranges (high-lat, transition, low-lat, equator)
@@ -1196,7 +1196,6 @@ module dist_solver_module
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size
 
-    integer, intent(in) :: mygrid_size_in
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size_in) :: fout
     
@@ -1283,7 +1282,7 @@ module dist_solver_module
   endfunction dist_flatten
 
 !-----------------------------------------------------------------------
-  pure function dist_unravel(fin) result(fout)
+  function dist_unravel(fin) result(fout)
 ! reorder 1D vector (RHS) into 2D fields (lat-lon)
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
@@ -1293,7 +1292,7 @@ module dist_solver_module
          ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
          mygrid_size
 
-    integer, intent(in) :: mygrid_size
+
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
     real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout
 
