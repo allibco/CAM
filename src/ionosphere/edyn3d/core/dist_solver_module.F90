@@ -120,7 +120,7 @@ module dist_solver_module
        !!!!!!!!!!!   
        
        ! reconstruct 2D distribution of FAC based on z
-       fac_hl(2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
+       fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
        !get ghost/halo points
        call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
@@ -166,7 +166,7 @@ module dist_solver_module
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
-         ij_start_s,ij_stop_s,partner_hgridsize,&
+         ij_start_s,ij_stop_s,partner_hgridsize,my_hgridsize, &
          calc_grid_ij, partner_exchange_hemisphere_mat, &
          gather_lon_1d
     
@@ -189,7 +189,7 @@ module dist_solver_module
     integer :: nnz_s, nnz_n, row_counter_s, row_counter_n
     
     ! the first row has most elements (nmlon+2)
-    !special case (only 1 processor does this_
+    !special case (only 1 processor does this)
     integer,dimension(nmlon+2) :: jcol1
     real(kind=rp),dimension(nmlon+2) :: nzval1
     integer :: counter
@@ -208,6 +208,16 @@ module dist_solver_module
     
     real(kind=rp),dimension(nmlon) :: coef3_j1_buf
 
+    !csr for each hemisphere - south
+    integer, dimension(my_hgridsize+2):: rowptr_s
+    integer, dimension((my_hgridsize+2)*MAX_NNZ + nmlon) ::  colind_s
+    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ + nmlon) :: values_s
+
+    !csr for each hemisphere - north
+    integer, dimension(my_hgridsize+2):: rowptr_s
+    integer, dimension((my_hgridsize+2)*MAX_NNZ) ::  colind_s
+    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ) :: values_s
+    
     !get hemisphere partner info
     integer, dimension(partner_hgridsize+1) :: partner_rowptr
     real(kind=rp),dimension(partner_hgridsize*MAX_NNZ) :: partner_values
@@ -308,7 +318,7 @@ module dist_solver_module
              !jcol1(isub+2) = (isub-1)*nmlat_T1+j+1
              !nzval1(isub+2) = coef(3,j,isub)
              counter = counter +1
-             jcol1(counter) =  calc_grid_ij(isub,j+1)
+             jcol1(counter) =  calc_grid_ij(isub,j+1,0)
              nzval1(counter) = coef3_j1_buf(isub)
           enddo
 
@@ -379,9 +389,9 @@ module dist_solver_module
           else
              loop_start_j = mlat0
           endif
-          loop_end_j = min(mlat1, jlatm_JT-1)
+          loop_stop_j = min(mlat1, jlatm_JT-1)
           
-          do j = loop_start_j, loop_end_j            
+          do j = loop_start_j, loop_stop_j            
              !!!!!!!South Hemishere
              jS=j
              jN = nmlat_T1-j+1
@@ -418,7 +428,7 @@ module dist_solver_module
              !bij -> connects to jN (conjugate point)
              rowcnt_s(ij) = rowcnt_s(ij)+1
              jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jN, lat_rank)
-             nzval_s(rowcnt_s(ij),ij)= bij(,j,i)
+             nzval_s(rowcnt_s(ij),ij)= bij(j,i)
                 
              !coef 8 (i+1, j-1)
              rowcnt_s(ij) = rowcnt_s(ij)+1
@@ -469,7 +479,7 @@ module dist_solver_module
              !bij -> connects to jS (conjugate point)
              rowcnt_n(ij) = rowcnt_n(ij)+1
              jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jS, lat_rank)
-             nzval_n(rowcnt_n(ij),ij)= bij(,j,i)             
+             nzval_n(rowcnt_n(ij),ij)= bij(j,i)             
              
              !coef 2 (i+1, j-1)
              rowcnt_n(ij) = rowcnt_n(ij)+1
@@ -494,7 +504,7 @@ module dist_solver_module
     !---------------------------------------!   
           
     !jlatm_JT REGION- two hemispheres are coupled at j-1
-    if (mlat0 <= latm_JT .and. mlat1 >= latm_JT) then ! I own grid points at latm_JT
+    if (mlat0 <= jlatm_JT .and. mlat1 >= jlatm_JT) then ! I own grid points at latm_JT
 
        !loop through the longitudes in my grid
        do i = mlon0, mlon1
@@ -639,9 +649,9 @@ module dist_solver_module
 
           !loop through relevant latitudes
           loop_start_j = max(mlat0, latm_JT+1)
-          loop_end_j = min(mlat1, nmlat_h)
+          loop_stop_j = min(mlat1, nmlat_h)
           
-          do j = loop_start_j, loop_end_j            
+          do j = loop_start_j, loop_stop_j            
              !!!!!!!South Hemishere
              jS=j
              jN = nmlat_T1-j+1
@@ -806,13 +816,13 @@ module dist_solver_module
 !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
 
-    !CHECK: might need to change to 0-based indexing
+    !might need to change to 0-based indexing (yes, but happens later)
     !first southern hemisphere rows
     if (mpi_rank > 0) then !don't own row 1
        rowptr_s(1) = 1
        row_counter_s = 1
        nnz_s = 0
-       !loop through grid pts/ matrix rows in souther hemisphere
+       !loop through grid pts/ matrix rows in southern hemisphere
        do ij = ij_start_s, ij_stop_s
           cnt = rowcnt_s(ij)
           do k = 1, cnt
@@ -1201,16 +1211,16 @@ module dist_solver_module
     
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fout_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fout_n
-    integer :: i,j,ij, loop_start_j, loop_end_j, jS, jN, cnt
+    integer :: i,j,ij, loop_start_j, loop_stop_j, jS, jN, cnt
     real(kind=rp) :: avg
 
     if (mlat0<latJT) then
        ! from pole to latm_JT, two hemispheres are uncoupled
        ! my longitudes
        loop_start_j = mlat0
-       loop_end_j = min(mlat1, latm_JT)
+       loop_stop_j = min(mlat1, latm_JT)
 
-       do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_end_j)
+       do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_stop_j)
           !south
           jS=j
           ij = calc_grid_ij(i,jS,lat_rank)
@@ -1227,9 +1237,9 @@ module dist_solver_module
     if ((mlat0 > latm_JT) .or. (mlat1 > latm_JT)) then
        ! from latm_JT to equator, symmetric solution
        loop_start_j = max(mlat0, latm_JT+1)
-       loop_end_j = mlat1
+       loop_stop_j = mlat1
 
-       do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_end_j)
+       do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_stop_j)
           avg = (fin(1,j,i)+fin(2,j,i))/2
 
           !south
