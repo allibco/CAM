@@ -788,7 +788,7 @@ endfunction all_gather_int
     integer :: i
 
 #ifdef PARALLEL
-    integer :: error, cnt, myrequest, tag, rs, re, is
+    integer :: ierr, cnt, myrequest, tag, rs, re, is
     integer, dimension(1:lon_size-1) :: requests  
     real(kind=rp), dimension(maxmlon) :: sendbuf
     real(kind=rp), dimension(nmlon) :: recvbuf
