@@ -75,7 +75,7 @@ module dist_solver_module
 
     allocate(rhs(mygrid_size))
     allocate(z(mygrid_size))
-    allocate(pot_h1_f(mygrid_size))
+    allocate(pot_hl_f(mygrid_size))
     allocate(sol(mygrid_size))
 
     
@@ -93,7 +93,7 @@ module dist_solver_module
     nnz = rowptr(mygrid_size+1)-1
 
     ! RHS in Block format to match LHS
-    rhs = dist_construct_rhs(mygrid_size,coef_full(10,:,:))
+    rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
 
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
@@ -951,7 +951,7 @@ module dist_solver_module
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
-  pure function dist_construct_rhs(mygrid_size, coef_10_s, coef_10_n) result(rhs)
+  pure function dist_construct_rhs(coef_10_s, coef_10_n) result(rhs)
 ! construct vector RHS
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
@@ -959,7 +959,7 @@ module dist_solver_module
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
-         calc_grid_ij, partner_exchange_hemisphere_vec
+         calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
@@ -1069,7 +1069,6 @@ module dist_solver_module
 ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
     integer :: i,iopt,info, first_row
-    integer(kind=c_long_long) :: f_factors
     real(kind=rp) :: berr
     
     integer(superlu_ptr) :: grid
