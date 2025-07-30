@@ -1273,9 +1273,9 @@ endfunction all_gather_int
           elseif (j == mlat0 -1) then
              latrank  = latrank - 1
           endif
-          if (latrank < 0 .OR. latrank >= lat_size) then
-             write(6,*) "Error in calc_grid_ij"
-          endif
+          !if (latrank < 0 .OR. latrank >= lat_size) then
+          !   write(6,*) "Error in calc_grid_ij"
+          !endif
           
           !num of latitude points in proc parition    
           my_numlat = nmlat_task(latrank)
@@ -1300,9 +1300,9 @@ endfunction all_gather_int
           elseif (jS == mlat0 -1) then
              latrank  = latrank - 1
           endif
-          if (latrank < 0 .OR. latrank >= lat_size) then
-             write(6,*) "Error in calc_grid_ij"
-          endif
+          !if (latrank < 0 .OR. latrank >= lat_size) then
+          !   write(6,*) "Error in calc_grid_ij"
+          !endif
           
           !num of latitude points in proc parition    
           my_numlat = nmlat_task(latrank)
