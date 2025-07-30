@@ -214,9 +214,9 @@ module dist_solver_module
     real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ + nmlon) :: values_s
 
     !csr for each hemisphere - north
-    integer, dimension(my_hgridsize+2):: rowptr_s
-    integer, dimension((my_hgridsize+2)*MAX_NNZ) ::  colind_s
-    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ) :: values_s
+    integer, dimension(my_hgridsize+2):: rowptr_n
+    integer, dimension((my_hgridsize+2)*MAX_NNZ) ::  colind_n
+    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ) :: values_n
     
     !get hemisphere partner info
     integer, dimension(partner_hgridsize+1) :: partner_rowptr
