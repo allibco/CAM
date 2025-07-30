@@ -153,7 +153,7 @@ module dist_solver_module
 
   endsubroutine dist_linear_system
 !-----------------------------------------------------------------------
-  pure subroutine dist_construct_lhs(nnz_est,bij,coef_s, coef_n,my_rowptr,my_colind, my_values)
+  subroutine dist_construct_lhs(nnz_est,bij,coef_s, coef_n,my_rowptr,my_colind, my_values)
 ! construct LHS matrix (CSR format - block row format for each task)
 
 ! need to set where the two hemispheres are connected
@@ -951,7 +951,7 @@ module dist_solver_module
     
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
-  pure function dist_construct_rhs(coef_10_s, coef_10_n) result(rhs)
+  function dist_construct_rhs(coef_10_s, coef_10_n) result(rhs)
 ! construct vector RHS
 
     use params_module,only:nmlat_h,nmlat_T1,nmlon
