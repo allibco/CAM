@@ -1242,7 +1242,7 @@ module dist_solver_module
     
     if ((mlat0 > jlatm_JT) .or. (mlat1 > jlatm_JT)) then
        ! from jlatm_JT to equator, symmetric solution
-       loop_start_j = max(mlat0, latm_JT+1)
+       loop_start_j = max(mlat0, jlatm_JT+1)
        loop_stop_j = mlat1
 
        do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_stop_j)
