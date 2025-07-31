@@ -1208,17 +1208,19 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
-         ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size
+         ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size, &
+         calc_grid_ij, my_hgridsize
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
-    real(kind=rp),dimension(mygrid_size_in) :: fout
+    real(kind=rp),dimension(mygrid_size) :: fout
     
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fout_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fout_n
     integer :: i,j,ij, loop_start_j, loop_stop_j, jS, jN, cnt
+    integer :: istart
     real(kind=rp) :: avg
 
-    if (mlat0<jlat_JT) then
+    if (mlat0<jlatm_JT) then
        ! from pole to jlatm_JT, two hemispheres are uncoupled
        ! my longitudes
        loop_start_j = mlat0
@@ -1238,8 +1240,8 @@ module dist_solver_module
        enddo
     endif
     
-    if ((mlat0 > latm_JT) .or. (mlat1 > latm_JT)) then
-       ! from latm_JT to equator, symmetric solution
+    if ((mlat0 > jlatm_JT) .or. (mlat1 > jlatm_JT)) then
+       ! from jlatm_JT to equator, symmetric solution
        loop_start_j = max(mlat0, latm_JT+1)
        loop_stop_j = mlat1
 
@@ -1279,7 +1281,7 @@ module dist_solver_module
              cnt = cnt + 1
              fout(cnt) = fout_s(ij)
           enddo
-          i_start = my_hgridsize + 1
+          istart = my_hgridsize + 1
           call partner_exchange_hemisphere_vec(fout(1:my_hgridsize), fout(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
@@ -1288,7 +1290,7 @@ module dist_solver_module
              cnt = cnt + 1
              fout(cnt) = fout_n(ij)
           enddo
-          i_start = partner_hgridsize + 1
+          istart = partner_hgridsize + 1
           call partner_exchange_hemisphere_vec(fout(istart:istart+my_hgridsize), fout(1:partner_hgridsize))
        endif
     endif
@@ -1304,7 +1306,7 @@ module dist_solver_module
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
-         mygrid_size
+         mygrid_size, mpi_rank, calc_grid_ij
 
 
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
