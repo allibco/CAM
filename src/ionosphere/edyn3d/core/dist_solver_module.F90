@@ -1064,7 +1064,7 @@ module dist_solver_module
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
     use iso_c_binding
-
+    use superlu_mod !binding interfaces
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank, mygrid_size
     
@@ -1081,152 +1081,29 @@ module dist_solver_module
     integer :: i,iopt first_row, nprow, npcol
 
     ! SuperLU_DIST structures (opaque handles)
-    type(kind=c_ptr) :: A, grid, ScalePermstruct, LUstruct
-    type(c_ptr) :: stat, berr_ptr, equed_ptr
-
+    type(kind=c_ptr) :: A, B, grid, ScalePermstruct, LUstruct
+    type(c_ptr) :: stat
 
     ! Other variables
-    integer(c_int) :: info
-    real(c_double) :: anorm, rcond
-    character(c_char) :: equed
-    real(c_double) :: berr(nrhs)
-
-    type, bind(C) :: superlu_options_t
-       integer(C_INT) :: Fact
-       integer(C_INT) :: Equil
-       integer(C_INT) :: ColPerm
-       integer(C_INT) :: RowPerm 
-       integer(C_INT) :: ReplaceTinyPivot
-       integer(C_INT) :: IterRefine
-       integer(C_INT) :: Trans
-       integer(C_INT) :: SymmetricMode
-       integer(C_INT) :: PrintStat
-       ! ... more fields exist but these are the most common
-    end type superlu_options_t
-
-    type(superlu_options_t) :: options
-
-    
-    ! Interface declarations for SuperLU_DIST functions
-    interface
-         ! Initialize SuperLU process grid
-        subroutine superlu_gridinit(comm, nprow, npcol, grid) &
-            bind(c, name='superlu_gridinit')
-            use iso_c_binding
-            integer(c_int), value :: comm    ! MPI communicator (converted to C)
-            integer(c_int), value :: nprow   ! Number of process rows
-            integer(c_int), value :: npcol   ! Number of process columns
-            type(c_ptr) :: grid              ! Output: grid handle
-        end subroutine
-
-
-        ! Create distributed matrix A
-        subroutine dCreate_CompRowLoc_Matrix_dist(A, m, n, nnz_loc, m_loc, &
-                                                   fst_row, nzval, colind, rowptr, &
-                                                   stype, dtype, mtype) &
-            bind(c, name='dCreate_CompRowLoc_Matrix_dist')
-            use iso_c_binding
-            type(c_ptr) :: A                    ! Output: matrix handle
-            integer(c_int), value :: m, n       ! Global matrix dimensions
-            integer(c_int), value :: nnz_loc    ! Local non-zeros
-            integer(c_int), value :: m_loc      ! Local rows
-            integer(c_int), value :: fst_row    ! First row (1-based)
-            type(c_ptr), value :: nzval         ! Pointer to values
-            type(c_ptr), value :: colind        ! Pointer to column indices  
-            type(c_ptr), value :: rowptr        ! Pointer to row pointers
-            integer(c_int), value :: stype      ! Storage type
-            integer(c_int), value :: dtype      ! Data type
-            integer(c_int), value :: mtype      ! Matrix type
-        end subroutine
-
-      
-
-        ! Set default options
-        subroutine set_default_options_dist(options) &
-            bind(c, name='set_default_options_dist')
-            use iso_c_binding
-            type(c_ptr) :: options
-        end subroutine
-
-        ! Initialize scale/permutation structure
-        subroutine dScalePermstructInit(m, n, ScalePermstruct) &
-            bind(c, name='dScalePermstructInit')
-            use iso_c_binding
-            integer(c_int), value :: m, n
-            type(c_ptr) :: ScalePermstruct
-        end subroutine
-
-        ! Initialize LU structure
-        subroutine dLUstructInit(n, LUstruct) &
-            bind(c, name='dLUstructInit')
-            use iso_c_binding
-            integer(c_int), value :: n
-            type(c_ptr) :: LUstruct
-        end subroutine
-
-        ! Initialize statistics
-        subroutine PStatInit(stat) &
-            bind(c, name='PStatInit')
-            use iso_c_binding
-            type(c_ptr) :: stat
-          end subroutine PStatInit
-          
-        ! Main solver routine
-        subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
-                          LUstruct, berr, stat, info) &
-            bind(c, name='pdgssvx')
-            use iso_c_binding
-            type(c_ptr), value :: options, A, ScalePermstruct, X, grid, LUstruct, stat
-            integer(c_int), value :: ldx, nrhs
-            type(c_ptr), value :: berr
-            integer(c_int) :: info
-        end subroutine
-
-        ! Cleanup functions
-        ! Destroy SuperLU process grid
-
-        subroutine superlu_gridexit(grid) &
-            bind(c, name='superlu_gridexit')
-            use iso_c_binding
-            type(c_ptr), value :: grid
-        end subroutine
-
-        ! Destroy SuperLU distributed matrix
-                subroutine Destroy_SuperMatrix_Store_dist(A) &
-            bind(c, name='Destroy_SuperMatrix_Store_dist')
-            use iso_c_binding
-            type(c_ptr), value :: A
-        end subroutine
-
-        subroutine dScalePermstructFree(ScalePermstruct) &
-            bind(c, name='dScalePermstructFree')
-            use iso_c_binding
-            type(c_ptr), value :: ScalePermstruct
-        end subroutine
-
-        subroutine dLUstructFree(LUstruct) &
-            bind(c, name='dLUstructFree')
-            use iso_c_binding
-            type(c_ptr), value :: LUstruct
-        end subroutine
-
-        subroutine PStatFree(stat) &
-            bind(c, name='PStatFree')
-            use iso_c_binding
-            type(c_ptr), value :: stat
-        end subroutine
-
-     end interface
-     
+    integer(kind=c_int) :: info
+    real(kind=c_double) :: berr
+ 
+    type(superlu_options_t) :: options    
+   
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
     nprow = lat_size
     npcol = lon_size
     call superlu_gridinit(dynamo_world, nprow, npcol, grid)
 
-    !these are 1-based 
-    first_row = task_csr_rowstarts(mpi_rank) 
+    !need everything 0-based
+    colind=colind-1
+    rowptr=rowptr-1
+    
+    first_row = task_csr_rowstarts(mpi_rank)     !these are 1-based 
+    first_row = first_row -1
 
+    
     !create the distributed compressed row matrix A
     ! matrix type parameters
     ! SLU_NR_loc  /* distributed compressed row format  */ 
@@ -1235,9 +1112,9 @@ module dist_solver_module
     call dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
 
-    ! Setup the right hand side
+    ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
-   
+
     ! Set the default input options
 
     ! this disables row permutations (faster and better if reusing
@@ -1253,28 +1130,29 @@ module dist_solver_module
     call set_default_options_dist(options)
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
-    call dLUstructInit(n_global, n_global, LUstruct)
+    call dLUstructInit(n_global, LUstruct)
     
     ! Initialize the statistics variables
     call PStatInit(stat)
-    
-    
+
     ! Call the linear equation solver (writes over rhs (sol))
     call pdgssvx(options, A, ScalePermstruct, sol, mygrid_size, nrhs, &
-         grid, LUstruct, berr_ptr, stat, info)
+         grid, LUstruct, berr, stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
-       write (*,*) 'Backward error: ', berr(1)
+       write (*,*) 'Backward error: ', berr
     else
-       write(*,*) 'INFO from f_pdgssvx = ', info
+       write(*,*) 'INFO from pdgssvx = ', info
     endif
     
-    ! Deallocate the storage allocated by SuperLU_DIST
-    call PStatFree(stat)
+    !print statistics
+    call PStatPrint(options,stat,grid)
 
     !clean up 
+    call PStatFree(stat)
     call Destroy_SuperMat_Store_dist(A)
-    call tScalePermstructFree(ScalePermstruct)
+    call dScalePermstructFree(ScalePermstruct)
+    call dDestroyLU
     call dLUStructFree(LUStruct)
     call superlu_gridexit(grid)
 

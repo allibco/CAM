@@ -1,171 +1,154 @@
-!> @file
-!! \brief This module contains Fortran-side wrappers for the SuperLU
-!! get/set functions.
-!!
-!! <pre>
-!! -- Distributed SuperLU routine (version 7.0) --
-!! Lawrence Berkeley National Lab, Univ. of California Berkeley.
-!! Last update: December 31, 2020
-!! </pre>
 
 module superlu_mod
 
 !----------------------------------------------------
-! This module contains Fortran-side wrappers for the SuperLU get/set
-! functions, with optional arguments so the user doesn't have to provide
-! the full set of components.
+  ! This module contains c bindings for superlu functions
+  ! that I am using
 !----------------------------------------------------
-
-use superlupara_mod
 
 implicit none
 contains
 
-subroutine get_GridInfo(grid, iam, nprow, npcol, npdep)
-  integer(superlu_ptr) :: grid     !! can be 2D or 3D grid
-  integer*4, optional :: iam
-  integer, optional :: nprow, npcol, npdep
-  integer :: l_iam, l_nprow, l_npcol, l_npdep
+  type, bind(c) :: superlu_options_t
+     integer(kind=c_int) :: Fact
+     integer(kind=c_int) :: Equil
+     integer(kind=c_int) :: ColPerm
+     integer(kind=c_int) :: RowPerm 
+     integer(kind=c_int) :: ReplaceTinyPivot
+     integer(kind=c_int) :: IterRefine
+     integer(kind=c_int) :: Trans
+     integer(kind=c_int) :: SymmetricMode
+     integer(kind=c_int) :: PrintStat
+     ! ... more fields exist but these are the most common
+  end type superlu_options_t
 
-  if (present(npdep)) then
-     call f_get_gridinfo3d(grid, l_iam, l_nprow, l_npcol, l_npdep)
-     npdep = l_npdep
-  else
-     call f_get_gridinfo(grid, l_iam, l_nprow, l_npcol)
-  endif
+ ! Interface declarations for SuperLU_DIST functions
+    interface
+         ! Initialize SuperLU process grid
+        subroutine superlu_gridinit(comm, nprow, npcol, grid) &
+            bind(c, name='superlu_gridinit')
+            use iso_c_binding
+            integer(c_int), value :: comm    ! MPI communicator (converted to C)
+            integer(c_int), value :: nprow   ! Number of process rows
+            integer(c_int), value :: npcol   ! Number of process columns
+            type(c_ptr) :: grid              ! Output: grid handle
+        end subroutine
 
-  if (present(iam)) iam = l_iam
-  if (present(nprow)) nprow = l_nprow
-  if (present(npcol)) npcol = l_npcol
 
-end subroutine get_GridInfo
+        ! Create distributed matrix A
+        subroutine dCreate_CompRowLoc_Matrix_dist(A, m, n, nnz_loc, m_loc, &
+                                                   fst_row, nzval, colind, rowptr, &
+                                                   stype, dtype, mtype) &
+            bind(c, name='dCreate_CompRowLoc_Matrix_dist')
+            use iso_c_binding
+            type(c_ptr) :: A                    ! Output: matrix handle
+            integer(c_int), value :: m, n       ! Global matrix dimensions
+            integer(c_int), value :: nnz_loc    ! Local non-zeros
+            integer(c_int), value :: m_loc      ! Local rows
+            integer(c_int), value :: fst_row    ! First row (1-based)
+            type(c_ptr), value :: nzval         ! Pointer to values
+            type(c_ptr), value :: colind        ! Pointer to column indices  
+            type(c_ptr), value :: rowptr        ! Pointer to row pointers
+            integer(c_int), value :: stype      ! Storage type
+            integer(c_int), value :: dtype      ! Data type
+            integer(c_int), value :: mtype      ! Matrix type
+        end subroutine
 
-subroutine get_SuperMatrix(A, nrow, ncol)
-  integer(superlu_ptr) :: A
-  integer, optional :: nrow, ncol
-  integer :: l_nrow, l_ncol
+       
+        ! Set default options
+        subroutine set_default_options_dist(options) &
+            bind(c, name='set_default_options_dist')
+            use iso_c_binding
+            type(c_ptr) :: options
+        end subroutine
 
-  call f_get_SuperMatrix(A, l_nrow, l_ncol)
+        ! Initialize scale/permutation structure
+        subroutine dScalePermstructInit(m, n, ScalePermstruct) &
+            bind(c, name='dScalePermstructInit')
+            use iso_c_binding
+            integer(c_int), value :: m, n
+            type(c_ptr) :: ScalePermstruct
+        end subroutine
 
-  if (present(nrow)) nrow = l_nrow
-  if (present(ncol)) ncol = l_ncol
+        ! Initialize LU structure
+        subroutine dLUstructInit(n, LUstruct) &
+            bind(c, name='dLUstructInit')
+            use iso_c_binding
+            integer(c_int), value :: n
+            type(c_ptr) :: LUstruct
+        end subroutine
 
-end subroutine get_SuperMatrix
+        ! Initialize statistics
+        subroutine PStatInit(stat) &
+            bind(c, name='PStatInit')
+            use iso_c_binding
+            type(c_ptr) :: stat
+          end subroutine PStatInit
+          
+        ! Main solver routine
+        subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
+                          LUstruct, berr, stat, info) &
+            bind(c, name='pdgssvx')
+            use iso_c_binding
+            type(c_ptr), value :: options, A, ScalePermstruct, X, grid, LUstruct, stat
+            integer(c_int), value :: ldx, nrhs
+            type(c_ptr), value :: berr
+            integer(c_int) :: info
+        end subroutine
 
-subroutine set_SuperMatrix(A, nrow, ncol)
-  integer(superlu_ptr) :: A
-  integer, optional :: nrow, ncol
-  integer :: l_nrow, l_ncol
+        subroutine PStatPrint(options, stat, grid)
+            bind(C, name="PStatPrint")
+            use iso_c_binding
+            type(superlu_options_t) :: options
+            type(c_ptr)     :: stat
+            type(c_ptr)        :: grid
+        end subroutine PStatPrint
 
-  call f_get_SuperMatrix(A, l_nrow, l_ncol)
+        ! Cleanup functions
+        subroutine superlu_gridexit(grid) &
+            bind(c, name='superlu_gridexit')
+            use iso_c_binding
+            type(c_ptr), value :: grid
+        end subroutine
+
+        ! Destroy SuperLU distributed matrix
+        subroutine Destroy_SuperMatrix_Store_dist(A) &
+            bind(c, name='Destroy_SuperMatrix_Store_dist')
+            use iso_c_binding
+            type(c_ptr), value :: A
+        end subroutine
+
+        subroutine dDestroy_LU(n, grid, LUstruct)
+            bind(c, name="dDestroy_LU")
+            use iso_c_binding
+            integer(c_int), value :: n
+            type(c_ptr)      :: grid
+            type(c_ptr)     :: LUstruct
+        end subroutine dDestroy_LU
+        
+        subroutine dScalePermstructFree(ScalePermstruct) &
+            bind(c, name='dScalePermstructFree')
+            use iso_c_binding
+            type(c_ptr), value :: ScalePermstruct
+        end subroutine
+
+        subroutine dLUstructFree(LUstruct) &
+            bind(c, name='dLUstructFree')
+            use iso_c_binding
+            type(c_ptr), value :: LUstruct
+        end subroutine
+
+        subroutine PStatFree(stat) &
+            bind(c, name='PStatFree')
+            use iso_c_binding
+            type(c_ptr), value :: stat
+        end subroutine
+
+     end interface
+     
+
+
   
-  if (present(nrow)) l_nrow = nrow
-  if (present(ncol)) l_ncol = ncol
-
-  call f_set_SuperMatrix(A, l_nrow, l_ncol)
-
-end subroutine set_SuperMatrix
-
-subroutine get_CompRowLoc_Matrix(A, nrow, ncol, nnz_loc, nrow_loc, fst_row)
-  integer(superlu_ptr) :: A
-  integer, optional :: nrow, ncol, nnz_loc, nrow_loc, fst_row
-  integer :: l_nrow, l_ncol, l_nnz_loc, l_nrow_loc, l_fst_row
-
-  call f_get_CompRowLoc_Matrix(A, l_nrow, l_ncol, l_nnz_loc, l_nrow_loc, &
-                               l_fst_row)
-
-  if (present(nrow)) nrow = l_nrow
-  if (present(ncol)) ncol = l_ncol
-  if (present(nnz_loc)) nnz_loc = l_nnz_loc
-  if (present(nrow_loc)) nrow_loc = l_nrow_loc
-  if (present(fst_row)) fst_row = l_fst_row
-
-end subroutine get_CompRowLoc_Matrix
-
-subroutine set_CompRowLoc_Matrix(A, nrow, ncol, nnz_loc, nrow_loc, fst_row)
-  integer(superlu_ptr) :: A
-  integer, optional :: nrow, ncol, nnz_loc, nrow_loc, fst_row
-  integer :: l_nrow, l_ncol, l_nnz_loc, l_nrow_loc, l_fst_row
-
-  call f_set_CompRowLoc_Matrix(A, l_nrow, l_ncol, l_nnz_loc, l_nrow_loc, &
-                               l_fst_row)
-
-  if (present(nrow)) l_nrow = nrow
-  if (present(ncol)) l_ncol = ncol
-  if (present(nnz_loc)) l_nnz_loc = nnz_loc
-  if (present(nrow_loc)) l_nrow_loc = nrow_loc
-  if (present(fst_row)) l_fst_row = fst_row
-
-end subroutine set_CompRowLoc_Matrix
-
-
-subroutine get_superlu_options(opt, Fact, Equil, ParSymbFact, ColPerm, &
-     RowPerm, IterRefine, Trans, ReplaceTinyPivot, SolveInitialized, &
-     RefineInitialized, PrintStat)
-  integer(superlu_ptr) :: opt
-  integer, optional :: Fact, Equil, ParSymbFact, ColPerm, RowPerm, &
-       IterRefine, Trans, ReplaceTinyPivot, SolveInitialized, &
-       RefineInitialized, PrintStat
-!
-  integer :: l_Fact, l_Equil, l_ParSymbFact, l_ColPerm, l_RowPerm, &
-             l_IterRefine, l_Trans, l_ReplaceTinyPivot, l_SolveInitialized, &
-             l_RefineInitialized, l_PrintStat
-
-  call f_get_superlu_options(opt, l_Fact, l_Equil, l_ParSymbFact, l_ColPerm, &
-                             l_RowPerm, l_IterRefine, l_Trans,  &
-                             l_ReplaceTinyPivot, l_SolveInitialized, &
-                             l_RefineInitialized, l_PrintStat)
-
-  if (present(Fact)) Fact = l_Fact
-  if (present(Equil)) Equil = l_Equil
-  if (present(ParSymbFact)) ParSymbFact = l_ParSymbFact
-  if (present(ColPerm)) ColPerm = l_ColPerm
-  if (present(RowPerm)) RowPerm = l_RowPerm
-  if (present(IterRefine)) IterRefine = l_IterRefine
-  if (present(Trans)) Trans = l_Trans
-  if (present(ReplaceTinyPivot)) ReplaceTinyPivot = l_ReplaceTinyPivot
-  if (present(SolveInitialized)) SolveInitialized = l_SolveInitialized
-  if (present(RefineInitialized)) RefineInitialized = l_RefineInitialized
-  if (present(PrintStat)) PrintStat = l_PrintStat
-
-end subroutine get_superlu_options
-
-
-subroutine set_superlu_options(opt, Fact, Equil, ParSymbFact, ColPerm, &
-     RowPerm, IterRefine, Trans, ReplaceTinyPivot, SolveInitialized, &
-     RefineInitialized, PrintStat)
-  integer(superlu_ptr) :: opt
-  integer, optional :: Fact, Equil, ParSymbFact, ColPerm, RowPerm, &
-       IterRefine, Trans, ReplaceTinyPivot, SolveInitialized, &
-       RefineInitialized, PrintStat
-!
-  integer :: l_Fact, l_Equil, l_ParSymbFact, l_ColPerm, l_RowPerm, &
-             l_IterRefine, l_Trans, l_ReplaceTinyPivot, l_SolveInitialized, &
-             l_RefineInitialized, l_PrintStat
-
-  call f_get_superlu_options(opt, l_Fact, l_Equil, l_ParSymbFact, l_ColPerm, &
-                             l_RowPerm, l_IterRefine, l_Trans,  &
-                             l_ReplaceTinyPivot, l_SolveInitialized, &
-                             l_RefineInitialized, l_PrintStat)
-
-  if (present(Fact)) l_Fact = Fact
-  if (present(Equil)) l_Equil = Equil
-  if (present(ParSymbFact)) l_ParSymbFact = ParSymbFact
-  if (present(ColPerm)) l_ColPerm = ColPerm
-  if (present(RowPerm)) l_RowPerm = RowPerm
-  if (present(IterRefine)) l_IterRefine = IterRefine
-  if (present(Trans)) l_Trans = Trans
-  if (present(ReplaceTinyPivot)) l_ReplaceTinyPivot = ReplaceTinyPivot
-  if (present(SolveInitialized)) l_SolveInitialized = SolveInitialized
-  if (present(RefineInitialized)) l_RefineInitialized = RefineInitialized
-  if (present(PrintStat)) l_PrintStat = PrintStat
-
-  call f_set_superlu_options(opt, l_Fact, l_Equil, l_ParSymbFact, &
-                             l_ColPerm, l_RowPerm, l_IterRefine, l_Trans, &
-                             l_ReplaceTinyPivot, l_SolveInitialized, &
-                             l_RefineInitialized, l_PrintStat)
-
-end subroutine set_superlu_options
 
 end module superlu_mod
 
