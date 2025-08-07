@@ -24,7 +24,7 @@ module superlu_mod
      ! ... more fields exist but these are the most common
   end type superlu_options_t
 
-  contains
+  
  ! Interface declarations for SuperLU_DIST functions
     interface
          ! Initialize SuperLU process grid
