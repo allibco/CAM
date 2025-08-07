@@ -1067,7 +1067,6 @@ module dist_solver_module
 
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
-    use iso_c_binding
     use superlu_mod !binding interfaces
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank, mygrid_size
@@ -1092,7 +1091,7 @@ module dist_solver_module
     integer(kind=c_int) :: info
     real(kind=c_double) :: berr
  
-    type(superlu_options_t) :: options    
+    type(superlu_options_t), target :: options    
    
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
@@ -1127,7 +1126,7 @@ module dist_solver_module
     options%RowPerm=1 !LargeDiag_MC64 (default)
     options%ColPerm=3 !COLAMD (default) - best speed/fill reduction balance
 
-    call set_default_options_dist(options)
+    call set_default_options_dist(c_loc(options))
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
     call dLUstructInit(n_global, LUstruct)
