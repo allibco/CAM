@@ -96,8 +96,8 @@ contains
             integer(c_int) :: info
         end subroutine
 
-        subroutine PStatPrint(options, stat, grid)
-            bind(C, name="PStatPrint")
+        subroutine PStatPrint(options, stat, grid) &
+            bind(c, name="PStatPrint")
             use iso_c_binding
             type(superlu_options_t) :: options
             type(c_ptr)     :: stat
@@ -118,7 +118,7 @@ contains
             type(c_ptr), value :: A
         end subroutine
 
-        subroutine dDestroy_LU(n, grid, LUstruct)
+        subroutine dDestroy_LU(n, grid, LUstruct) &
             bind(c, name="dDestroy_LU")
             use iso_c_binding
             integer(c_int), value :: n
