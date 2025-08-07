@@ -1135,8 +1135,8 @@ module dist_solver_module
     call PStatInit(stat)
 
     ! Call the linear equation solver (writes over rhs (sol))
-    call pdgssvx(options, A, ScalePermstruct, sol, mygrid_size, nrhs, &
-         grid, LUstruct, berr, stat, info)
+    call pdgssvx(c_loc(options), A, ScalePermstruct, sol, mygrid_size, nrhs, &
+         grid, LUstruct, c_loc(berr), stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
        write (*,*) 'Backward error: ', berr
@@ -1145,7 +1145,7 @@ module dist_solver_module
     endif
     
     !print statistics
-    call PStatPrint(options,stat,grid)
+    call PStatPrint(c_loc(options),stat,grid)
 
     !clean up 
     call PStatFree(stat)
