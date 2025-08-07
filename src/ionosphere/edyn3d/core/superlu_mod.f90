@@ -1,13 +1,15 @@
 
 module superlu_mod
 
+  use iso_c_binding
+
 !----------------------------------------------------
   ! This module contains c bindings for superlu functions
   ! that I am using
 !----------------------------------------------------
 
-implicit none
-contains
+  implicit none
+
 
   type, bind(c) :: superlu_options_t
      integer(kind=c_int) :: Fact
@@ -22,6 +24,7 @@ contains
      ! ... more fields exist but these are the most common
   end type superlu_options_t
 
+  contains
  ! Interface declarations for SuperLU_DIST functions
     interface
          ! Initialize SuperLU process grid
@@ -145,9 +148,6 @@ contains
         end subroutine
 
      end interface
-     
-
-
   
 
 end module superlu_mod
