@@ -94,7 +94,7 @@ module superlu_mod
             type(c_ptr), value :: options, A, ScalePermstruct, X, grid, LUstruct, stat
             integer(c_int), value :: ldx, nrhs
             type(c_ptr), value :: berr
-            integer(c_ptr),value :: info
+            type(c_ptr),value :: info
         end subroutine
 
         subroutine PStatPrint(options, stat, grid) &
