@@ -1078,7 +1078,7 @@ module dist_solver_module
 
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
-    integer :: i,iopt first_row, nprow, npcol
+    integer :: i,iopt, first_row, nprow, npcol
 
     ! SuperLU_DIST structures (opaque handles)
     type(kind=c_ptr) :: A, B, grid, ScalePermstruct, LUstruct
