@@ -135,6 +135,10 @@ module dist_solver_module
      enddo
 
      !superlu 
+     !need everything 0-based
+     colind=colind-1
+     rowptr=rowptr-1
+
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
@@ -1096,10 +1100,6 @@ module dist_solver_module
     npcol = lon_size
     call superlu_gridinit(dynamo_world, nprow, npcol, grid)
 
-    !need everything 0-based
-    colind=colind-1
-    rowptr=rowptr-1
-    
     first_row = task_csr_rowstarts(mpi_rank)     !these are 1-based 
     first_row = first_row -1
 
