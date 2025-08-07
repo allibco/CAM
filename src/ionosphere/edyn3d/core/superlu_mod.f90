@@ -2,14 +2,12 @@
 module superlu_mod
 
   use iso_c_binding
+  implicit none
 
 !----------------------------------------------------
   ! This module contains c bindings for superlu functions
   ! that I am using
 !----------------------------------------------------
-
-  implicit none
-
 
   type, bind(c) :: superlu_options_t
      integer(kind=c_int) :: Fact
@@ -34,7 +32,7 @@ module superlu_mod
             integer(c_int), value :: comm    ! MPI communicator (converted to C)
             integer(c_int), value :: nprow   ! Number of process rows
             integer(c_int), value :: npcol   ! Number of process columns
-            type(c_ptr) :: grid              ! Output: grid handle
+            type(c_ptr), value :: grid              ! Output: grid handle
         end subroutine
 
 
@@ -44,7 +42,7 @@ module superlu_mod
                                                    stype, dtype, mtype) &
             bind(c, name='dCreate_CompRowLoc_Matrix_dist')
             use iso_c_binding
-            type(c_ptr) :: A                    ! Output: matrix handle
+            type(c_ptr), value :: A                    ! Output: matrix handle
             integer(c_int), value :: m, n       ! Global matrix dimensions
             integer(c_int), value :: nnz_loc    ! Local non-zeros
             integer(c_int), value :: m_loc      ! Local rows
@@ -62,7 +60,7 @@ module superlu_mod
         subroutine set_default_options_dist(options) &
             bind(c, name='set_default_options_dist')
             use iso_c_binding
-            type(c_ptr) :: options
+            type(c_ptr), value :: options
         end subroutine
 
         ! Initialize scale/permutation structure
@@ -70,7 +68,7 @@ module superlu_mod
             bind(c, name='dScalePermstructInit')
             use iso_c_binding
             integer(c_int), value :: m, n
-            type(c_ptr) :: ScalePermstruct
+            type(c_ptr), value :: ScalePermstruct
         end subroutine
 
         ! Initialize LU structure
@@ -78,14 +76,14 @@ module superlu_mod
             bind(c, name='dLUstructInit')
             use iso_c_binding
             integer(c_int), value :: n
-            type(c_ptr) :: LUstruct
+            type(c_ptr), value :: LUstruct
         end subroutine
 
         ! Initialize statistics
         subroutine PStatInit(stat) &
             bind(c, name='PStatInit')
             use iso_c_binding
-            type(c_ptr) :: stat
+            type(c_ptr), value :: stat
           end subroutine PStatInit
           
         ! Main solver routine
@@ -96,15 +94,15 @@ module superlu_mod
             type(c_ptr), value :: options, A, ScalePermstruct, X, grid, LUstruct, stat
             integer(c_int), value :: ldx, nrhs
             type(c_ptr), value :: berr
-            integer(c_int) :: info
+            integer(c_ptr),value :: info
         end subroutine
 
         subroutine PStatPrint(options, stat, grid) &
             bind(c, name="PStatPrint")
             use iso_c_binding
-            type(superlu_options_t) :: options
-            type(c_ptr)     :: stat
-            type(c_ptr)        :: grid
+            type(c_ptr), value :: options
+            type(c_ptr), value :: stat
+            type(c_ptr), value :: grid
         end subroutine PStatPrint
 
         ! Cleanup functions
@@ -125,8 +123,8 @@ module superlu_mod
             bind(c, name="dDestroy_LU")
             use iso_c_binding
             integer(c_int), value :: n
-            type(c_ptr)      :: grid
-            type(c_ptr)     :: LUstruct
+            type(c_ptr), value    :: grid
+            type(c_ptr), value    :: LUstruct
         end subroutine dDestroy_LU
         
         subroutine dScalePermstructFree(ScalePermstruct) &
