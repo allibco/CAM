@@ -1081,7 +1081,7 @@ module dist_solver_module
     integer :: i,iopt, first_row, nprow, npcol
 
     ! SuperLU_DIST structures (opaque handles)
-    type(kind=c_ptr) :: A, B, grid, ScalePermstruct, LUstruct
+    type(c_ptr) :: A, grid, ScalePermstruct, LUstruct
     type(c_ptr) :: stat
 
     ! Other variables
