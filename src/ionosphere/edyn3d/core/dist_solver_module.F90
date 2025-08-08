@@ -1179,7 +1179,7 @@ module dist_solver_module
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size, &
-         calc_grid_ij, my_hgridsize
+         calc_grid_ij, my_hgridsize, partner_exchange_hemisphere_vec
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size) :: fout
@@ -1276,7 +1276,8 @@ module dist_solver_module
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
-         mygrid_size, mpi_rank, calc_grid_ij
+         mygrid_size, mpi_rank, calc_grid_ij, &
+         partner_exchange_hemisphere_vec
 
 
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
