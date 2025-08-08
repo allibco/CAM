@@ -199,7 +199,9 @@ contains
 
     use stencil_module, only: calculate_coef, calculate_coef_ns2, calculate_coef_ns
     use stencil_module, only: calculate_bij
-    use solver_module, only: linear_system
+    !use solver_module, only: linear_system
+    use dist_solver_module, only: dist_linear_system
+
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_get
 
     !use fieldline_module,only: npts_s1,npts_s2, bmag_s1, bmag_s2, vmp_s1, vmp_s2
@@ -390,7 +392,7 @@ contains
        tmp_ghost(4,:,:,mlat0:mlat1,mlon0:mlon1) = vn_s1(:,:,mlat0:mlat1,mlon0:mlon1)
        call sync_mlat_5d(tmp_ghost(:,:,:,:,mlon0:mlon1), 4, nhgt_fix, 2)
        call sync_mlon_5d(tmp_ghost, 4, nhgt_fix, 2)
-
+       
        sigP_s1(:,:,:,:) = tmp_ghost(1,:,:,:,:)
        sigH_s1(:,:,:,:) = tmp_ghost(2,:,:,:,:)
        ntlU_s1(:,:,:,:) = tmp_ghost(3,:,:,:,:)
@@ -463,7 +465,8 @@ contains
 
        ! construct linear system and solve
        call t_startf(subname//'->linear_system_solve')
-       call linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
+       !call linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
+       call dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
        call t_stopf(subname//'->linear_system_solve')
 
        call edyn3d_hist_mlonlat_out('HILAT_FAC',fac_hl_p(1:2,mlat0:mlat1,mlon0:mlon1))

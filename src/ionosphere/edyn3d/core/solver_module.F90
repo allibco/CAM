@@ -698,7 +698,7 @@ module solver_module
     real(kind=c_double),dimension(nnz),intent(in) :: values
     real(kind=rp),dimension(n),intent(in) :: rhs
     real(kind=rp),dimension(n) :: sol
-
+#if 0
 ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
     integer :: i,iopt,info
@@ -738,7 +738,8 @@ module solver_module
     iopt = 3
     call c_fortran_dgssv(iopt, n, nnz, nrhs, &
       values, rowind, colptr, sol, n, f_factors, info)
-
+#endif
+    
   endfunction solve_superlu
 !-----------------------------------------------------------------------
   pure subroutine csr_to_csc(nrow,ncol,nnz, &
