@@ -1136,7 +1136,7 @@ module dist_solver_module
 
     ! Call the linear equation solver (writes over rhs (sol))
     call pdgssvx(c_loc(options), A, ScalePermstruct, sol, mygrid_size, nrhs, &
-         grid, LUstruct, c_loc(berr), stat, info)
+         grid, LUstruct, berr, stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
        write (*,*) 'Backward error: ', berr
