@@ -1089,7 +1089,7 @@ module dist_solver_module
 
     ! Other variables
     integer(kind=c_int) :: info
-    real(kind=c_double) :: berr
+    real(kind=c_double), target :: berr_array(nrhs)
  
     type(superlu_options_t), target :: options    
    
@@ -1136,7 +1136,7 @@ module dist_solver_module
 
     ! Call the linear equation solver (writes over rhs (sol))
     call pdgssvx(c_loc(options), A, ScalePermstruct, sol, mygrid_size, nrhs, &
-         grid, LUstruct, berr, stat, info)
+         grid, LUstruct, c_loc(berr_array), stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
        write (*,*) 'Backward error: ', berr

@@ -93,7 +93,7 @@ module superlu_mod
             use iso_c_binding
             type(c_ptr), value :: options, A, ScalePermstruct, X, grid, LUstruct, stat
             integer(c_int), value :: ldx, nrhs
-            type(c_double), value :: berr
+            type(c_ptr), value :: berr
             integer(c_int),value :: info
         end subroutine
 
