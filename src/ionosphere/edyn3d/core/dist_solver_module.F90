@@ -1076,9 +1076,16 @@ module dist_solver_module
     integer(kind=c_int),dimension(nnz_loc),intent(in) :: colind
     real(kind=c_double),dimension(nnz_loc),intent(in) :: values
 
-    real(kind=rp),dimension(n_loc),intent(in) :: rhs
-    real(kind=rp),dimension(n_loc) :: sol
+    !warning! we assume that kind=rp is same as c_double for values
+    !and rhs input
 
+    real(kind=c_double),dimension(n_loc),intent(in) :: rhs
+    real(kind=c_double),dimension(n_loc), target :: sol
+
+    !we might not want to assume that kind=rp is same as c_double
+    real(kind=c_double), dimension(n_loc), target :: sol_c
+
+    
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
     integer :: i,iopt, first_row, nprow, npcol
@@ -1135,11 +1142,12 @@ module dist_solver_module
     call PStatInit(stat)
 
     ! Call the linear equation solver (writes over rhs (sol))
-    call pdgssvx(c_loc(options), A, ScalePermstruct, sol, mygrid_size, nrhs, &
+    call pdgssvx(c_loc(options), A, ScalePermstruct, c_loc(sol),&
+         mygrid_size, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
-       write (*,*) 'Backward error: ', berr
+       write (*,*) 'Backward error: ', berr_array(1)
     else
        write(*,*) 'INFO from pdgssvx = ', info
     endif
