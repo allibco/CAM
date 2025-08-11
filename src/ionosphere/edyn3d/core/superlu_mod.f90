@@ -122,7 +122,7 @@ module superlu_mod
         subroutine dDestroy_LU(n, grid, LUstruct) &
             bind(c, name="dDestroy_LU")
             use iso_c_binding
-            integer(c_int), value :: n
+            integer(c_int), value :: n  ! Problem size (number of columns in A)
             type(c_ptr), value    :: grid
             type(c_ptr), value    :: LUstruct
         end subroutine dDestroy_LU

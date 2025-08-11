@@ -1165,7 +1165,7 @@ module dist_solver_module
     call PStatFree(stat)
     call Destroy_SuperMatrix_Store_dist(A)
     call dScalePermstructFree(ScalePermstruct)
-    call dDestroy_LU
+    call dDestroy_LU(n_global,grid,LUstruct)
     call dLUStructFree(LUStruct)
     call superlu_gridexit(grid)
 
