@@ -2,6 +2,7 @@ module dist_solver_module
   use perf_mod, only: t_startf, t_stopf
 
   use prec,only:rp
+  use iso_c_binding
 
   implicit none
 
