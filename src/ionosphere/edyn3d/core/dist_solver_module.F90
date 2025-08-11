@@ -1070,7 +1070,7 @@ module dist_solver_module
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
     use superlu_mod, only: dCreate_CompRowLoc_Matrix_dist, superlu_gridinit, &
          set_default_options_dist, dScalePermstructInit, dLUstructInit, &
-         PStatInit, pdgssvx, PStatPrint, Destroy_SuperMatrix_Store_dist, &
+         PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
          dScalePermstructFree,dDestroy_LU,dLUStructFree,&
          superlu_gridexit, superlu_options_t
     
@@ -1163,9 +1163,9 @@ module dist_solver_module
 
     !clean up 
     call PStatFree(stat)
-    call Destroy_SuperMat_Store_dist(A)
+    call Destroy_SuperMatrix_Store_dist(A)
     call dScalePermstructFree(ScalePermstruct)
-    call dDestroyLU
+    call dDestroy_LU
     call dLUStructFree(LUStruct)
     call superlu_gridexit(grid)
 
