@@ -1078,9 +1078,9 @@ module dist_solver_module
          task_csr_rowstarts, mpi_rank, mygrid_size
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
-    integer(kind=c_int),dimension(n_loc+1),intent(in) :: rowptr
-    integer(kind=c_int),dimension(nnz_loc),intent(in) :: colind
-    real(kind=c_double),dimension(nnz_loc),intent(in) :: values
+    integer(kind=c_int),dimension(n_loc+1),intent(in), target :: rowptr
+    integer(kind=c_int),dimension(nnz_loc),intent(in), target :: colind
+    real(kind=c_double),dimension(nnz_loc),intent(in), target :: values
 
     !warning! we assume that kind=rp is same as c_double for values
     !and rhs input
@@ -1122,7 +1122,7 @@ module dist_solver_module
     ! SLU_D     /* 1 = double precision real */
     ! SLU_GE,    /* 0 = general */
     call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
-         values, colind, rowptr, 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
+         c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
 
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
