@@ -1069,8 +1069,8 @@ module dist_solver_module
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
     use superlu_mod, only: dCreate_CompRowLoc_Matrix_dist, superlu_gridinit, &
          set_default_options_dist, dScalePermstructInit, dLUstructInit, &
-         PStatInit, pdgssvx, PStatPrint, Destroy_SuperMat_Store_dist, &
-         dScalePermstructFree,dDestroyLU,dLUStructFree,&
+         PStatInit, pdgssvx, PStatPrint, Destroy_SuperMatrix_Store_dist, &
+         dScalePermstructFree,dDestroy_LU,dLUStructFree,&
          superlu_gridexit
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
