@@ -24,7 +24,8 @@ module dist_solver_module
     use mpi_module, only: mpi_rank,dynamo_world,lat_rank,lon_rank,&
                           nmlat_task,nmlon_task,mygrid_size,&
                           sync_mlat_5d, sync_mlon_5d,& 
-                          sync_mlat_3d, sync_mlon_3d
+                          sync_mlat_3d, sync_mlon_3d, &
+                          superlu_options_t
     
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
 ! nmlat_h => # mag latitudes in one hemisphere
