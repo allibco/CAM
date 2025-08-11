@@ -1121,7 +1121,7 @@ module dist_solver_module
     ! SLU_NR_loc  /* distributed compressed row format  */ 
     ! SLU_D     /* 1 = double precision real */
     ! SLU_GE,    /* 0 = general */
-    call dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+    call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
 
     ! Setup the right hand side (rhs contains local data)
