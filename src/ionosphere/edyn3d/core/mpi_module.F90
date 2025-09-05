@@ -2,6 +2,7 @@
 module mpi_module
 
   use prec, only: rp
+  use cam_logfile, only: iulog
 #ifdef PARALLEL
   use MPI
   use iso_fortran_env, only: real32,real64
@@ -75,13 +76,13 @@ module mpi_module
     !we could say divisible by 2)
     ! Check if mpi_size is valid for even lon_size constraint
     if (mpi_size /= 1 .and. mpi_size /= 2 .and. mod(mpi_size, 4) /= 0) then
-       write(6,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2 (OR THERE WILL BE PROBLEMS)'
-       write(6,*) 'Current mpi_size =', mpi_size
+       write(iulog,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2 (OR THERE WILL BE PROBLEMS)'
+       write(iulog,*) 'Current mpi_size =', mpi_size
     endif
     
     do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
       lon_size = mpi_size / lat_size
-      if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 2) exit ! lon_size >= lat_size
+      if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 0) exit ! lon_size >= lat_size
     enddo
    
 ! stack along latitudes first then longitudes

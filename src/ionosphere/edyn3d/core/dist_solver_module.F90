@@ -3,6 +3,7 @@ module dist_solver_module
 
   use prec,only:rp
   use iso_c_binding
+  use cam_logfile, only: iulog
 
   implicit none
 
@@ -1153,9 +1154,9 @@ module dist_solver_module
          grid, LUstruct, c_loc(berr_array), stat, info)
     
     if (info == 0 .and. mpi_rank == 0) then
-       write (*,*) 'Backward error: ', berr_array(1)
+       write (iulog,*) 'Backward error: ', berr_array(1)
     else
-       write(*,*) 'INFO from pdgssvx = ', info
+       write(iulog,*) 'INFO from pdgssvx = ', info
     endif
     
     !print statistics
