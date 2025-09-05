@@ -64,6 +64,11 @@ contains
     ! init mpi for 3D edynamo
     call mpi_init( mpicom_atm, npes_edyn3D )
 
+    ! AB: log grid info:
+    if (masterproc) then
+       write(iulog,*) prefix,'3D Edyn lon_size, lat_size: ',lon_size,lat_size
+    end if
+    
     ! set up magnetic latitude and longitude grids
     call generate_mag_grid(edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt)
 
