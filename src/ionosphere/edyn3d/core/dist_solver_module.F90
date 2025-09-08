@@ -840,8 +840,8 @@ module dist_solver_module
              colind_s(nnz_s) = jcol_s(k,ij)
              values_s(nnz_s) = nzval_s(k,ij)
           enddo
-          rowptr_s(row_counter_s + 1) = nnz_s + 1
           row_counter_s = row_counter_s + 1
+          rowptr_s(row_counter_s) = nnz_s + 1
        enddo
      else ! I own row 1 (grid point i=1, j=1)
        rowptr_s(1) = 1
@@ -857,8 +857,12 @@ module dist_solver_module
        row_counter_s = row_counter_s + 1
        rowptr_s(row_counter_s) = nnz_s + 1
        !now remaining rows
-        do ij = ij_start_s+1, ij_stop_s
+       if (ij_start_s+1 <> 2)
+       do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
+          if (nnz_s + cnt > size(colind_s)) then
+             write(iulog,*) 'Error: sparse matrix arrays too small'
+          endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
              colind_s(nnz_s) = jcol_s(k,ij)
@@ -868,7 +872,7 @@ module dist_solver_module
           rowptr_s(row_counter_s) = nnz_s + 1
        enddo
     endif
-    
+    write(iulog,*) 'mpi_rank, nnz_s = ', mpi_rank, nnz_s
     !loop through north hemiphere
     rowptr_n(1) = 1
     row_counter_n = 1
@@ -902,7 +906,7 @@ module dist_solver_module
              my_rowptr(i) = rowptr_s(i)
           enddo
           nnz_s = my_rowptr(row_counter_s + 1)
-          write(iulog,*) 'mpi_rank, row_counter_s, nnz_s = ', mpi_rank, nnz_s, row_counter_s
+          write(iulog,*) 'mpi_rank, row_counter_s, nnz_s = ', mpi_rank, row_counter_s, nnz_s
           do concurrent (i = 1:nnz_s)
              my_colind(i) = colind_s(i)
              my_values(i) = values_s(i)
