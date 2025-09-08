@@ -902,6 +902,7 @@ module dist_solver_module
              my_rowptr(i) = rowptr_s(i)
           enddo
           nnz_s = my_rowptr(row_counter_s + 1)
+          write(iulog,*) 'mpi_rank, row_counter_s, nnz_s = ', mpi_rank, nnz_s, row_counter_s
           do concurrent (i = 1:nnz_s)
              my_colind(i) = colind_s(i)
              my_values(i) = values_s(i)
