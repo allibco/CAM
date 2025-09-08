@@ -591,8 +591,8 @@ module dist_solver_module
           !extra connection to South at 6
           !      lhs(ij,(im-1)*nmlat_T1+jS-1) = coef(6,jS,i)
           rowcnt_n(ij) = rowcnt_n(ij)+1
-          jcol_n(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
-          nzval_n(rowcnt_s(ij),ij)= coef_s(6,j,i)
+          jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
+          nzval_n(rowcnt_n(ij),ij)= coef_s(6,j,i)
           !coef 4 (i-1, j-1)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN-1, lat_rank)
@@ -609,8 +609,8 @@ module dist_solver_module
           !extra connection to South at 7
           !      lhs(ij, (i-1)*nmlat_T1+jS-1) = coef(7,jS,i)
           rowcnt_n(ij) = rowcnt_n(ij)+1
-          jcol_n(rowcnt_s(ij),ij)= calc_grid_ij(i, jS-1, lat_rank)
-          nzval_n(rowcnt_s(ij),ij)= coef_s(7,j,i)
+          jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jS-1, lat_rank)
+          nzval_n(rowcnt_n(ij),ij)= coef_s(7,j,i)
           !coef 3 (i, j-1)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i, jN-1, lat_rank)
@@ -627,8 +627,8 @@ module dist_solver_module
           !extra connection to South at 8
           !      lhs(ij,(ip-1)*nmlat_T1+jS-1) = coef(8,jS,i)
           rowcnt_n(ij) = rowcnt_n(ij)+1
-          jcol_n(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jS-1, lat_rank)
-          nzval_n(rowcnt_s(ij),ij)= coef_s(8,j,i)
+          jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jS-1, lat_rank)
+          nzval_n(rowcnt_n(ij),ij)= coef_s(8,j,i)
           !coef 2 (i+1, j-1)
           rowcnt_n(ij) = rowcnt_n(ij)+1
           jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i+1, jN-1, lat_rank)
