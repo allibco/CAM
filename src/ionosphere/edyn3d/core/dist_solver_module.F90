@@ -849,6 +849,9 @@ module dist_solver_module
        nnz_s = 0
        ! first row seperately
        cnt = rowcnt_s(1)
+       if (cnt > size(colind_s)) then
+          write(iulog,*) 'Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
+       endif
        do k = 1, cnt
           nnz_s = nnz_s + 1
           colind_s(nnz_s) = jcol1(k)
@@ -857,11 +860,11 @@ module dist_solver_module
        row_counter_s = row_counter_s + 1
        rowptr_s(row_counter_s) = nnz_s + 1
        !now remaining rows
-       if (ij_start_s+1 <> 2)
+       write(iulog,*) "ij_start_s + 1 = (2)", ij_start_s+1
        do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
           if (nnz_s + cnt > size(colind_s)) then
-             write(iulog,*) 'Error: sparse matrix arrays too small'
+             write(iulog,*) 'Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
           endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
