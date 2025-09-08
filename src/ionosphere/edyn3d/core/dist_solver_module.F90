@@ -908,7 +908,7 @@ module dist_solver_module
           !my south (goes first)
 
           if (row_counter_s + 1 > size(my_rowptr)) then
-             write(iulog,*) 'AB: Error: my_rowptr array too small for south data, size = ', size(my_row_ptr)
+             write(iulog,*) 'AB: Error: my_rowptr array too small for south data, size = ', size(my_rowptr)
           endif
           do concurrent (i = 2:row_counter_s + 1)
              my_rowptr(i) = rowptr_s(i)
