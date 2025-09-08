@@ -271,7 +271,8 @@ module dist_solver_module
 
     ! procs will set up rows for their domain in the southern hemisphere and northern hemisphere
     ! we'll keep in two different arrays to combine when we assemble the CSR matricx
-    ! each proc has to have a continguous block od rows, so we'll have to apply a permutation
+    ! each proc has to have a continguous block od rows, so we'll have to do a bit of
+    ! rearraging
     
     ! Set up matrix with loops through the following regions:
     ! poles, lower/upper lats (through latm_JT), then latm_Jt, through equator
@@ -583,6 +584,9 @@ module dist_solver_module
           
           
           !!Northern Hemi
+
+          !AB-calc_ij for North hemisphere
+          ij = calc_grid_ij(i,jN,lat_rank)
 
           !extra connection to South at 6
           !      lhs(ij,(im-1)*nmlat_T1+jS-1) = coef(6,jS,i)
