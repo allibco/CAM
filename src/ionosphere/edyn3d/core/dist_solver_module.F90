@@ -193,7 +193,7 @@ module dist_solver_module
     integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip, k, cnt
     integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
     integer :: nnz_s, nnz_n, row_counter_s, row_counter_n
-    integer :: nnz_south, nnz_north
+    integer :: nnz_south, nnz_north, num_row_n, num_row_s
     
     ! the first row has most elements (nmlon+2)
     !special case (only 1 processor does this)
@@ -880,9 +880,10 @@ module dist_solver_module
        enddo
     endif
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
-    row_counter_s = row_counter_s -1
+    num_row_s = row_counter_s -1
+    nnz_south = nnz_s
+    write(iulog,*) 'AB: mpi_rank, nnz_south, num_rows_s = ', mpi_rank, nnz_south, num_rows_s
     
-    write(iulog,*) 'AB: mpi_rank, nnz_s, row_counter_s = ', mpi_rank, nnz_s, row_counter_s
     !loop through north hemiphere
     rowptr_n(1) = 1
     row_counter_n = 1
@@ -899,10 +900,12 @@ module dist_solver_module
        row_counter_n = row_counter_n + 1
        rowptr_n(row_counter_n) = nnz_n + 1
     enddo
-
-
+    num_row_n = row_counter_n - 1
+    nnz_north = nnz_n
+    
     if (mpi_size > 0) then
-       !now get my block of the csr matrix (my_rowptr, my_values, my_colind)
+       !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
+       !still using 1-based indices
        my_rowptr(1) = 1
 
        ! now swap hemisphere data with partner
@@ -911,18 +914,18 @@ module dist_solver_module
        if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
           call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
                partner_rowptr, partner_values, partner_cols)
-          !my south (goes first)
 
-          if (row_counter_s + 1 > size(my_rowptr)) then
-             write(iulog,*) 'AB: Error: my_rowptr array too small for south data, size = ', size(my_rowptr)
+          !my south (goes first into csr block)
+          if (num_row_s + 1 > size(my_rowptr)) then
+             write(iulog,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
           endif
-          do concurrent (i = 2:row_counter_s + 1)
+          do concurrent (i = 2:num_row_s + 1)
              my_rowptr(i) = rowptr_s(i)
              write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
           enddo
           
-          nnz_south = my_rowptr(row_counter_s + 1) - 1
-          write(iulog,*) 'AB: mpi_rank, row_counter_s, nnz_south = ', mpi_rank, row_counter_s, nnz_south
+          nnz_south = my_rowptr(num_row_s + 1) - 1
+          write(iulog,*) 'AB: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
           if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
              write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
           endif
@@ -935,11 +938,13 @@ module dist_solver_module
           !partner has north
           do i = 1,  partner_hgridsize
              cnt = partner_rowptr(i+1) - partner_rowptr(i)
-             my_rowptr(row_counter_s + 1 + i) = my_rowptr(row_counter_s + i) + cnt
+             my_rowptr(num_row_s + 1 + i) = my_rowptr(num_row_s + i) + cnt
           enddo
           !north proc's data goes second
-          !CHECK mygrid_size = row_counter_s + partner_hgridsize
-
+          !CHECK mygrid_size = num_row_s + partner_hgridsize
+          if (mygrid_size /= num_row_s + partner_hgrdsize) then
+             write(iulog, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
+          
           nnz_north = my_rowptr(mygrid_size + 1) -1
 
           if (nnz_south + nnz_north > size(my_colind)) then
@@ -955,12 +960,12 @@ module dist_solver_module
           call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, colind_s, &
                partner_rowptr, partner_values, partner_cols)
           
-          !partner has south - partner's data goes first
+          !partner has south - partner's data goes first into csr block
           do concurrent (i = 2:partner_hgridsize + 1)
              my_rowptr(i) = partner_rowptr(i)
           enddo
           
-          nnz_south = my_rowptr(partner_hgridsize + 1)
+          nnz_south = my_rowptr(partner_hgridsize + 1) -1
           do concurrent (i = 1:nnz_south)
              my_colind(i) = partner_cols(i)
              my_values(i) = partner_values(i)
@@ -972,7 +977,7 @@ module dist_solver_module
              my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize + i)+cnt
           enddo
           
-          nnz_north = my_rowptr(mygrid_size + 1)
+          nnz_north = my_rowptr(mygrid_size + 1) -1
           do concurrent (i = 1:nnz_north)
              my_colind(nnz_south + i) = colind_n(i)
              my_values(nnz_south + i) = values_n(i)
@@ -981,20 +986,20 @@ module dist_solver_module
        endif
     else !one task
        !south 
-       do concurrent (i = 1:row_counter_s + 1)
+       do concurrent (i = 1:num_row_s + 1)
           my_rowptr(i) = rowptr_s(i)
        enddo
-       nnz_south = my_rowptr(row_counter_s + 1)
+       nnz_south = my_rowptr(num_row_s + 1) -1
        do concurrent (i=1:nnz_south)
           my_colind(i) = colind_s(i)
           my_values(i) = values_s(i)
        enddo
        !north
-       do i = 1, row_counter_n
+       do i = 1, num_row_n
           cnt = rowptr_n(i+1) - rowptr_n(i)
-          my_rowptr(row_counter_s +i + 1) = my_rowptr(row_counter_s + i) + cnt
+          my_rowptr(num_row_s +i + 1) = my_rowptr(num_row_s + i) + cnt
        enddo
-       nnz_north = my_rowptr(mygrid_size + 1)
+       nnz_north = my_rowptr(mygrid_size + 1) -1
        do concurrent (i = 1:nnz_north)
           my_colind(nnz_south + i) = colind_n(i)
           my_values(nnz_south + i) = values_n(i)
