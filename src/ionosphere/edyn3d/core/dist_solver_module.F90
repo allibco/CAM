@@ -882,7 +882,7 @@ module dist_solver_module
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
     num_row_s = row_counter_s -1
     nnz_south = nnz_s
-    write(iulog,*) 'AB: mpi_rank, nnz_south, num_rows_s = ', mpi_rank, nnz_south, num_rows_s
+    write(iulog,*) 'AB: mpi_rank, nnz_south, num_rows_s = ', mpi_rank, nnz_south, num_row_s
     
     !loop through north hemiphere
     rowptr_n(1) = 1
@@ -942,8 +942,9 @@ module dist_solver_module
           enddo
           !north proc's data goes second
           !CHECK mygrid_size = num_row_s + partner_hgridsize
-          if (mygrid_size /= num_row_s + partner_hgrdsize) then
+          if (mygrid_size /= num_row_s + partner_hgridsize) then
              write(iulog, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
+          endif
           
           nnz_north = my_rowptr(mygrid_size + 1) -1
 
