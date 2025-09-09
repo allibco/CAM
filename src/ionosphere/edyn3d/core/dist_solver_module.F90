@@ -912,7 +912,7 @@ module dist_solver_module
           endif
           do concurrent (i = 2:row_counter_s + 1)
              my_rowptr(i) = rowptr_s(i)
-             write(iulog,*) 'i, my_rowptr(i), rowwptr_s(i)', i, my_rowptr(i), rowwptr_s(i)
+             write(iulog,*) 'i, my_rowptr(i), rowwptr_s(i)', i, my_rowptr(i), rowptr_s(i)
           enddo
           
           nnz_south = my_rowptr(row_counter_s + 1)
