@@ -342,7 +342,7 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
     real(kind=rp), dimension(partner_hgridsize*nnz), intent(out) :: partner_values
 
     
-    integer :: i
+    integer :: i, nnz_count
     
 #ifdef PARALLEL
 
@@ -389,8 +389,8 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
     do concurrent i =1, my_hgridsize + 1
        partner_rowptr(i) = my_rowptr(i)
     enddo
-    nnz = my_rowptr(my_hgridsize + 1)
-    do concurrent i = 1, nnz
+    nnz_count = my_rowptr(my_hgridsize + 1)
+    do concurrent i = 1, nnz_count
        partner_cols(i) = my_cols(i)
        partner_values(i) = my_values(i)
     enddo
