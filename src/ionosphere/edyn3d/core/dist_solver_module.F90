@@ -918,10 +918,10 @@ module dist_solver_module
           endif
           do concurrent (i = 2:row_counter_s + 1)
              my_rowptr(i) = rowptr_s(i)
-             write(iulog,*) 'AB: X=i, my_rowptr(i), rowwptr_s(i)', i, my_rowptr(i), rowptr_s(i)
+             write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
           enddo
           
-          nnz_south = my_rowptr(row_counter_s + 1)
+          nnz_south = my_rowptr(row_counter_s + 1) - 1
           write(iulog,*) 'AB: mpi_rank, row_counter_s, nnz_south = ', mpi_rank, row_counter_s, nnz_south
           if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
              write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
@@ -940,10 +940,10 @@ module dist_solver_module
           !north proc's data goes second
           !CHECK mygrid_size = row_counter_s + partner_hgridsize
 
-          nnz_north = my_rowptr(mygrid_size + 1)
+          nnz_north = my_rowptr(mygrid_size + 1) -1
 
           if (nnz_south + nnz_north > size(my_colind)) then
-             write(iulog,*) 'AB: Error: my_colind array too small for combined data'
+             write(iulog,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
           endif
 
           do concurrent (i = 1:nnz_north)
