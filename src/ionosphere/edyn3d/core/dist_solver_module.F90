@@ -844,7 +844,8 @@ module dist_solver_module
           row_counter_s = row_counter_s + 1
           rowptr_s(row_counter_s) = nnz_s + 1
        enddo
-     else ! I own row 1 (grid point i=1, j=1)
+        
+    else ! I own row 1 (grid point i=1, j=1)
        rowptr_s(1) = 1
        row_counter_s = 1
        nnz_s = 0
@@ -862,6 +863,8 @@ module dist_solver_module
        rowptr_s(row_counter_s) = nnz_s + 1
        !now remaining rows
        write(iulog,*) "AB: ij_start_s + 1 = (2)", ij_start_s+1
+       write(iulog,*) "AB: ij_stop_s ", ij_stop_s
+
        do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
           if (nnz_s + cnt > size(colind_s)) then
@@ -876,7 +879,10 @@ module dist_solver_module
           rowptr_s(row_counter_s) = nnz_s + 1
        enddo
     endif
-    write(iulog,*) 'AB: mpi_rank, nnz_s = ', mpi_rank, nnz_s
+    !now row_counter_s needs to be decremented by 1 so it = #rows of s
+    row_counter_s = row_counter_s -1
+    
+    write(iulog,*) 'AB: mpi_rank, nnz_s, row_counter_s = ', mpi_rank, nnz_s, row_counter_s
     !loop through north hemiphere
     rowptr_n(1) = 1
     row_counter_n = 1
