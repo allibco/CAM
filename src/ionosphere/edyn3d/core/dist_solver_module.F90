@@ -826,9 +826,8 @@ module dist_solver_module
 ! which is in jcol1 and nzval1
 !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
-
     !might need to change to 0-based indexing (yes, but happens later)
-    !first southern hemisphere rows
+    !first SOUTH hemisphere rows
     if (mpi_rank > 0) then !don't own row 1
        rowptr_s(1) = 1
        row_counter_s = 1
@@ -878,13 +877,13 @@ module dist_solver_module
           row_counter_s = row_counter_s + 1
           rowptr_s(row_counter_s) = nnz_s + 1
        enddo
-    endif
+    endif !end of SOUTH
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
     num_row_s = row_counter_s -1
     nnz_south = nnz_s
     write(iulog,*) 'AB: mpi_rank, nnz_south, num_rows_s = ', mpi_rank, nnz_south, num_row_s
     
-    !loop through north hemiphere
+    !loop through NORTH hemiphere
     rowptr_n(1) = 1
     row_counter_n = 1
     nnz_n = 0
@@ -902,7 +901,9 @@ module dist_solver_module
     enddo
     num_row_n = row_counter_n - 1
     nnz_north = nnz_n
-    
+
+
+    !SET UP BLOCK CSR
     if (mpi_size > 0) then
        !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
        !still using 1-based indices
@@ -911,7 +912,7 @@ module dist_solver_module
        ! now swap hemisphere data with partner
        !for N and S hemi, the even proc rows go first to maintain grid order
        !(so the south owning process)
-       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+       if (mod(mpi_rank,2) == 0) then !EVEN, own south, **send north**
           call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
                partner_rowptr, partner_values, partner_cols)
 
@@ -921,10 +922,13 @@ module dist_solver_module
           endif
           do concurrent (i = 2:num_row_s + 1)
              my_rowptr(i) = rowptr_s(i)
-             write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
+             !write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
           enddo
+          !nnz_south set above - but souble check
+          if (nnz_south /= my_rowptr(num_row_s + 1) - 1) then
+             write(iulog,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
+          endif
           
-          nnz_south = my_rowptr(num_row_s + 1) - 1
           write(iulog,*) 'AB: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
           if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
              write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
@@ -946,8 +950,9 @@ module dist_solver_module
              write(iulog, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
           endif
           
-          nnz_north = my_rowptr(mygrid_size + 1) -1
-
+          !nnz_north needs to be set from partner's info
+          nnz_north = my_rowptr(mygrid_size + 1) -1  - nnz_south
+          
           if (nnz_south + nnz_north > size(my_colind)) then
              write(iulog,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
           endif
@@ -957,7 +962,7 @@ module dist_solver_module
              my_values(nnz_south + i) = partner_values(i)
           enddo
           
-       else !odd, own north, **send south**
+       else !ODD, own north, **send south**
           call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, colind_s, &
                partner_rowptr, partner_values, partner_cols)
           
@@ -965,20 +970,23 @@ module dist_solver_module
           do concurrent (i = 2:partner_hgridsize + 1)
              my_rowptr(i) = partner_rowptr(i)
           enddo
-          
+
+          !calc based on partner info
           nnz_south = my_rowptr(partner_hgridsize + 1) -1
+
           do concurrent (i = 1:nnz_south)
              my_colind(i) = partner_cols(i)
              my_values(i) = partner_values(i)
           enddo
           
           !my north - goes second
-          do i = 1, row_counter_n
+          do i = 1, num_row_n
              cnt = rowptr_n(i+1) - rowptr_n(i)
-             my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize + i)+cnt
+             my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize + i) + cnt
           enddo
           
-          nnz_north = my_rowptr(mygrid_size + 1) -1
+          !nnz_north alreadycalculated for me above
+
           do concurrent (i = 1:nnz_north)
              my_colind(nnz_south + i) = colind_n(i)
              my_values(nnz_south + i) = values_n(i)
@@ -990,7 +998,7 @@ module dist_solver_module
        do concurrent (i = 1:num_row_s + 1)
           my_rowptr(i) = rowptr_s(i)
        enddo
-       nnz_south = my_rowptr(num_row_s + 1) -1
+       !nnz_south is calculated above    
        do concurrent (i=1:nnz_south)
           my_colind(i) = colind_s(i)
           my_values(i) = values_s(i)
@@ -1000,7 +1008,7 @@ module dist_solver_module
           cnt = rowptr_n(i+1) - rowptr_n(i)
           my_rowptr(num_row_s +i + 1) = my_rowptr(num_row_s + i) + cnt
        enddo
-       nnz_north = my_rowptr(mygrid_size + 1) -1
+       !nnz_north is calc above
        do concurrent (i = 1:nnz_north)
           my_colind(nnz_south + i) = colind_n(i)
           my_values(nnz_south + i) = values_n(i)
