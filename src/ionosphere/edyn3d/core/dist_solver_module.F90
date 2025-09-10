@@ -661,7 +661,7 @@ module dist_solver_module
     
     ! between latm_JT and equator (nmlat_h) REGION (symmetric solution)
     ! don't include equator
-    if ((mlat0 > jlatm_JT .and. mlat0 < nmlat_h ) .or. (mlat1 > jlatm_JT .and. mlat0 < nmlat)) then
+    if ((mlat0 > jlatm_JT .and. mlat0 < nmlat_h ) .or. (mlat1 > jlatm_JT .and. mlat0 < nmlat_h)) then
 
         !loop through the longitudes in my grid
        do i = mlon0, mlon1
