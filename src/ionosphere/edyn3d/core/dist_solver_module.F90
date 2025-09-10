@@ -241,6 +241,13 @@ module dist_solver_module
     nzval1 = 0.0
     coef3_j1_buf = 0.0
 
+    !   some debugging info
+    write(iulog, *) 'mpi_rank, ij_start_s, ij_stop_s', mpi_rank, ij_start_s, ij_stop_s
+    write(iulog, *) 'mpi_rank, ij_start_n, ij_stop_n',mpi_rank, ij_start_n, ij_stop_n
+    write(iulog, *) 'mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size',mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size
+    write(iulog, *) 'mpi_rank, lat_rank, lon_rank',mpi_rank, lat_rank, lon_rank
+
+    
     
 !_______________    
 
@@ -881,7 +888,7 @@ module dist_solver_module
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
     num_row_s = row_counter_s -1
     nnz_south = nnz_s
-    write(iulog,*) 'AB: mpi_rank, nnz_south, num_rows_s = ', mpi_rank, nnz_south, num_row_s
+    !write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
     
     !loop through NORTH hemiphere
     rowptr_n(1) = 1
@@ -985,7 +992,7 @@ module dist_solver_module
              my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize + i) + cnt
           enddo
           
-          !nnz_north alreadycalculated for me above
+          !nnz_north already calculated for me above
 
           do concurrent (i = 1:nnz_north)
              my_colind(nnz_south + i) = colind_n(i)
