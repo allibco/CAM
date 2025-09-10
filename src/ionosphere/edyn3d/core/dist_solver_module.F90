@@ -242,10 +242,10 @@ module dist_solver_module
     coef3_j1_buf = 0.0
 
     !   some debugging info
-    write(iulog, *) 'mpi_rank, ij_start_s, ij_stop_s', mpi_rank, ij_start_s, ij_stop_s
-    write(iulog, *) 'mpi_rank, ij_start_n, ij_stop_n',mpi_rank, ij_start_n, ij_stop_n
-    write(iulog, *) 'mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size',mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size
-    write(iulog, *) 'mpi_rank, lat_rank, lon_rank',mpi_rank, lat_rank, lon_rank
+    write(iulog, *) 'AB: mpi_rank, ij_start_s, ij_stop_s', mpi_rank, ij_start_s, ij_stop_s
+    write(iulog, *) 'AB: mpi_rank, ij_start_n, ij_stop_n',mpi_rank, ij_start_n, ij_stop_n
+    write(iulog, *) 'AB: mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size',mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size
+    write(iulog, *) 'AB: mpi_rank, lat_rank, lon_rank',mpi_rank, lat_rank, lon_rank
 
     
     
@@ -659,15 +659,16 @@ module dist_solver_module
        
     endif
     
-    ! between latm_JT and equator (nmlat_h) REGION (symmetric solution?)
-    if ((mlat0 > jlatm_JT .and. mlat0 /= nmlat_h ) .or. (mlat1 > jlatm_JT .and. mlat0 /= nmlat_h)) then
+    ! between latm_JT and equator (nmlat_h) REGION (symmetric solution)
+    ! don't include equator
+    if ((mlat0 > jlatm_JT .and. mlat0 < nmlat_h ) .or. (mlat1 > jlatm_JT .and. mlat0 < nmlat)) then
 
         !loop through the longitudes in my grid
        do i = mlon0, mlon1
 
-          !loop through relevant latitudes
+          !loop through relevant latitudes (don't do equator)
           loop_start_j = max(mlat0, jlatm_JT+1)
-          loop_stop_j = min(mlat1, nmlat_h)
+          loop_stop_j = min(mlat1, nmlat_h-1)
           
           do j = loop_start_j, loop_stop_j            
              !!!!!!!South Hemishere
