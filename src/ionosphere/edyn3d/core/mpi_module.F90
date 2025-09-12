@@ -333,7 +333,7 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
 #ifdef PARALLEL
     use MPI
 #endif
-    integer, intent(in) :: nnz
+    integer, intent(in) :: nnz_per_row
     
     integer, dimension(my_hgridsize+1), intent(in) :: my_rowptr
     integer, dimension(my_hgridsize*nnz_per_row), intent(in) :: my_cols
@@ -1284,7 +1284,9 @@ endfunction all_gather_int
        endif
        
        if (latrank < 0 .OR. latrank >= lat_size) then
-          write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+          !write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+          ij = -1
+          return
        endif
        
        !num of latitude points in proc parition    
@@ -1294,7 +1296,7 @@ endfunction all_gather_int
        !adjust if i is on edge of global domain
        if (i_in == 0) then
           i = nmlon
-       elseif (i == nmlon+1) then
+       elseif (i_in == nmlon+1) then
           i = 1
        else
           i = i_in
@@ -1321,7 +1323,9 @@ endfunction all_gather_int
        endif
 
         if (latrank < 0 .OR. latrank >= lat_size) then
-          write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+           !write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+           ij = -2
+           return
        endif
               
        !num of latitude points in proc parition    
@@ -1354,7 +1358,7 @@ endfunction all_gather_int
     !calculate ij
     ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
 
-  endfunction calc_grid_ij
+  end function calc_grid_ij
 
   !-----------------------------------------------------------------------
 
