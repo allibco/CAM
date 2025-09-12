@@ -292,9 +292,9 @@ function partner_exchange_int(intin) result(intout)
     integer :: intout
    
 #ifdef PARALLEL
-    integer :: ierr, tag = 88
+    integer :: ierr
+    integer :: tag = 88
     integer :: send_request, recv_request
-    integer :: status(MPI_STATUS_SIZE)
 
     !post receive
     call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
@@ -307,10 +307,12 @@ function partner_exchange_int(intin) result(intout)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
     ! Wait for send to complete
-    call MPI_Wait(send_request, status, ierr)
-    
+    call MPI_Wait(send_request, MPI_STATUS_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
     ! Wait for receive to complete
-    call MPI_Wait(recv_request, status, ierr)
+    call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
 #else
 
@@ -322,7 +324,7 @@ endfunction partner_exchange_int
 
 !-----------------------------------------------------------------------
 
-subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
+subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
      partner_rowptr, partner_values, partner_cols)
 
 
@@ -334,12 +336,12 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
     integer, intent(in) :: nnz
     
     integer, dimension(my_hgridsize+1), intent(in) :: my_rowptr
-    integer, dimension(my_hgridsize*nnz), intent(in) :: my_cols
-    real(kind=rp), dimension(my_hgridsize*nnz), intent(in) :: my_values
+    integer, dimension(my_hgridsize*nnz_per_row), intent(in) :: my_cols
+    real(kind=rp), dimension(my_hgridsize*nnz_per_row), intent(in) :: my_values
 
     integer, dimension(partner_hgridsize+1), intent(out) :: partner_rowptr
-    integer, dimension(partner_hgridsize*nnz), intent(out) :: partner_cols
-    real(kind=rp), dimension(partner_hgridsize*nnz), intent(out) :: partner_values
+    integer, dimension(partner_hgridsize*nnz_per_row), intent(out) :: partner_cols
+    real(kind=rp), dimension(partner_hgridsize*nnz_per_row), intent(out) :: partner_values
 
     
     integer :: i, nnz_count
@@ -354,11 +356,11 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
          dynamo_world, send_request(1), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
-    call MPI_Isend(my_cols, my_hgridsize*nnz, MPI_INTEGER, mpi_partner, 201, dynamo_world, &
+    call MPI_Isend(my_cols, my_hgridsize*nnz_per_row, MPI_INTEGER, mpi_partner, 201, dynamo_world, &
          send_request(2), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
-    call MPI_Isend(my_values, my_hgridsize*nnz, mpi_rp, mpi_partner, 202, dynamo_world, &
+    call MPI_Isend(my_values, my_hgridsize*nnz_per_row, mpi_rp, mpi_partner, 202, dynamo_world, &
          send_request(3), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
@@ -367,11 +369,11 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
          200, dynamo_world, recv_request(1), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
-    call MPI_Irecv(partner_cols,partner_hgridsize*nnz, MPI_INTEGER, mpi_partner, &
+    call MPI_Irecv(partner_cols,partner_hgridsize*nnz_per_row, MPI_INTEGER, mpi_partner, &
          201, dynamo_world, recv_request(2), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
 
-    call MPI_Irecv(partner_values, partner_hgridsize*nnz, mpi_rp, mpi_partner, &
+    call MPI_Irecv(partner_values, partner_hgridsize*nnz_per_row, mpi_rp, mpi_partner, &
          202, dynamo_world, recv_request(3), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
        
@@ -386,11 +388,12 @@ subroutine partner_exchange_hemisphere_mat(nnz, my_rowptr, my_values, my_cols, &
     
 #else
 !serial
-    do concurrent i =1, my_hgridsize + 1
+    do concurrent (i = 1: my_hgridsize + 1)
        partner_rowptr(i) = my_rowptr(i)
     enddo
+    !TO DO: are we 1- or 0-based?
     nnz_count = my_rowptr(my_hgridsize + 1)
-    do concurrent i = 1, nnz_count
+    do concurrent (i = 1: nnz_count
        partner_cols(i) = my_cols(i)
        partner_values(i) = my_values(i)
     enddo
@@ -414,7 +417,7 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
     
 #ifdef PARALLEL
 
-    integer ierr
+    integer :: ierr
     integer :: send_request, recv_request
 
     !send to my partner
@@ -425,20 +428,22 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
 
     !recv from my partner
     call MPI_Irecv(partner_values, partner_hgridsize, mpi_rp, mpi_partner, &
-         401, dynamo_world, recv_request, ierr)
+         400, dynamo_world, recv_request, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
        
     ! Wait for my send to complete
     call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
     !Wait for my recv
     call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
-    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
     
 #else
-!serial
-    do concurrent i =1, my_hgridsize 
+    !serial
+    integer :: i
+    
+    do concurrent i =1:my_hgridsize 
        partner_values(i) = my_values(i)
     enddo
     
@@ -786,10 +791,10 @@ endfunction all_gather_int
     real(kind=rp), dimension(mlon0:mlon1), intent(in) :: varin
     real(kind=rp), dimension(nmlon) :: varout
 
-    integer :: i
+    integer :: i,j
 
 #ifdef PARALLEL
-    integer :: ierr, cnt, myrequest, tag, rs, re, is
+    integer :: ierr, cnt, myrequest, tag, rs, re
     integer, dimension(1:lon_size-1) :: requests  
     real(kind=rp), dimension(maxmlon) :: sendbuf
     real(kind=rp), dimension(nmlon) :: recvbuf
@@ -798,45 +803,51 @@ endfunction all_gather_int
     
     ! load to work array
     sendbuf=0.0
+    recvbuf=0.0
+    varout=0.0
    
     ! gather data to 0 from proc_row 0
-    if (mpi_rank == 0 .and. lon_size > 1 ) then ! receive from other procs in row
+    if (mpi_rank == 0) then !root proc recieves data
 
-       do i = 1,lon_size -1
-          rs = mlon0_task(i)
-          re = mlon1_task(i)
-          cnt = re-rs+1
-          
-          call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
-               i, tag, dynamo_world, &
-               requests(i), ierr)
-          if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
-       enddo
-
-
-       !now wait to receive all data
-       call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
-       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
-
-       !now copy to output
-       !for myself (root 0)
+       !copy my data
        do concurrent (i = mlon0:mlon1)
           varout(i) = varin(i)
        enddo
-       !from all other procs
-       if (lon_size > 1) then
-          is = mlon0_task(1)
-          do concurrent (i = is:nmlon)
-             varout(i) = recvbuf(i)
+       if (lon_size > 1) then !get data from other procs
+          do i = 1,lon_size -1
+             rs = mlon0_task(i)
+             re = mlon1_task(i)
+             cnt = re-rs+1
+          
+             call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
+                  i, tag, dynamo_world, &
+                  requests(i), ierr)
+             if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
           enddo
+
+          !now wait to receive all data
+          call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
+          if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
+
+          !copy from all other procs
+          do i = 1, lon_size - 1
+             rs = mlon0_task(i)
+             re = mlon1_task(i)
+             do concurrent (j = rs:re)
+                varout(j) = recvbuf(j)
+             end do
+          end do
+
+          
        endif
        
     elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root (0)
 
        cnt = mlon1-mlon0+1
-       do concurrent (i = 1:cnt)
-          sendbuf(i) = varin(i+mlon0-1)
-       enddo
+       !do concurrent (i = 1:cnt)
+       !   sendbuf(i) = varin(i+mlon0-1)
+       !enddo
+       sendbuf(1:cnt) = varin(mlon0:mlon1)
        
        call MPI_Isend(sendbuf, cnt, mpi_rp, &
             0, tag, dynamo_world, &
@@ -1250,84 +1261,99 @@ endfunction all_gather_int
     
     use params_module,only:nmlon,nmlat_T1, nmlat_h
 
-    integer, intent(in) :: i_in,j_in,my_latrank
+    integer, intent(in) :: i_in, j_in, my_latrank
     integer:: ij
     
     integer:: m, my_numlat, jS, latrank, i, j
-
-    latrank = my_latrank
-    i = i_in
-    j = j_in
     
     if (mpi_size == 1) then
-      ij = (i-1)*nmlat_T1+j
+      ij = (i_in-1)*nmlat_T1+j_in
+      return
+    endif
 
-   else
+    if (j_in <= nmlat_h) then !south hemi or equator
 
-       if (j <= nmlat_h) then !south hemi or equator
-
-          !if j is in ghost layer for the calling proc, then adjust latrank
-          if (j == mlat1 + 1) then
-             latrank  = latrank + 1
-          elseif (j == mlat0 -1) then
-             latrank  = latrank - 1
-          endif
-          !if (latrank < 0 .OR. latrank >= lat_size) then
-          !   write(6,*) "Error in calc_grid_ij"
-          !endif
-          
-          !num of latitude points in proc parition    
-          my_numlat = nmlat_task(latrank)
-       
-          !adjust if i is on edge of global domain
-          if (i == 0) then
-             i = nmlon
-          elseif (i == nmlon+1) then
-             i = 1
-          endif
-          
-          m = task_lat_offset(latrank)
- 
-       else !north hemi
-
-          !need to know if j is in the ghost point for the
-          !calling proc (and adjust latrank )
-          
-          jS = nmlat_T1 -j +1
-          if (jS == mlat1 + 1) then
-             latrank  = latrank + 1
-          elseif (jS == mlat0 -1) then
-             latrank  = latrank - 1
-          endif
-          !if (latrank < 0 .OR. latrank >= lat_size) then
-          !   write(6,*) "Error in calc_grid_ij"
-          !endif
-          
-          !num of latitude points in proc parition    
-          my_numlat = nmlat_task(latrank)
-          
-          !adjust if i is on edge of global domain
-          if (i == 0) then
-             i = nmlon
-          elseif (i == nmlon+1) then
-             i = 1
-          endif
-       
-          !if i am in the task row that includes equator, then
-          ! subtract 1 from num_lat (becuz don't count equator
-          ! twice)
-          if (latrank == lat_size - 1 ) then
-             my_numlat = my_numlat - 1
-          endif
-       
-          !m is different in the in the north hemisphere
-          m = nmlat_T1 - task_lat_offset(latrank) - my_numlat
+       !calc latrank
+       !if j_in is in ghost layer for the calling proc, then adjust latrank
+       if (j_in == mlat1 + 1) then
+          latrank  = my_latrank + 1
+       elseif (j_in == mlat0 -1) then
+          latrank  = my_latrank - 1
+       else
+          latrank = my_latrank
        endif
-    
-       ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+       
+       if (latrank < 0 .OR. latrank >= lat_size) then
+          write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+       endif
+       
+       !num of latitude points in proc parition    
+       my_numlat = nmlat_task(latrank)
 
-    endif !end morethan one proc
-    
+       !calc i
+       !adjust if i is on edge of global domain
+       if (i_in == 0) then
+          i = nmlon
+       elseif (i == nmlon+1) then
+          i = 1
+       else
+          i = i_in
+       endif
+
+       !no mods to j for south
+       j = j_in
+
+       !offset
+       m = task_lat_offset(latrank)
+       
+    else !north hemi (j_in is in north hemisphere)
+
+       !calc latrank
+       !need to know if j_in is in the ghost point for the
+       !calling proc (and adjust latrank )
+       jS = nmlat_T1 -j_in +1
+       if (jS == mlat1 + 1) then
+          latrank  = my_latrank + 1
+       elseif (jS == mlat0 -1) then
+          latrank  = my_latrank - 1
+       else
+          latrank = my_latrank
+       endif
+
+        if (latrank < 0 .OR. latrank >= lat_size) then
+          write(iulog,*) "Error with latrank in calc_grid_ij: mpi_rank, latrank", mpi_rank, latrank
+       endif
+              
+       !num of latitude points in proc parition    
+       my_numlat = nmlat_task(latrank)
+
+       !calc i
+       !adjust if i is on edge of global domain
+       if (i_in == 0) then
+          i = nmlon
+       elseif (i_in == nmlon+1) then
+          i = 1
+       else
+          i = i_in
+       endif
+       
+       !if i am in the task row that includes equator, then
+       ! subtract 1 from num_lat (becuz don't count equator
+       ! twice)
+       if (latrank == lat_size - 1 ) then
+          my_numlat = my_numlat - 1
+       endif
+
+       !no change to j
+       j = j_in
+       
+       !m is different in the in the north hemisphere
+       m = nmlat_T1 - task_lat_offset(latrank) - my_numlat
+    endif
+
+    !calculate ij
+    ij = (nmlon*m) + (j-m) + ((i-1)*my_numlat)
+
   endfunction calc_grid_ij
 
   !-----------------------------------------------------------------------
