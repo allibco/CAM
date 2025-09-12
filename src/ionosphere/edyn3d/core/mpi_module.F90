@@ -391,8 +391,8 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
     do concurrent (i = 1: my_hgridsize + 1)
        partner_rowptr(i) = my_rowptr(i)
     enddo
-    !TO DO: are we 1- or 0-based?
-    nnz_count = my_rowptr(my_hgridsize + 1)
+    !note for nnz calc that we are 1-based?
+    nnz_count = my_rowptr(my_hgridsize + 1) -1
     do concurrent (i = 1: nnz_count
        partner_cols(i) = my_cols(i)
        partner_values(i) = my_values(i)
