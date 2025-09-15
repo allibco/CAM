@@ -7,7 +7,7 @@ module dist_solver_module
 
   implicit none
 
-  !ths does not incl the dense row at the pole
+  !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
   
   contains
@@ -154,7 +154,16 @@ module dist_solver_module
 
 
      !pot and fac_hl are ready to return (updated grid + halo)
-     
+
+     ! Deallocate arrays to free memory
+     if (allocated(rowptr)) deallocate(rowptr)
+     if (allocated(colind)) deallocate(colind) 
+     if (allocated(values_csr)) deallocate(values_csr)
+     if (allocated(rhs)) deallocate(rhs)
+     if (allocated(z)) deallocate(z)
+     if (allocated(pot_hl_f)) deallocate(pot_hl_f)
+     if (allocated(sol)) deallocate(sol)
+      
      call t_stopf('dist_linear_system')
 
   endsubroutine dist_linear_system
@@ -412,6 +421,10 @@ module dist_solver_module
              jN = nmlat_T1-j+1
              ij = calc_grid_ij(i,jS,lat_rank)
 
+             if (ij > ij_stop_s .or. ij < ij_start_s) then
+                write(iulog,*) 'AB: Error ij south index 1 for lhs', mpi_rank, ij
+             endif
+
              !the edges of the poc domain are handles in calc_grid_ij
              
              !coef 6 (i-1, j-1)
@@ -465,7 +478,10 @@ module dist_solver_module
              !!!!!!!!!!North Hemisphere
              ! note that coef has the direction switched in the NH
              ij = calc_grid_ij(i,jN,lat_rank)
-
+             if (ij > ij_stop_n .or. ij < ij_start_n) then
+                write(iulog,*) 'AB: Error ij north index 1 for lhs', mpi_rank, ij
+             endif
+             
              !coef 4 (i-1, j-1)
              rowcnt_n(ij) = rowcnt_n(ij)+1
              jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN-1, lat_rank)
@@ -532,7 +548,10 @@ module dist_solver_module
 
           !Southern hemisphere
           ij = calc_grid_ij(i,jS,lat_rank)
-
+          if (ij > ij_stop_s .or. ij < ij_start_s) then
+             write(iulog,*) 'AB: Error ij south index 2 for lhs', mpi_rank, ij
+          endif
+          
           !coef 6 (i-1, j-1)
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
@@ -595,7 +614,10 @@ module dist_solver_module
 
           !AB-calc_ij for North hemisphere
           ij = calc_grid_ij(i,jN,lat_rank)
-
+          if (ij > ij_stop_n .or. ij < ij_start_n) then
+             write(iulog,*) 'AB: Error ij north index 2 for lhs', mpi_rank, ij
+          endif
+             
           !extra connection to South at 6
           !      lhs(ij,(im-1)*nmlat_T1+jS-1) = coef(6,jS,i)
           rowcnt_n(ij) = rowcnt_n(ij)+1
@@ -676,6 +698,10 @@ module dist_solver_module
              jN = nmlat_T1-j+1
              ij = calc_grid_ij(i,jS,lat_rank)
 
+             if (ij > ij_stop_s .or. ij < ij_start_s) then
+                write(iulog,*) 'AB: Error ij south index 3 for lhs', mpi_rank, ij
+             endif
+             
              !coef 6 (i-1, j-1)
              rowcnt_s(ij) = rowcnt_s(ij)+1
              jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jS-1, lat_rank)
@@ -723,6 +749,10 @@ module dist_solver_module
              !!!!!!!!!!!!North hemisphere (coef direction switched)
              ij = calc_grid_ij(i,jN,lat_rank)
 
+             if (ij > ij_stop_n .or. ij < ij_start_n) then
+                write(iulog,*) 'AB: Error ij north index 3 for lhs', mpi_rank, ij
+             endif
+             
              !coef 4 (i-1, j-1)
              rowcnt_n(ij) = rowcnt_n(ij)+1
              jcol_n(rowcnt_n(ij),ij)= calc_grid_ij(i-1, jN-1, lat_rank)
@@ -781,7 +811,12 @@ module dist_solver_module
        !loop through the longitudes in my grid
        do i = mlon0, mlon1
           ij = calc_grid_ij(i,j,lat_rank)
+          
+          if (ij > ij_stop_s .or. ij < ij_start_s) then
+             write(iulog,*) 'AB: Error ij south index 4 for lhs', mpi_rank, ij
+          endif
 
+          
           !coef 6 (i-1, j-1)
           rowcnt_s(ij) = rowcnt_s(ij)+1
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, j-1, lat_rank)
@@ -1063,6 +1098,11 @@ module dist_solver_module
           ! for longitude i=1 at the south pole
           i = 1
           ij = calc_grid_ij(i,j, lat_rank)
+
+          if (ij > ij_stop_s .or. ij < ij_start_s) then
+             write(iulog,*) 'AB: Error ij south index for rhs', mpi_rank, ij
+          endif
+          
           !has to get rest of row from other tasks
           rhs_s(ij) = sum(coef10_j1_buf(:))
        endif
@@ -1071,6 +1111,11 @@ module dist_solver_module
        do i = mlon0,mlon1 
           jN = nmlat_T1-j+1 !j=1, so jN= nmlat_T1
           ij = calc_grid_ij(i,jN,lat_rank)
+
+          if (ij > ij_stop_n .or. ij < ij_start_n) then
+             write(iulog,*) 'AB: Error ij north index for rhs', mpi_rank, ij
+          endif
+          
           rhs_n(ij) = phi_pol
        enddo
        j_start = 2
@@ -1081,10 +1126,18 @@ module dist_solver_module
     do concurrent (i = mlon0:mlon1, j = j_start:mlat1)
        !south
        ij = calc_grid_ij(i,j,lat_rank)
+       if (ij > ij_stop_s .or. ij < ij_start_s) then
+          write(iulog,*) 'AB: Error ij south index 2 for rhs', mpi_rank, ij
+       endif
        rhs_s(ij) = coef_10_s(j,i)
+          
        !north
        jN = nmlat_T1-j+1
        ij = calc_grid_ij(i,jN,lat_rank)
+       if (ij > ij_stop_n .or. ij < ij_start_n) then
+             write(iulog,*) 'AB: Error ij nouth index 2 for rhs', mpi_rank, ij
+       endif
+
        rhs_n(ij) = coef_10_n(j,i)
     enddo
 
@@ -1149,7 +1202,7 @@ module dist_solver_module
     real(kind=c_double),dimension(n_loc), target :: sol
 
     !we might not want to assume that kind=rp is same as c_double
-    real(kind=c_double), dimension(n_loc), target :: sol_c
+    !real(kind=c_double), dimension(n_loc), target :: sol_c
 
     
     ! for SuperLU sparse matrix solver
@@ -1181,7 +1234,8 @@ module dist_solver_module
     ! SLU_NR_loc  /* distributed compressed row format  */ 
     ! SLU_D     /* 1 = double precision real */
     ! SLU_GE,    /* 0 = general */
-    call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+   call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
 
     ! Setup the right hand side (rhs contains local data)
@@ -1212,15 +1266,22 @@ module dist_solver_module
          mygrid_size, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
     
-    if (info == 0 .and. mpi_rank == 0) then
-       write (iulog,*) 'Backward error: ', berr_array(1)
-    else
-       write(iulog,*) 'INFO from pdgssvx = ', info
+    if (info /= 0) then
+       write(iulog,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
     endif
+    if (info == 0 .and. mpi_rank == 0) then
+       write(iulog,*) 'Backward error: ', berr_array(1)
+    endif
+
     
     !print statistics
     call PStatPrint(c_loc(options),stat,grid)
 
+    ! result is sol (already assigned by reference in pdgssvx)
+
+    !TO DO Can I save some of the LU structures after the first time since
+    !the sparsity pattern of A will not change
+    
     !clean up 
     call PStatFree(stat)
     call Destroy_SuperMatrix_Store_dist(A)
@@ -1256,6 +1317,11 @@ module dist_solver_module
     integer :: istart
     real(kind=rp) :: avg
 
+    ! Initialize arrays to avoid uninitialized values
+    fout_s = 0.0
+    fout_n = 0.0
+    fout = 0.0
+    
     if (mlat0<jlatm_JT) then
        ! from pole to jlatm_JT, two hemispheres are uncoupled
        ! my longitudes
@@ -1266,13 +1332,21 @@ module dist_solver_module
           !south
           jS=j
           ij = calc_grid_ij(i,jS,lat_rank)
-          fout_s(ij) = fin(1,j,i)
+          !TO DO: checkbounds
+          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+             fout_s(ij) = fin(1,j,i)
+           else
+             write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
+          endif
           
           !north
           jN = nmlat_T1-j+1
           ij = calc_grid_ij(i,jN,lat_rank)
-          fout_n(ij) = fin(2,j,i)
-
+          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+             fout_n(ij) = fin(2,j,i)
+          else
+             write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
+          endif
        enddo
     endif
     
@@ -1353,42 +1427,50 @@ module dist_solver_module
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fin_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fin_n
     real(kind=rp),dimension(partner_hgridsize) :: buffer
-    
-    !divide into hemispheres
-    !!
-    !do ij = ij_start_s, ij_stop_s
-    !   cnt = cnt + 1
-    !   fin_s(ij) = fin(cnt)
-    !enddo
-    !do ij = ij_start_n, ij_stop_n
-    !   cnt = cnt + 1
-    !   fin_n(ij) = fin(cnt)
-    !enddo
-    
+
+    !output array
+    fout = 0.0
+
     !first reverse the hemisphere swap
     if (mod(mpi_rank,2) == 0) then !even, own south, **send north** back to partner
        !south
        isn=1
        cnt = 0
+
        do ij = ij_start_s, ij_stop_s
           cnt = cnt + 1
           fin_s(ij) = fin(cnt)
        enddo
+
        do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
           jS = j
           ij =  calc_grid_ij(i,jS,lat_rank)
-          fout(isn,j,i) = fin_s(ij)
+          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+             fout(isn,j,i) = fin_s(ij)
+          else
+             write(iulog,*) "Error in unravel south, mpirank, ij = ", mpi_rank, ij
+          endif
        enddo
+       
        !send north info to partner and receive my north data
        isn=2
        do i=1, partner_hgridsize
-          buffer(i) = fin(cnt + i)
+          if ((cnt +i) <= mygrid_size) then 
+             buffer(i) = fin(cnt + i)
+          else
+             write(iulog,*) "Error in unravel buffer, mpirank, cnt+i = ", mpi_rank, cnt+i
+          endif
        enddo
+
        call partner_exchange_hemisphere_vec(buffer, fin_n)
        do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
           jN = nmlat_T1-j+1
           ij =  calc_grid_ij(i,jN,lat_rank)
-          fout(isn,j,i) = fin_n(ij)
+          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+             fout(isn,j,i) = fin_n(ij)
+           else
+             write(iulog,*) "Error in unravel north, mpirank, ij = ", mpi_rank, ij
+          endif
        enddo    
     else !odd, so own north, send south back to partner
        !south
@@ -1400,7 +1482,11 @@ module dist_solver_module
        do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
           jS = j
           ij =  calc_grid_ij(i,jS,lat_rank)
-          fout(isn,j,i) = fin_s(ij)
+          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+             fout(isn,j,i) = fin_s(ij)
+          else
+             write(iulog,*) "Error in unravel south, mpirank, ij = ", mpi_rank, ij
+          endif
        enddo
        !north
        isn=2
@@ -1412,7 +1498,12 @@ module dist_solver_module
        do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
           jN = nmlat_T1-j+1
           ij =  calc_grid_ij(i,jN,lat_rank)
-          fout(isn,j,i) = fin_n(ij)
+          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+             fout(isn,j,i) = fin_n(ij)
+          else
+             write(iulog,*) "Error in unravel north, mpirank, ij = ", mpi_rank, ij
+          endif
+          
        enddo
     endif !end north
        
@@ -1434,7 +1525,7 @@ module dist_solver_module
 
      integer :: i, j, temp_i, z
      real(kind=rp) :: temp_r
-     integer :: keep(9)
+     integer :: keep(MAX_NNZ)
 
      do i=2,len
        temp_i = array_i(i)
