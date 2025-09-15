@@ -1234,8 +1234,8 @@ module dist_solver_module
     ! SLU_NR_loc  /* distributed compressed row format  */ 
     ! SLU_D     /* 1 = double precision real */
     ! SLU_GE,    /* 0 = general */
-             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-   call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+
+    call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
 
     ! Setup the right hand side (rhs contains local data)
