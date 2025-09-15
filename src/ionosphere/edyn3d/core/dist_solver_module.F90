@@ -567,6 +567,7 @@ module dist_solver_module
           !extra connection to north at 6
           !      lhs(ij,(im-1)*nmlat_T1+jN+1) = coef(6,jN,i)
           rowcnt_s(ij) = rowcnt_s(ij)+1
+          !!!!AB - double check
           jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
           nzval_s(rowcnt_s(ij),ij)= coef_n(6,j,i)
 
@@ -585,7 +586,8 @@ module dist_solver_module
           !extra connection to north at 7
           !      lhs(ij, (i-1)*nmlat_T1+jN+1) = coef(7,jN,i)
           rowcnt_s(ij) = rowcnt_s(ij)+1
-          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
+          !!!!!AB- double check
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i, jN+1, lat_rank)
           nzval_s(rowcnt_s(ij),ij)= coef_n(7,j,i)
 
           !coef 8 (i+1, j-1)
@@ -603,7 +605,8 @@ module dist_solver_module
           !extra connection to north at 8
           !      lhs(ij,(ip-1)*nmlat_T1+jN+1) = coef(8,jN,i)
           rowcnt_s(ij) = rowcnt_s(ij)+1
-          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i-1, jN+1, lat_rank)
+          !!!!!AB double -check
+          jcol_s(rowcnt_s(ij),ij)= calc_grid_ij(i+1, jN+1, lat_rank)
           nzval_s(rowcnt_s(ij),ij)= coef_n(8,j,i)
 
           !sort by col indices
@@ -926,7 +929,7 @@ module dist_solver_module
     nnz_south = nnz_s
     !write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
     
-    !loop through NORTH hemiphere
+    !loop through NORTH hemisphere
     rowptr_n(1) = 1
     row_counter_n = 1
     nnz_n = 0
@@ -947,7 +950,7 @@ module dist_solver_module
 
 
     !SET UP BLOCK CSR
-    if (mpi_size > 0) then
+    if (mpi_size > 1) then
        !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
        !still using 1-based indices
        my_rowptr(1) = 1
@@ -967,7 +970,7 @@ module dist_solver_module
              my_rowptr(i) = rowptr_s(i)
              !write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
           enddo
-          !nnz_south set above - but souble check
+          !nnz_south set above - but double check
           if (nnz_south /= my_rowptr(num_row_s + 1) - 1) then
              write(iulog,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
           endif
