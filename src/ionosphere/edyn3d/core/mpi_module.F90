@@ -1,6 +1,7 @@
 #define PARALLEL
 module mpi_module
 
+  use esmf
   use prec, only: rp
   use cam_logfile, only: iulog
 #ifdef PARALLEL
