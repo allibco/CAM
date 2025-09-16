@@ -1445,7 +1445,7 @@ module dist_solver_module
           fin_s(ij) = fin(cnt)
        enddo
 
-       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jS = j
           ij =  calc_grid_ij(i,jS,lat_rank)
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
@@ -1466,7 +1466,7 @@ module dist_solver_module
        enddo
 
        call partner_exchange_hemisphere_vec(buffer, fin_n)
-       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jN = nmlat_T1-j+1
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
@@ -1482,7 +1482,7 @@ module dist_solver_module
           buffer(i) = fin(i)
        enddo
        call partner_exchange_hemisphere_vec(buffer, fin_s)
-       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jS = j
           ij =  calc_grid_ij(i,jS,lat_rank)
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
@@ -1498,7 +1498,7 @@ module dist_solver_module
           cnt = cnt + 1
           fin_n(ij) = fin(cnt)
        enddo
-       do concurrent (i = mlat0:mlat1, j = mlon0:mlon1)
+       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jN = nmlat_T1-j+1
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
