@@ -1,7 +1,6 @@
 #define PARALLEL
 module mpi_module
 
-  use esmf
   use prec, only: rp
   use cam_logfile, only: iulog
 #ifdef PARALLEL
@@ -1361,6 +1360,20 @@ endfunction all_gather_int
 
   end function calc_grid_ij
 
+  ! -----------------------------------------------------------------------
+
+  !parallel sparse matrix-vectrr multiply (using esmf)
+  ! A is the local block CSR format
+  ! x is the proc's local vector
+  
+!  function sp_matvec(A_rowptr,A_colind, A_values, x_loc) result(b_loc)
+    
+    
+
+    
+
+
+!  end function sp_matvec
   !-----------------------------------------------------------------------
 
 endmodule mpi_module
