@@ -1451,7 +1451,7 @@ module dist_solver_module
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout(isn,j,i) = fin_s(ij)
           else
-             write(iulog,*) "Error in unravel south, mpirank, ij = ", mpi_rank, ij
+             write(iulog,*) "Error in unravel south 1, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
           endif
        enddo
        
@@ -1472,7 +1472,7 @@ module dist_solver_module
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(isn,j,i) = fin_n(ij)
            else
-             write(iulog,*) "Error in unravel north, mpirank, ij = ", mpi_rank, ij
+             write(iulog,*) "Error in unravel north 1, mpirank, ij = ", mpi_rank, ij, ij_start_n, ij_stop_n
           endif
        enddo    
     else !odd, so own north, send south back to partner
@@ -1488,7 +1488,7 @@ module dist_solver_module
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout(isn,j,i) = fin_s(ij)
           else
-             write(iulog,*) "Error in unravel south, mpirank, ij = ", mpi_rank, ij
+             write(iulog,*) "Error in unravel south 2, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
           endif
        enddo
        !north
@@ -1504,7 +1504,7 @@ module dist_solver_module
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(isn,j,i) = fin_n(ij)
           else
-             write(iulog,*) "Error in unravel north, mpirank, ij = ", mpi_rank, ij
+             write(iulog,*) "Error in unravel north, mpirank 2, ij = ", mpi_rank, ij, ij_start_n, ij_stop_n
           endif
           
        enddo
