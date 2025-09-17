@@ -1184,13 +1184,13 @@ module dist_solver_module
   endfunction dist_construct_rhs
  !-----------------------------------------------------------------------
 
- function dist_matvec
+! function dist_matvec
 
 
 
    
 
- endfunction dist_matvec
+ !endfunction dist_matvec
  
   
 !-----------------------------------------------------------------------
