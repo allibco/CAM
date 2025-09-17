@@ -36,7 +36,7 @@ module mpi_module
 
 #ifdef PARALLEL
     integer :: ierr
-    integer :: color, npes_host
+    integer :: color, npes_host, dynamo_rank
 
 
     
