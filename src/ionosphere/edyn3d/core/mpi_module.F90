@@ -58,6 +58,13 @@ module mpi_module
 
     color = mpi_rank/mpi_size
     call mpi_comm_split(mpi_comm_host, color, mpi_rank, dynamo_world, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Comm_split', ierr)
+
+    call MPI_Comm_rank(dynamo_world, dynamo_rank, ierr)
+
+    
+    write(iulog,*) 'AB: mpi_init: Mpi_rank, mpi_size, color, npes_host, npes_edyn3d, dynamo_rank', mpi_rank, mpi_size, color, npes_host, npes_edyn3d, dynamo_rank
+    
 
 #else
     mpi_rp = rp
@@ -65,25 +72,29 @@ module mpi_module
     mpi_rank = 0
 #endif
 
-! factorize MPI process number to the nearest two numbers
-    !do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
-    !  lon_size = mpi_size / lat_size
-    !  if (lon_size*lat_size == mpi_size) exit ! lon_size >= lat_size
-    !enddo
 
     !Modified for distributed version, lon_size must be an even number
-    !BEST RESULTS when mpi_size = 1, 2, or is divisible by 4.  if we would allow lat_size >=lon_size, then
-    !we could say divisible by 2)
+    !BEST RESULTS when mpi_size is divisible by 4. 
     ! Check if mpi_size is valid for even lon_size constraint
     if (mpi_size /= 1 .and. mpi_size /= 2 .and. mod(mpi_size, 4) /= 0) then
        write(iulog,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2 (OR THERE WILL BE PROBLEMS)'
        write(iulog,*) 'Current mpi_size =', mpi_size
     endif
-    
-    do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
-      lon_size = mpi_size / lat_size
-      if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 0) exit ! lon_size >= lat_size
-    enddo
+
+    if (mpi_size == 1) then
+       lat_size = 1
+       lon_size = 1
+    elseif (mpi_size == 2) then
+       lat_size = 1
+       lon_size = 2
+    else
+       ! Original factorization loop for other cases
+       do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
+          lon_size = mpi_size / lat_size
+          if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 0) exit ! lon_size >= lat_size
+       enddo
+    endif
+
    
 ! stack along latitudes first then longitudes
 ! (lat_size=3)
@@ -296,6 +307,8 @@ function partner_exchange_int(intin) result(intout)
     integer :: tag = 88
     integer :: send_request, recv_request
 
+    intout = 0
+    
     !post receive
     call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
          dynamo_world, recv_request, ierr)
