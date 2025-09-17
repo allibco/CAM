@@ -65,7 +65,7 @@ module dist_solver_module
     !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
     !allocate space for rowptr,colind,values_csr
-    ! Alli: why does MAX_NNZ=12? seems like 10 is max?
+    ! ABx why does MAX_NNZ=12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
     if (mpi_rank == 0) then ! make room for dense row
        nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
@@ -1093,7 +1093,7 @@ module dist_solver_module
     if (lat_rank == 0) then ! I own the pole regions (j=1)
        j=1
 
-       !proc in lat_rows 0 have to share info whith proc 0
+       !proc in lat_rows 0 have to share info with proc 0
        coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
        
        if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
@@ -1122,9 +1122,10 @@ module dist_solver_module
           rhs_n(ij) = phi_pol
        enddo
        j_start = 2
+
     else !don't own j=1
        j_start = mlat0
-    endif !lat_rank = 0
+    endif !treatment for j=1
     
     do concurrent (i = mlon0:mlon1, j = j_start:mlat1)
        !south
@@ -1138,7 +1139,7 @@ module dist_solver_module
        jN = nmlat_T1-j+1
        ij = calc_grid_ij(i,jN,lat_rank)
        if (ij > ij_stop_n .or. ij < ij_start_n) then
-             write(iulog,*) 'AB: Error ij nouth index 2 for rhs', mpi_rank, ij
+             write(iulog,*) 'AB: Error ij north index 2 for rhs', mpi_rank, ij
        endif
 
        rhs_n(ij) = coef_10_n(j,i)
@@ -1181,7 +1182,17 @@ module dist_solver_module
      endif
      
   endfunction dist_construct_rhs
+ !-----------------------------------------------------------------------
 
+ function dist_matvec
+
+
+
+   
+
+ endfunction dist_matvec
+ 
+  
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
     use superlu_mod, only: dCreate_CompRowLoc_Matrix_dist, superlu_gridinit, &

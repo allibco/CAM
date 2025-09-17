@@ -54,8 +54,7 @@ module superlu_mod
             integer(c_int), value :: dtype      ! Data type
             integer(c_int), value :: mtype      ! Matrix type
         end subroutine
-
-       
+        
         ! Set default options
         subroutine set_default_options_dist(options) &
             bind(c, name='set_default_options_dist')

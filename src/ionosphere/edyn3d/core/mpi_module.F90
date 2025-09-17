@@ -1362,18 +1362,5 @@ endfunction all_gather_int
 
   ! -----------------------------------------------------------------------
 
-  !parallel sparse matrix-vectrr multiply (using esmf)
-  ! A is the local block CSR format
-  ! x is the proc's local vector
-  
-!  function sp_matvec(A_rowptr,A_colind, A_values, x_loc) result(b_loc)
-    
-    
-
-    
-
-
-!  end function sp_matvec
-  !-----------------------------------------------------------------------
 
 endmodule mpi_module
