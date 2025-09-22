@@ -64,7 +64,7 @@ contains
     ! init mpi for 3D edynamo
     call mpi_init( mpicom_atm, npes_edyn3D )
 
-    ! set up magnetic latitude and longitude grids
+    ! set up magnetic latitude and longitude grids (no mpi module)
     call generate_mag_grid(edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt)
 
     ! log grid info:
@@ -74,12 +74,13 @@ contains
        write(iulog,*) prefix,'3D Edyn lon_size, lat_size: ',lon_size,lat_size
     end if
 
-    ! set up constants
+    ! set up constants (no mpi module)
     call init_cons()
 
+    ! (no mpi module usage)                                                                     
     call alloc_fieldline_lite(ierror)
     if (ierror/=0) then
-       call endrun(prefix//'alloc_fieldline failed')
+       call endrun(prefix//'alloc_fieldline_lite failed')
     end if
 
     ! set up field-line grids
@@ -92,9 +93,11 @@ contains
     ! set up MPI decomposition
     call setup_topology(nmlat_h,nmlon)
 
+    ! uses mpi in the extents for grid  - maybe ok for just active procs?                
     call edyn3d_hist_mag_grids_reg()
 
-    acitve_tasks: if (mpi_rank<mpi_size) then
+    !non active tasks have mpi_rank<  0 (see mpi_init)                                              
+    active_tasks: if (mpi_rank >= 0) then
 
        ! allocate memory for fieldline data
        call alloc_fieldline(ierror)
@@ -116,7 +119,7 @@ contains
        call calculate_m(npts_p,npts_s1,npts_s2,npts_r, &
             F_p,F_s1,F_s2,F_r,M3_p,M1_s1,M2_s2,M3_r)
 
-    end if acitve_tasks
+    end if active_tasks
 
     call edyn3d_esmf_s2_mag_grid_init()
     call edyn3d_esmf_s1_mag_grid_init()
@@ -352,8 +355,8 @@ contains
     call edyn3d_hist_mag_s2_out('un_s2',un_s2)
     call edyn3d_hist_mag_s2_out('vn_s2',vn_s2)
 
-    if (mpi_rank<mpi_size) then
-
+    if (mpi_rank >= 0) then
+       !only active tasks
 
        sigP_s1 = nan
        zigP_s1 = nan
@@ -508,7 +511,7 @@ contains
        call edyn3d_hist_mag_s2_out('IonU_s2',vx_s2(:,:,mlat0:mlat1,mlon0:mlon1))
        call edyn3d_hist_mag_s2_out('IonV_s2',vy_s2(:,:,mlat0:mlat1,mlon0:mlon1))
        call edyn3d_hist_mag_s2_out('IonW_s2',vz_s2(:,:,mlat0:mlat1,mlon0:mlon1))
-    end if
+    end if   !end active tasks 
 
     ! map to oplus geographic grid and output diagnostics
     magsrc_2d_flds_bndl(1)%fld => fac_hl_p
@@ -564,6 +567,7 @@ contains
     use edyn3d_esmf_s2_mag_grid_mod, only: edyn3d_esmf_s2_mag_grid_destroy
     use edyn3d_esmf_mag_ref_p_grid_mod, only: edyn3d_esmf_mag_ref_p_grid_destroy
     use edyn3d_hist_mag_grids_mod, only: edyn3d_hist_mag_grids_final
+    use mpi_module, only: dynamo_mpi_finalize
 
     call edyn3d_esmf_fields_rhandles_destroy()
     call edyn3d_esmf_oplus_grid_destroy()
@@ -573,7 +577,9 @@ contains
     call edyn3d_esmf_mag_ref_p_grid_destroy()
 
     call edyn3d_hist_mag_grids_final()
-
+    call dynamo_mpi_finalize()
+    
   end subroutine edyn3d_driver_final
+  !-----------------------------------------------------------------------------
 
 end module edyn3d_driver_mod
