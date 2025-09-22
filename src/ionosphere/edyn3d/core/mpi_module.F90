@@ -15,7 +15,7 @@ module mpi_module
     lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
-    ij_start_s=0, ij_stop_s=0, ij_start_n=0, ij_stop_n=0, &
+    ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
     mpi_partner, partner_hgridsize, my_hgridsize, &
     mygrid_size, &
     mpi_comm_host_rank=-1
@@ -140,8 +140,9 @@ module mpi_module
   endsubroutine init
 !-----------------------------------------------------------------------
   subroutine setup_topology(nmlat_in, nmlon_in)
-! setup MPI decompositions in geo and mag coordinates and the connectivity matrix
-
+    ! setup MPI decompositions in geo and mag coordinates and the connectivity matrix
+    ! note: non-active procs have mpi_rank < 0
+    
     use params_module, only:nmlat_h,nmlat_T1,nmlon
     
     integer, intent(in) :: nmlat_in, nmlon_in
@@ -156,24 +157,24 @@ module mpi_module
     nmlat_task = 0
     nmlon_task = 0
 
-    ! AB: the first 4 aren't needed for the dist version
+    ! AB: TO DO: the first 4 aren't needed for the dist version
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
     allocate(mlon0_task(0:mpi_size-1))
     allocate(mlon1_task(0:mpi_size-1))
-    
-    !for dist
-    allocate(task_csr_rowstarts(0:mpi_size))
-    allocate(task_mygrid_size(0:mpi_size-1))
-    allocate(task_lat_offset(0:lat_size-1))
-
     mlat0_task = 1
     mlon0_task = 1
     mlat1_task = -1
     mlon1_task = -1
-
+ 
+    !for dist
+    allocate(task_csr_rowstarts(0:mpi_size))
+    allocate(task_mygrid_size(0:mpi_size-1))
+    allocate(task_lat_offset(0:lat_size-1))
+    task_csr_rowstarts = 0
+    task_mygrid_size = 0
     task_lat_offset = 0
-    
+   
     nmlat = nmlat_in
     nmlon = nmlon_in
 
@@ -182,7 +183,7 @@ module mpi_module
 
     nmlat_task = generate_minvar_list(nmlat, lat_size)
     maxmlat = maxval(nmlat_task)
-    if (lat_rank<lat_size) then
+    if (mpi_rank >= 0) then
        mlat0 = 1
        do j = 0, lat_rank-1
           mlat0 = mlat0 + nmlat_task(j)
@@ -192,7 +193,7 @@ module mpi_module
 
     nmlon_task = generate_minvar_list(nmlon, lon_size)
     maxmlon = maxval(nmlon_task)
-    if (lat_rank<lat_size) then
+    if (mpi_rank >= 0) then
        mlon0 = 1
        do i = 0, lon_rank-1
           mlon0 = mlon0 + nmlon_task(i)
@@ -228,12 +229,16 @@ module mpi_module
 
     !Find partner for distributed grid (0,1), (2,3), (3,4) etc.
     if (mpi_size > 1) then
-       if (mod(mpi_rank, 2) == 0) then
-          !Number is even or zero'
-          mpi_partner = mpi_rank + 1
-       else
-          !Number is odd'
-          mpi_partner = mpi_rank - 1
+       if (mpi_rank >=0 ) then !active
+          if (mod(mpi_rank, 2) == 0) then
+             !Number is even or zero'
+             mpi_partner = mpi_rank + 1
+          else
+             !Number is odd'
+             mpi_partner = mpi_rank - 1
+          endif
+       else !not active
+          mpi_partner = -1
        endif
     else
        mpi_partner = 0
@@ -241,73 +246,78 @@ module mpi_module
 
     
     !initial matrix row start and stops
-    !s hemi
-    ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
-    ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
-    !n hemi
-    !adjust j for n hemisphere
-    mlat0_n = nmlat_T1 - mlat0 + 1
-    mlat1_n =  nmlat_T1 - mlat1 + 1
-    if (mlat1_n == nmlat_h) then !equator
-       mlat1_n  = mlat1_n + 1
-    endif
-    !now mlat0_n will be bigger than mlat1_n in north hemisphere
-    ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
-    ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
+    if (mpi_rank >=0 ) then !active
 
-   
-    !sizes in each hemisphere
-    mysize_n =  (ij_stop_n -ij_start_n + 1)
-    mysize_s = (ij_stop_s -ij_start_s + 1)
+       !s hemi
+       ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
+       ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
+       !n hemi
+       !adjust j for n hemisphere
+       mlat0_n = nmlat_T1 - mlat0 + 1
+       mlat1_n =  nmlat_T1 - mlat1 + 1
+       if (mlat1_n == nmlat_h) then !equator
+          mlat1_n  = mlat1_n + 1
+       endif
+       !now mlat0_n will be bigger than mlat1_n in north hemisphere
+       ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
+       ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
+       
+       !sizes in each hemisphere
+       mysize_n =  (ij_stop_n -ij_start_n + 1)
+       mysize_s = (ij_stop_s -ij_start_s + 1)
     
-    !get partner sizes and then my grid size for block csr matrix
-    !for each partner pair, even owns s hemi and odd owns north hemi
-    if (mod(mpi_rank,2) == 0) then !even, own south, send north
-       partner_hgridsize = partner_exchange_int(mysize_n)
-       my_hgridsize = mysize_s
-       mygrid_size =  mysize_s + partner_hgridsize
-    else !odd, own north, send south
-       partner_hgridsize = partner_exchange_int(mysize_s)
-       my_hgridsize = mysize_n
-       mygrid_size =  mysize_n + partner_hgridsize
-    endif
-
-    !now we need to calculate the rowstarts for the csr martix
-    !do an allgather to get each procs grid size
-    task_mygrid_size = all_gather_int(mygrid_size)
-
-    !now rowstarts - set all to zero
-    task_csr_rowstarts = 0
-    !south hemisphere is even, then northern is odd, so for 6 tasks
-    ! the order of block rows:
-    !1
-    !3
-    !5
-    !4
-    !2
-    !0
-    !south (even)
-    cnt = 0
-    do i=0, mpi_size-1, 2
-       cnt = cnt + 1
-       task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
-            + task_mygrid_size(i)
-    enddo
-    !north 
-    if (mpi_size > 1) then !mpi_size is even
-       do i= mpi_size-1, 1, -2
+       !get partner sizes and then my grid size for block csr matrix
+       !for each partner pair, even owns s hemi and odd owns north hemi
+       if (mod(mpi_rank,2) == 0) then !even, own south, send north
+          partner_hgridsize = partner_exchange_int(mysize_n)
+          my_hgridsize = mysize_s
+          mygrid_size =  mysize_s + partner_hgridsize
+       else !odd, own north, send south
+          partner_hgridsize = partner_exchange_int(mysize_s)
+          my_hgridsize = mysize_n
+          mygrid_size =  mysize_n + partner_hgridsize
+       endif
+           
+       !now we need to calculate the rowstarts for the csr martix
+       !do an allgather to get each procs grid size
+       task_mygrid_size = all_gather_int(mygrid_size)
+       
+       !now rowstarts - set all to zero
+       task_csr_rowstarts = 0
+       !south hemisphere is even, then northern is odd, so for 6 tasks
+       ! the order of block rows:
+       !1
+       !3
+       !5
+       !4
+       !2
+       !0
+       !south (even)
+       cnt = 0
+       do i=0, mpi_size-1, 2
           cnt = cnt + 1
           task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
                + task_mygrid_size(i)
        enddo
-    endif
+       !north 
+       if (mpi_size > 1) then !mpi_size is even
+          do i= mpi_size-1, 1, -2
+             cnt = cnt + 1
+             task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
+                  + task_mygrid_size(i)
+          enddo
+       endif
        
-    
-    ! halos
-    mlatd0 = mlat0 - 1
-    mlatd1 = mlat1 + 1
-    mlond0 = mlon0 - 1
-    mlond1 = mlon1 + 1
+       ! halos
+       mlatd0 = mlat0 - 1
+       mlatd1 = mlat1 + 1
+       mlond0 = mlon0 - 1
+       mlond1 = mlon1 + 1
+
+    else !non-active
+       mygrid_size = 0
+       partner_hgridsize = 0
+    endif
 
   endsubroutine setup_topology
 !-----------------------------------------------------------------------
