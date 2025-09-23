@@ -953,6 +953,9 @@ module dist_solver_module
     !loop through grid pts/ matrix rows in north hemisphere
     do ij = ij_start_n, ij_stop_n
        cnt = rowcnt_n(ij)
+       if (nnz_n + cnt > size(colind_n)) then
+          write(iulog,*) 'AB: Error: north sparse matrix arrays too small nnz_n, cnt = ', nnz_n, cnt
+       endif
        do k = 1, cnt
           nnz_n = nnz_n + 1
           colind_n(nnz_n) = jcol_n(k,ij)

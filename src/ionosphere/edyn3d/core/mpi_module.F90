@@ -255,7 +255,7 @@ module mpi_module
        !adjust j for n hemisphere
        mlat0_n = nmlat_T1 - mlat0 + 1
        mlat1_n =  nmlat_T1 - mlat1 + 1
-       if (mlat1_n == nmlat_h) then !equator
+       if (mlat1_n == nmlat_h) then !equator (don't double count)
           mlat1_n  = mlat1_n + 1
        endif
        !now mlat0_n will be bigger than mlat1_n in north hemisphere
@@ -265,7 +265,8 @@ module mpi_module
        !sizes in each hemisphere
        mysize_n =  (ij_stop_n -ij_start_n + 1)
        mysize_s = (ij_stop_s -ij_start_s + 1)
-    
+       write(iulog,*) 'AB: mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
+       
        !get partner sizes and then my grid size for block csr matrix
        !for each partner pair, even owns s hemi and odd owns north hemi
        if (mod(mpi_rank,2) == 0) then !even, own south, send north
