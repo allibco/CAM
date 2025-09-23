@@ -549,7 +549,6 @@ module dist_solver_module
        !loop through the longitudes in my grid
        do i = mlon0, mlon1
 
-
           !just one latitude (so no loop)
           j = jlatm_JT
           jS = j
@@ -874,12 +873,15 @@ module dist_solver_module
        enddo ! longitudes
        
     endif !equator
-       
-!now each proc has rowcnt_s, jcol_s, nzval_s
-!              rowcnt_n, jcol_n, nzval_n
-! jcol and nzval contain up to MAX_NNZ entries per grid point, except for grid point 1
-! which is in jcol1 and nzval1
-!my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
+
+    !------------
+    !now each proc has rowcnt_s, jcol_s, nzval_s
+    !              rowcnt_n, jcol_n, nzval_n
+    ! popular rowptr_s, colind_s and values_s (csr format), then same for north also
+    
+    ! jcol and nzval contain up to MAX_NNZ entries per grid point, except for grid point 1
+    ! which is in jcol1 and nzval1
+    !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
     !might need to change to 0-based indexing (yes, but happens later for superlu)
     !first SOUTH hemisphere rows
@@ -887,9 +889,13 @@ module dist_solver_module
        rowptr_s(1) = 1
        row_counter_s = 1
        nnz_s = 0
+
        !loop through grid pts/ matrix rows in southern hemisphere
        do ij = ij_start_s, ij_stop_s
-          cnt = rowcnt_s(ij)
+          cnt = rowcnt_s(ij) !entries in row
+           if (nnz_s + cnt > size(colind_s)) then
+              write(iulog,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
+           endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
              colind_s(nnz_s) = jcol_s(k,ij)
@@ -905,7 +911,8 @@ module dist_solver_module
        nnz_s = 0
        ! first row seperately
        cnt = rowcnt_s(1)
-       if (cnt > size(colind_s)) then
+       write(iulog,*) 'AB: mpi_rank 0, row1 count = ', cnt
+       if (cnt + nnz_s > size(colind_s)) then
           write(iulog,*) 'AB: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
        endif
        do k = 1, cnt
@@ -918,7 +925,7 @@ module dist_solver_module
        !now remaining rows
        !write(iulog,*) "AB: ij_start_s + 1 = (2)", ij_start_s+1
        !write(iulog,*) "AB: ij_stop_s ", ij_stop_s
-
+       !start on row 2
        do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
           if (nnz_s + cnt > size(colind_s)) then
