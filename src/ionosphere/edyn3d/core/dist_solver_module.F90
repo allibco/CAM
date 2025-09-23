@@ -183,7 +183,7 @@ module dist_solver_module
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
          ij_start_s,ij_stop_s,partner_hgridsize,my_hgridsize, &
          calc_grid_ij, partner_exchange_hemisphere_mat, &
-         gather_lon_1d, mygrid_size
+         gather_lon_1d, mygrid_size, mpi_partner
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -251,10 +251,10 @@ module dist_solver_module
     coef3_j1_buf = 0.0
 
     !   some debugging info
-    write(iulog, *) 'AB: mpi_rank, ij_start_s, ij_stop_s', mpi_rank, ij_start_s, ij_stop_s
-    write(iulog, *) 'AB: mpi_rank, ij_start_n, ij_stop_n',mpi_rank, ij_start_n, ij_stop_n
-    write(iulog, *) 'AB: mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size',mpi_rank, my_hgridsize, partner_hgridsize, mygrid_size
-    write(iulog, *) 'AB: mpi_rank, lat_rank, lon_rank',mpi_rank, lat_rank, lon_rank
+    write(iulog, *) 'AB: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    write(iulog, *) 'AB: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    write(iulog, *) 'AB: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
+    write(iulog, *) 'AB: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
 
     
     
