@@ -225,14 +225,14 @@ module dist_solver_module
     real(kind=rp),dimension(nmlon) :: coef3_j1_buf
 
     !csr for each hemisphere - south
-    integer, dimension(my_hgridsize+2):: rowptr_s
-    integer, dimension((my_hgridsize+2)*MAX_NNZ + nmlon) ::  colind_s
-    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ + nmlon) :: values_s
+    integer, dimension(my_hgridsize+1):: rowptr_s
+    integer, dimension((my_hgridsize)*MAX_NNZ + nmlon) ::  colind_s
+    real(kind=rp), dimension((my_hgridsize)*MAX_NNZ + nmlon) :: values_s
 
     !csr for each hemisphere - north
-    integer, dimension(my_hgridsize+2):: rowptr_n
-    integer, dimension((my_hgridsize+2)*MAX_NNZ) ::  colind_n
-    real(kind=rp), dimension((my_hgridsize+2)*MAX_NNZ) :: values_n
+    integer, dimension(my_hgridsize+1):: rowptr_n
+    integer, dimension((my_hgridsize)*MAX_NNZ) ::  colind_n
+    real(kind=rp), dimension((my_hgridsize)*MAX_NNZ) :: values_n
     
     !get hemisphere partner info
     integer, dimension(partner_hgridsize+1) :: partner_rowptr
@@ -246,6 +246,15 @@ module dist_solver_module
     rowcnt_s = 0
     rowcnt_n = 0
 
+    rowptr_s= 0
+    colind_s = 0
+    values_s = 0.0
+
+    rowptr_n = 0
+    colind_n = 0
+    values_n = 0.0
+    
+    
     jcol1 = 0
     nzval1 = 0.0
     coef3_j1_buf = 0.0
@@ -872,7 +881,7 @@ module dist_solver_module
 ! which is in jcol1 and nzval1
 !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
-    !might need to change to 0-based indexing (yes, but happens later)
+    !might need to change to 0-based indexing (yes, but happens later for superlu)
     !first SOUTH hemisphere rows
     if (mpi_rank > 0) then !don't own row 1
        rowptr_s(1) = 1
@@ -886,11 +895,11 @@ module dist_solver_module
              colind_s(nnz_s) = jcol_s(k,ij)
              values_s(nnz_s) = nzval_s(k,ij)
           enddo
-          row_counter_s = row_counter_s + 1
-          rowptr_s(row_counter_s) = nnz_s + 1
+          row_counter_s = row_counter_s + 1 !add a row
+          rowptr_s(row_counter_s) = nnz_s + 1 !pointer to the next row
        enddo
         
-    else ! I own row 1 (grid point i=1, j=1)
+    elseif (mpi_rank== 0) ! I own row 1 (grid point i=1, j=1)
        rowptr_s(1) = 1
        row_counter_s = 1
        nnz_s = 0
@@ -907,8 +916,8 @@ module dist_solver_module
        row_counter_s = row_counter_s + 1
        rowptr_s(row_counter_s) = nnz_s + 1
        !now remaining rows
-       write(iulog,*) "AB: ij_start_s + 1 = (2)", ij_start_s+1
-       write(iulog,*) "AB: ij_stop_s ", ij_stop_s
+       !write(iulog,*) "AB: ij_start_s + 1 = (2)", ij_start_s+1
+       !write(iulog,*) "AB: ij_stop_s ", ij_stop_s
 
        do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
@@ -927,7 +936,7 @@ module dist_solver_module
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
     num_row_s = row_counter_s -1
     nnz_south = nnz_s
-    !write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
+    write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
     
     !loop through NORTH hemisphere
     rowptr_n(1) = 1
@@ -947,6 +956,7 @@ module dist_solver_module
     enddo
     num_row_n = row_counter_n - 1
     nnz_north = nnz_n
+    write(iulog,*) 'AB: mpi_rank, num_row_n, nnz_north =  ', mpi_rank, num_row_n, nnz_north
 
 
     !SET UP BLOCK CSR
@@ -969,14 +979,14 @@ module dist_solver_module
              endif
              do concurrent (i = 2:num_row_s + 1)
                 my_rowptr(i) = rowptr_s(i)
-                !write(iulog,*) 'AB: mpi_rank, i, my_rowptr(i), rowwptr_s(i)', mpi_rank, i, my_rowptr(i), rowptr_s(i)
              enddo
              !nnz_south set above - but double check
              if (nnz_south /= my_rowptr(num_row_s + 1) - 1) then
                 write(iulog,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
              endif
           
-             write(iulog,*) 'AB: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
+             write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
+
              if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
                 write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
              endif
@@ -989,8 +999,10 @@ module dist_solver_module
              !partner has north
              do i = 1,  partner_hgridsize
                 cnt = partner_rowptr(i+1) - partner_rowptr(i)
+                write(iulog,*) 'AB: extra: mpi_rank, i, cnt= ', mpi_rank, i, cnt 
                 my_rowptr(num_row_s + 1 + i) = my_rowptr(num_row_s + i) + cnt
              enddo
+             
              !north proc's data goes second
              !CHECK mygrid_size = num_row_s + partner_hgridsize
              if (mygrid_size /= num_row_s + partner_hgridsize) then
@@ -999,7 +1011,10 @@ module dist_solver_module
           
              !nnz_north needs to be set from partner's info
              nnz_north = my_rowptr(mygrid_size + 1) -1  - nnz_south
-          
+
+             write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_north = ', mpi_rank, num_row_s, nnz_north
+
+             
              if (nnz_south + nnz_north > size(my_colind)) then
                 write(iulog,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
              endif

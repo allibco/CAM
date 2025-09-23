@@ -390,7 +390,7 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
      partner_rowptr, partner_values, partner_cols)
 
 
-!the south pole dense row does not get sent (it's owned by rank 0)  
+!the south pole denser row does not get sent (it's owned by rank 0, which is even)  
 
 #ifdef PARALLEL
     use MPI
@@ -412,6 +412,10 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
 
     integer ierr
     integer, dimension(3) :: send_request, recv_request
+
+    partner_rowptr = 0
+    partner_cols = 0
+    partner_values = 0.0
 
     !send to my partner
     call MPI_Isend(my_rowptr, my_hgridsize + 1, MPI_INTEGER, mpi_partner, 200, &
