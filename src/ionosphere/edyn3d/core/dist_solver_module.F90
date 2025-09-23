@@ -999,7 +999,7 @@ module dist_solver_module
              !partner has north
              do i = 1,  partner_hgridsize
                 cnt = partner_rowptr(i+1) - partner_rowptr(i)
-                write(iulog,*) 'AB: extra: mpi_rank, i, cnt= ', mpi_rank, i, cnt 
+                !write(iulog,*) 'AB: extra: mpi_rank, i, cnt= ', mpi_rank, i, cnt 
                 my_rowptr(num_row_s + 1 + i) = my_rowptr(num_row_s + i) + cnt
              enddo
              
