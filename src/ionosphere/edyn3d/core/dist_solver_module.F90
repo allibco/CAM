@@ -1012,7 +1012,7 @@ module dist_solver_module
              !nnz_north needs to be set from partner's info
              nnz_north = my_rowptr(mygrid_size + 1) -1  - nnz_south
 
-             write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_north = ', mpi_rank, num_row_s, nnz_north
+             write(iulog,*) 'AB: again: mpi_rank, nnz_north = ', mpi_rank, nnz_north
 
              
              if (nnz_south + nnz_north > size(my_colind)) then
