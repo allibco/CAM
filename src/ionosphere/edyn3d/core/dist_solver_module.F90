@@ -899,7 +899,7 @@ module dist_solver_module
           rowptr_s(row_counter_s) = nnz_s + 1 !pointer to the next row
        enddo
         
-    elseif (mpi_rank== 0) ! I own row 1 (grid point i=1, j=1)
+    elseif (mpi_rank== 0) then ! I own row 1 (grid point i=1, j=1)
        rowptr_s(1) = 1
        row_counter_s = 1
        nnz_s = 0
