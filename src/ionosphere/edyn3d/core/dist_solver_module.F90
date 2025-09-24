@@ -1108,7 +1108,7 @@ module dist_solver_module
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: rhs_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: rhs_n
 
-    integer :: i,j,ij, jN, j_start, cnt
+    integer :: i,j,ij, jN, j_start, cnt, istart
 
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
     
