@@ -183,7 +183,8 @@ module dist_solver_module
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
          ij_start_s,ij_stop_s,partner_hgridsize,my_hgridsize, &
          calc_grid_ij, partner_exchange_hemisphere_mat, &
-         gather_lon_1d, mygrid_size, mpi_partner
+         gather_lon_1d, mygrid_size, mpi_partner, &
+         mygrid_size_n, mygrid_size_s
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -225,14 +226,14 @@ module dist_solver_module
     real(kind=rp),dimension(nmlon) :: coef3_j1_buf
 
     !csr for each hemisphere - south
-    integer, dimension(my_hgridsize+1):: rowptr_s
-    integer, dimension((my_hgridsize)*MAX_NNZ + nmlon) ::  colind_s
-    real(kind=rp), dimension((my_hgridsize)*MAX_NNZ + nmlon) :: values_s
+    integer, dimension(mygrid_size_s+1):: rowptr_s
+    integer, dimension((mygrid_size_s)*MAX_NNZ + nmlon) ::  colind_s
+    real(kind=rp), dimension((mygrid_size_s)*MAX_NNZ + nmlon) :: values_s
 
     !csr for each hemisphere - north
-    integer, dimension(my_hgridsize+1):: rowptr_n
-    integer, dimension((my_hgridsize)*MAX_NNZ) ::  colind_n
-    real(kind=rp), dimension((my_hgridsize)*MAX_NNZ) :: values_n
+    integer, dimension(mygrid_size_n+1):: rowptr_n
+    integer, dimension((mygrid_size_n)*MAX_NNZ) ::  colind_n
+    real(kind=rp), dimension((mygrid_size_n)*MAX_NNZ) :: values_n
     
     !get hemisphere partner info
     integer, dimension(partner_hgridsize+1) :: partner_rowptr
@@ -969,7 +970,7 @@ module dist_solver_module
     write(iulog,*) 'AB: mpi_rank, num_row_n, nnz_north =  ', mpi_rank, num_row_n, nnz_north
 
 
-    !SET UP BLOCK CSR
+    !SET UP BLOCK CSR (exchange with partner)
     if (mpi_size > 1) then
        if (mpi_rank >= 0) then !active proc
           !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
