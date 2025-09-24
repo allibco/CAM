@@ -1121,6 +1121,7 @@ module dist_solver_module
     write(iulog, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
     write(iulog, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
     write(iulog, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+    write(iulog, *) 'AB: RHS nmlat_h', nmlat_h
 
     !first do j=1
     if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
