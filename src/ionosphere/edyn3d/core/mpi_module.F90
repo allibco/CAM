@@ -18,7 +18,7 @@ module mpi_module
     ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
     mpi_partner, partner_hgridsize, my_hgridsize, &
     mygrid_size, mygrid_size_s, mygrid_size_n, &
-    mpi_comm_host_rank=-1
+    mpi_comm_host_rank=-1, my_sendgrid_size
 
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
@@ -277,10 +277,15 @@ module mpi_module
           partner_hgridsize = partner_exchange_int(mysize_n)
           my_hgridsize = mysize_s
           mygrid_size =  mysize_s + partner_hgridsize
+
+          my_sendgrid_size = mysize_n
        else !odd, own north, send south
           partner_hgridsize = partner_exchange_int(mysize_s)
           my_hgridsize = mysize_n
           mygrid_size =  mysize_n + partner_hgridsize
+
+          my_sendgrid_size = mysize_s
+
        endif
            
        !now we need to calculate the rowstarts for the csr martix
@@ -402,9 +407,9 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
 #endif
     integer, intent(in) :: nnz_per_row
     
-    integer, dimension(my_hgridsize+1), intent(in) :: my_rowptr
-    integer, dimension(my_hgridsize*nnz_per_row), intent(in) :: my_cols
-    real(kind=rp), dimension(my_hgridsize*nnz_per_row), intent(in) :: my_values
+    integer, dimension(my_sendgrid_size+1), intent(in) :: my_rowptr
+    integer, dimension(my_sendgrid_size*nnz_per_row), intent(in) :: my_cols
+    real(kind=rp), dimension(my_sendgrid_size*nnz_per_row), intent(in) :: my_values
 
     integer, dimension(partner_hgridsize+1), intent(out) :: partner_rowptr
     integer, dimension(partner_hgridsize*nnz_per_row), intent(out) :: partner_cols
