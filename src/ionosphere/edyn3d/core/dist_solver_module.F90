@@ -1101,7 +1101,7 @@ module dist_solver_module
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
          calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size, &
-         gather_lon_1d, mpi_size
+         gather_lon_1d, mpi_size, my_sendgrid_size
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
@@ -1204,7 +1204,7 @@ module dist_solver_module
              rhs(cnt) = rhs_s(ij)
           enddo
           istart = my_hgridsize + 1
-          call partner_exchange_hemisphere_vec(rhs(1:my_hgridsize), rhs(istart:istart+partner_hgridsize))
+          call partner_exchange_hemisphere_vec(rhs(1:my_sendgrid_size), rhs(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
           cnt = partner_hgridsize
@@ -1213,7 +1213,7 @@ module dist_solver_module
              rhs(cnt) = rhs_n(ij)
           enddo
           istart = partner_hgridsize + 1
-          call partner_exchange_hemisphere_vec(rhs(istart:istart+my_hgridsize), rhs(1:partner_hgridsize))
+          call partner_exchange_hemisphere_vec(rhs(istart:istart+my_sendgrid_size), rhs(1:partner_hgridsize))
           
        endif
      else !mpi_size = 1
