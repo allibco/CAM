@@ -1108,7 +1108,7 @@ module dist_solver_module
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: rhs_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: rhs_n
 
-    integer :: i,j,ij, jN, j_start, cnt, istart
+    integer :: i,j,ij, jN, j_start, cnt
 
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
     
@@ -1116,10 +1116,16 @@ module dist_solver_module
     rhs_n = 0.0
     rhs_s = 0.0
 
-    !first do j=1
-    if (lat_rank == 0) then ! I own the pole regions (j=1)
-       j=1
+    !   some debugging info
+    write(iulog, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    write(iulog, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    write(iulog, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
+    write(iulog, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
 
+    !first do j=1
+    if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
+       j=1
+       !SOUTH POLE
        !proc in lat_rows 0 have to share info with proc 0
        coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
        
@@ -1127,54 +1133,57 @@ module dist_solver_module
           ! this is mpi_rank =  0 
           ! for longitude i=1 at the south pole
           i = 1
-          ij = calc_grid_ij(i,j, lat_rank)
-
+          ij = calc_grid_ij(i,j, lat_rank) !this should be 1
+          
           if (ij > ij_stop_s .or. ij < ij_start_s) then
              write(iulog,*) 'AB: Error ij south index for rhs', mpi_rank, ij
           endif
-          
           !has to get rest of row from other tasks
           rhs_s(ij) = sum(coef10_j1_buf(:))
        endif
 
-       ! at j=1, for each i, set Phi(i,nmlat_T1) = phi_pol at the north pole
-       do i = mlon0,mlon1 
-          jN = nmlat_T1-j+1 !j=1, so jN= nmlat_T1
-          ij = calc_grid_ij(i,jN,lat_rank)
+       !nothing else for south pole j=1
+       
+       !NORTH POLE (still j=1), all i
+       do i = mlon0, mlon1
+          jN = nmlat_T1-j+1 !j=1, so jN = nmlat_T1
+          ij = calc_grid_ij(i, jN, lat_rank)
 
           if (ij > ij_stop_n .or. ij < ij_start_n) then
              write(iulog,*) 'AB: Error ij north index for rhs', mpi_rank, ij
           endif
           rhs_n(ij) = phi_pol
        enddo
-
+       !now we've done j=1, so increment
        j_start = 2
-
-    else !don't own j=1
+    else !done with j=1 for procs owning j=1 (lat_rank = 0)
        j_start = mlat0
     endif !treatment for j=1
 
     write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
-    
+
+    !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
     do i = mlon0,mlon1
        do j = j_start,mlat1
-          !south
+          !SOUTH
           ij = calc_grid_ij(i,j,lat_rank)
           if (ij > ij_stop_s .or. ij < ij_start_s) then
              write(iulog,*) 'AB: Error ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
           endif
           rhs_s(ij) = coef_10_s(j,i)
           
-          !north
-          jN = nmlat_T1-j+1
-          ij = calc_grid_ij(i,jN,lat_rank)
+          !NORTH
+          jN = nmlat_T1-j+1 !needed to calc ij
+          ij = calc_grid_ij(i, jN, lat_rank)
           if (ij > ij_stop_n .or. ij < ij_start_n) then
              write(iulog,*) 'AB: Error ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
           endif
           rhs_n(ij) = coef_10_n(j,i)
        enddo
     enddo
-    
+
+
+    !redistribution
     if (mpi_size > 1) then
        !now do partner hemisphere exchange for continguous rows
        
@@ -1212,7 +1221,7 @@ module dist_solver_module
      endif
      
   endfunction dist_construct_rhs
- !--------------------Clean---------------------------------------------------
+ !-----------------------------------------------------------------------
 
 ! function dist_matvec
 
