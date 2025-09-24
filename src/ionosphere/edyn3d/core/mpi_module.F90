@@ -428,15 +428,15 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
     partner_values = 0.0
 
     !send to my partner
-    call MPI_Isend(my_rowptr, my_hgridsize + 1, MPI_INTEGER, mpi_partner, 200, &
+    call MPI_Isend(my_rowptr, my_sendgrid_size + 1, MPI_INTEGER, mpi_partner, 200, &
          dynamo_world, send_request(1), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
-    call MPI_Isend(my_cols, my_hgridsize*nnz_per_row, MPI_INTEGER, mpi_partner, 201, dynamo_world, &
+    call MPI_Isend(my_cols, my_sendgrid_size*nnz_per_row, MPI_INTEGER, mpi_partner, 201, dynamo_world, &
          send_request(2), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
-    call MPI_Isend(my_values, my_hgridsize*nnz_per_row, mpi_rp, mpi_partner, 202, dynamo_world, &
+    call MPI_Isend(my_values, my_sendgrid_size*nnz_per_row, mpi_rp, mpi_partner, 202, dynamo_world, &
          send_request(3), ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
@@ -487,7 +487,7 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
     use MPI
 #endif
 
-    real(kind=rp), dimension(my_hgridsize), intent(in) :: my_values
+    real(kind=rp), dimension(my_sendgrid_size), intent(in) :: my_values
     real(kind=rp), dimension(partner_hgridsize), intent(out) :: partner_values
 
     
@@ -498,7 +498,7 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
 
     !send to my partner
    
-    call MPI_Isend(my_values, my_hgridsize, mpi_rp, mpi_partner, 400, dynamo_world, &
+    call MPI_Isend(my_values, my_sendgrid_size, mpi_rp, mpi_partner, 400, dynamo_world, &
          send_request, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
