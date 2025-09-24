@@ -1163,7 +1163,9 @@ module dist_solver_module
 
     write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
 
+    
     !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
+    !here we need to not do the equator twice :) (only in the south)s
     do i = mlon0,mlon1
        do j = j_start,mlat1
           !SOUTH
@@ -1174,6 +1176,11 @@ module dist_solver_module
           rhs_s(ij) = coef_10_s(j,i)
           
           !NORTH
+          ! don't do the equator in the N
+          if (j == nmlat_h) then
+             cycle
+          endif
+          
           jN = nmlat_T1-j+1 !needed to calc ij
           ij = calc_grid_ij(i, jN, lat_rank)
           if (ij > ij_stop_n .or. ij < ij_start_n) then
