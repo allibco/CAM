@@ -1156,8 +1156,8 @@ module dist_solver_module
 
     write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
     
-    do (i = mlon0,mlon1)
-       do (j = j_start,mlat1)
+    do i = mlon0,mlon1
+       do j = j_start,mlat1
           !south
           ij = calc_grid_ij(i,j,lat_rank)
           if (ij > ij_stop_s .or. ij < ij_start_s) then
