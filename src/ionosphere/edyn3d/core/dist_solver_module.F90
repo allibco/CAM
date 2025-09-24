@@ -1153,24 +1153,28 @@ module dist_solver_module
     else !don't own j=1
        j_start = mlat0
     endif !treatment for j=1
-    
-    do concurrent (i = mlon0:mlon1, j = j_start:mlat1)
-       !south
-       ij = calc_grid_ij(i,j,lat_rank)
-       if (ij > ij_stop_s .or. ij < ij_start_s) then
-          write(iulog,*) 'AB: Error ij south index 2 for rhs', mpi_rank, ij
-       endif
-       rhs_s(ij) = coef_10_s(j,i)
-          
-       !north
-       jN = nmlat_T1-j+1
-       ij = calc_grid_ij(i,jN,lat_rank)
-       if (ij > ij_stop_n .or. ij < ij_start_n) then
-             write(iulog,*) 'AB: Error ij north index 2 for rhs: i,j,jN, ij', mpi_rank, i,j,jN,ij
-       endif
-       rhs_n(ij) = coef_10_n(j,i)
-    enddo
 
+    write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
+    
+    do (i = mlon0,mlon1)
+       do (j = j_start,mlat1)
+          !south
+          ij = calc_grid_ij(i,j,lat_rank)
+          if (ij > ij_stop_s .or. ij < ij_start_s) then
+             write(iulog,*) 'AB: Error ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
+          endif
+          rhs_s(ij) = coef_10_s(j,i)
+          
+          !north
+          jN = nmlat_T1-j+1
+          ij = calc_grid_ij(i,jN,lat_rank)
+          if (ij > ij_stop_n .or. ij < ij_start_n) then
+             write(iulog,*) 'AB: Error ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
+          endif
+          rhs_n(ij) = coef_10_n(j,i)
+       enddo
+    enddo
+    
     if (mpi_size > 1) then
        !now do partner hemisphere exchange for continguous rows
        
@@ -1208,7 +1212,7 @@ module dist_solver_module
      endif
      
   endfunction dist_construct_rhs
- !-----------------------------------------------------------------------
+ !--------------------Clean---------------------------------------------------
 
 ! function dist_matvec
 
