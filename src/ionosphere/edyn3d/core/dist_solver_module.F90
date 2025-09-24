@@ -1123,8 +1123,8 @@ module dist_solver_module
        !proc in lat_rows 0 have to share info with proc 0
        coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
        
-       if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
-          ! this is mpi_rank =  0 proc
+       if (lon_rank == 0) then !I also own i=1 (special case for 1 processor)
+          ! this is mpi_rank =  0 
           ! for longitude i=1 at the south pole
           i = 1
           ij = calc_grid_ij(i,j, lat_rank)
@@ -1145,9 +1145,9 @@ module dist_solver_module
           if (ij > ij_stop_n .or. ij < ij_start_n) then
              write(iulog,*) 'AB: Error ij north index for rhs', mpi_rank, ij
           endif
-          
           rhs_n(ij) = phi_pol
        enddo
+
        j_start = 2
 
     else !don't own j=1
@@ -1166,9 +1166,8 @@ module dist_solver_module
        jN = nmlat_T1-j+1
        ij = calc_grid_ij(i,jN,lat_rank)
        if (ij > ij_stop_n .or. ij < ij_start_n) then
-             write(iulog,*) 'AB: Error ij north index 2 for rhs', mpi_rank, ij
+             write(iulog,*) 'AB: Error ij north index 2 for rhs: i,j,jN, ij', mpi_rank, i,j,jN,ij
        endif
-
        rhs_n(ij) = coef_10_n(j,i)
     enddo
 
