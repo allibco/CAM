@@ -17,7 +17,7 @@ module mpi_module
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
     ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
     mpi_partner, partner_hgridsize, my_hgridsize, &
-    mygrid_size, mygrid_size_s, mygrid_size_n &
+    mygrid_size, mygrid_size_s, mygrid_size_n, &
     mpi_comm_host_rank=-1
 
   integer, dimension(:), allocatable :: &
