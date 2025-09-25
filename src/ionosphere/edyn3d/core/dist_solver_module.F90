@@ -25,7 +25,8 @@ module dist_solver_module
     use mpi_module, only: mpi_rank,dynamo_world,lat_rank,lon_rank,&
                           nmlat_task,nmlon_task,mygrid_size,&
                           sync_mlat_5d, sync_mlon_5d,& 
-                          sync_mlat_3d, sync_mlon_3d
+                          sync_mlat_3d, sync_mlon_3d, &
+                          mlat0, mlat1, mlon0, mlon1
     
 ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
 ! nmlat_h => # mag latitudes in one hemisphere
@@ -41,7 +42,7 @@ module dist_solver_module
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(out) :: pot
     
     integer,parameter :: root = 0
-    integer :: nlonlat,mlat0,mlat1,mlon0,mlon1,i,j,isn,ic,nnz, nnz_est
+    integer :: nlonlat,i,j,isn,ic,nnz, nnz_est
 
     integer,dimension(:), allocatable :: rowptr
     integer,dimension(:), allocatable :: colind
