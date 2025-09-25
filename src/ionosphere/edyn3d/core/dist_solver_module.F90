@@ -1367,7 +1367,8 @@ module dist_solver_module
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size, &
-         calc_grid_ij, my_hgridsize, partner_exchange_hemisphere_vec
+         calc_grid_ij, my_hgridsize, partner_exchange_hemisphere_vec, &
+         my_sendgrid_size
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size) :: fout
@@ -1383,7 +1384,7 @@ module dist_solver_module
     fout_n = 0.0
     fout = 0.0
     
-    if (mlat0<jlatm_JT) then
+    if (mlat0<jlatm_JT) then !includes jlatm_JT
        ! from pole to jlatm_JT, two hemispheres are uncoupled
        ! my longitudes
        loop_start_j = mlat0
@@ -1393,7 +1394,7 @@ module dist_solver_module
           !south
           jS=j
           ij = calc_grid_ij(i,jS,lat_rank)
-          !TO DO: checkbounds
+          !checkbounds
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout_s(ij) = fin(1,j,i)
            else
@@ -1403,6 +1404,7 @@ module dist_solver_module
           !north
           jN = nmlat_T1-j+1
           ij = calc_grid_ij(i,jN,lat_rank)
+          !checkbounds
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout_n(ij) = fin(2,j,i)
           else
@@ -1412,7 +1414,7 @@ module dist_solver_module
     endif
     
     if ((mlat0 > jlatm_JT) .or. (mlat1 > jlatm_JT)) then
-       ! from jlatm_JT to equator, symmetric solution
+       ! from jlatm_JT+1 to equator, symmetric solution
        loop_start_j = max(mlat0, jlatm_JT+1)
        loop_stop_j = mlat1
 
@@ -1422,17 +1424,32 @@ module dist_solver_module
           !south
           jS=j
           ij = calc_grid_ij(i,jS,lat_rank)
-          fout_s(ij) = avg
-
+          !checkbounds
+          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+             fout_s(ij) = avg
+          else
+             write(iulog,*) "Error in flatten 2 south, mpirank, ij = ", mpi_rank, ij
+          endif
+             
           !north
+          ! don't do the equator in the N 
+          if (j == nmlat_h) then
+             cycle
+          endif
           jN = nmlat_T1-j+1
           ij = calc_grid_ij(i,jN,lat_rank)
-          fout_n(ij) = avg
+          !checkbounds
+          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+             fout_n(ij) = avg
+          else
+             write(iulog,*) "Error in flatten 2 north, mpirank, ij = ", mpi_rank, ij
+          endif
+
        enddo
     endif
 
     if (mpi_size == 1) then
-    !now combine & the rows so they are the same order as in matrix
+       !now combine the rows so they are the same order as in matrix
        cnt = 0
        do ij = ij_start_s, ij_stop_s
           cnt = cnt + 1
@@ -1443,6 +1460,8 @@ module dist_solver_module
           fout(cnt) = fout_n(ij)
        enddo
     else
+
+       
        !now do partner hemisphere exchange for continguous rows
        !for N and S hemi, the even proc rows go first to maintain grid order
        !(so the south owning process)
@@ -1453,7 +1472,7 @@ module dist_solver_module
              fout(cnt) = fout_s(ij)
           enddo
           istart = my_hgridsize + 1
-          call partner_exchange_hemisphere_vec(fout(1:my_hgridsize), fout(istart:istart+partner_hgridsize))
+          call partner_exchange_hemisphere_vec(fout(1:my_sendgrid_size), fout(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
           cnt = partner_hgridsize
@@ -1462,7 +1481,7 @@ module dist_solver_module
              fout(cnt) = fout_n(ij)
           enddo
           istart = partner_hgridsize + 1
-          call partner_exchange_hemisphere_vec(fout(istart:istart+my_hgridsize), fout(1:partner_hgridsize))
+          call partner_exchange_hemisphere_vec(fout(istart:istart+my_sendgrid_size), fout(1:partner_hgridsize))
        endif
     endif
        
