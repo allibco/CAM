@@ -42,7 +42,7 @@ module dist_solver_module
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(out) :: pot
     
     integer,parameter :: root = 0
-    integer :: nlonlat,i,j,isn,ic,nnz, nnz_est
+    integer :: nlonlat,i,j,ic,nnz, nnz_est
 
     integer,dimension(:), allocatable :: rowptr
     integer,dimension(:), allocatable :: colind
@@ -1506,7 +1506,7 @@ module dist_solver_module
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
     real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout
 
-    integer :: i,j,isn,ij, cnt, jS, jN
+    integer :: i,j,ij, cnt, jS, jN
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fin_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fin_n
     real(kind=rp),dimension(partner_hgridsize) :: buffer
@@ -1518,7 +1518,6 @@ module dist_solver_module
     if (mod(mpi_rank,2) == 0) then !EVEN, own then south, send other
                                    !half back to partner
        !south
-       isn=1
        cnt = 0
        !this is mine for the south, so copy
        do ij = ij_start_s, ij_stop_s
@@ -1530,7 +1529,10 @@ module dist_solver_module
           jS = j
           ij =  calc_grid_ij(i,jS,lat_rank)
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-             fout(isn,j,i) = fin_s(ij)
+             fout(1,j,i) = fin_s(ij)
+             if (j == nmlat_h) then !equator, set in north also
+                fout(2,j,i) = fin_s(ij)
+             endif
           else
              write(iulog,*) "Error in unravel south 1, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_s, ij_stop_s
           endif
@@ -1550,6 +1552,10 @@ module dist_solver_module
        !now fin_n contains my north data, so put back into 3D array   
        do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jN = nmlat_T1-j+1 !north j
+          if (j == nmlat_h) then !no equator data from north in fin_n
+             !(already populated)
+             cycle
+          endif
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(2,j,i) = fin_n(ij)
@@ -1571,6 +1577,9 @@ module dist_solver_module
           ij =  calc_grid_ij(i,jS,lat_rank)
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout(1,j,i) = fin_s(ij)
+             if (j == nmlat_h) then !equator, set in north also
+                fout(2,j,i) = fin_s(ij)
+             endif
           else
              write(iulog,*) "Error in unravel south 2, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
           endif
@@ -1585,14 +1594,15 @@ module dist_solver_module
        !put in 3D array
        do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
           jN = nmlat_T1-j+1 !north index
-          if (j == nmlat_h) then !no equator data in north
+          if (j == nmlat_h) then !no equator data from north in fin_n
+             !(already populated)
              cycle
           endif
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(2,j,i) = fin_n(ij)
           else
-             write(iulog,*) "Error in unravel north, mpirank 2, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_n, ij_stop_n
+             write(iulog,*) "Error in unravel north 2, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_n, ij_stop_n
           endif
           
        enddo
