@@ -157,7 +157,7 @@ module mpi_module
     nmlat_task = 0
     nmlon_task = 0
 
-    ! AB: TO DO: the first 4 aren't needed for the dist version
+    ! AB: TO DO: the first 2 aren't needed for the dist version?
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
     allocate(mlon0_task(0:mpi_size-1))
@@ -889,12 +889,14 @@ endfunction all_gather_int
        do concurrent (i = mlon0:mlon1)
           varout(i) = varin(i)
        enddo
-       if (lon_size > 1) then !get data from other procs
+       if (lon_size > 1) then !get data from other procs 1:lon_size -1
           do i = 1,lon_size -1
              rs = mlon0_task(i)
              re = mlon1_task(i)
              cnt = re-rs+1
-          
+             
+             write(iulog,*) 'AB: Gather, mpi_rank, i, rs, re', mpi_rank, i, rs, re
+             
              call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
                   i, tag, dynamo_world, &
                   requests(i), ierr)
@@ -913,8 +915,6 @@ endfunction all_gather_int
                 varout(j) = recvbuf(j)
              end do
           end do
-
-          
        endif
        
     elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root (0)
