@@ -874,7 +874,17 @@ endfunction all_gather_int
     integer, dimension(1:lon_size-1) :: requests  
     real(kind=rp), dimension(maxmlon) :: sendbuf
     real(kind=rp), dimension(nmlon) :: recvbuf
- 
+
+
+    ! Add this debug output at the start
+    write(iulog,*) 'AB: DEBUG - nmlon =', nmlon
+    write(iulog,*) 'AB: DEBUG - mlon0, mlon1 =', mlon0, mlon1
+    write(iulog,*) 'AB: DEBUG - size(varin) =', size(varin)
+#ifdef PARALLEL
+    write(iulog,*) 'AB: DEBUG - lon_size =', lon_size
+    write(iulog,*) 'AB: DEBUG - mpi_rank =', mpi_rank
+#endif
+    
     tag = 34
     
     ! load to work array
