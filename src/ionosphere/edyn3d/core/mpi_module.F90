@@ -907,7 +907,7 @@ endfunction all_gather_int
           call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
           if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
-          write(iulog,*) 'AB: size(varout), size(recvbuf)', sizze(varout), size(recvbuf)
+          write(iulog,*) 'AB: size(varout), size(recvbuf)', size(varout), size(recvbuf)
 
           
           !copy from all other procs
