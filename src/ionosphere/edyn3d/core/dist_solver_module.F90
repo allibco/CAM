@@ -1335,6 +1335,7 @@ module dist_solver_module
        write(iulog,*) 'Backward error: ', berr_array(1)
     endif
 
+    !Also need to do a matvec here with A
     
     !print statistics
     call PStatPrint(c_loc(options),stat,grid)

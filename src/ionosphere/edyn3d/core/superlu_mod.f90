@@ -104,6 +104,10 @@ module superlu_mod
             type(c_ptr), value :: grid
         end subroutine PStatPrint
 
+        !super lu matvec routine (internal - not typically called by user)
+
+       
+          
         ! Cleanup functions
         subroutine superlu_gridexit(grid) &
             bind(c, name='superlu_gridexit')

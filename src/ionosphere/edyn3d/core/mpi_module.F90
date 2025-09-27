@@ -907,11 +907,15 @@ endfunction all_gather_int
           call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
           if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
+          write(iulog,*) 'AB: size(varout), size(recvbuf)', sizze(varout), size(recvbuf)
+
+          
           !copy from all other procs
           do i = 1, lon_size - 1
              rs = mlon0_task(i)
              re = mlon1_task(i)
              do concurrent (j = rs:re)
+                write(iulog,*) 'AB: j=', j
                 varout(j) = recvbuf(j)
              end do
           end do
