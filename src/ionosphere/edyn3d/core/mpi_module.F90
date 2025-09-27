@@ -143,7 +143,7 @@ module mpi_module
     ! setup MPI decompositions in geo and mag coordinates and the connectivity matrix
     ! note: non-active procs have mpi_rank < 0
     
-    use params_module, only:nmlat_h,nmlat_T1,nmlon
+    use params_module, only:nmlat_h,nmlat_T1
     
     integer, intent(in) :: nmlat_in, nmlon_in
 
@@ -174,7 +174,8 @@ module mpi_module
     task_csr_rowstarts = 0
     task_mygrid_size = 0
     task_lat_offset = 0
-   
+
+    !set globale vars in this module
     nmlat = nmlat_in
     nmlon = nmlon_in
 
@@ -925,7 +926,7 @@ endfunction all_gather_int
              rs = mlon0_task(i)
              re = mlon1_task(i)
              do concurrent (j = rs:re)
-                write(iulog,*) 'AB: j=', j
+            !    write(iulog,*) 'AB: j=', j
                 varout(j) = recvbuf(j)
              end do
           end do
@@ -1349,7 +1350,7 @@ endfunction all_gather_int
   ! if j lives on the calling processor
   pure function calc_grid_ij(i_in,j_in,my_latrank) result(ij)
     
-    use params_module,only:nmlon,nmlat_T1, nmlat_h
+    use params_module,only:nmlat_T1, nmlat_h
 
     integer, intent(in) :: i_in, j_in, my_latrank
     integer:: ij
