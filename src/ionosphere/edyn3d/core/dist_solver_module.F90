@@ -134,9 +134,9 @@ module dist_solver_module
      ! add FAC forcing to RHS
      !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
-        write(*,*) 'Debug: i=', i, 'rhs(i)=', rhs(i), 'z(i)=', z(i)
-        if (isnan(rhs(i))) write(*,*) 'rhs(i) is NaN'
-        if (isnan(z(i))) write(*,*) 'z(i) is NaN'
+        !write(*,*) 'Debug: i=', i, 'rhs(i)=', rhs(i), 'z(i)=', z(i)
+        if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
+        if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
         rhs(i) = rhs(i)+z(i)
      enddo
 

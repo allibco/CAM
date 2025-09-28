@@ -18,9 +18,9 @@ module mpi_module
     nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
     nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
     ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
-    mpi_partner, partner_hgridsize, my_hgridsize, &
-    mygrid_size, mygrid_size_s, mygrid_size_n, &
-    mpi_comm_host_rank=-1, my_sendgrid_size
+    mpi_partner=-1, partner_hgridsize=0, my_hgridsize=0, &
+    mygrid_size =0, mygrid_size_s=0, mygrid_size_n=0, &
+    mpi_comm_host_rank=-1, my_sendgrid_size=0
 
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
@@ -160,6 +160,7 @@ module mpi_module
     nmlon_task = 0
 
     ! AB: TO DO: the first 2 aren't needed for the dist version?
+    ! TO DO: deallocate
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
     allocate(mlon0_task(0:mpi_size-1))
@@ -268,7 +269,7 @@ module mpi_module
        !sizes in each hemisphere
        mysize_n =  (ij_stop_n -ij_start_n + 1)
        mysize_s = (ij_stop_s -ij_start_s + 1)
-       write(iulog,*) 'AB: mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
+       write(iulog,*) 'AB: SETUP TOPO mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
 
        !set global vars (n & s row counts will be diff for procs on equator)
        mygrid_size_n = mysize_n
@@ -276,18 +277,20 @@ module mpi_module
        
        !get partner sizes and then my grid size for block csr matrix
        !for each partner pair, even owns s hemi and odd owns north hemi
-       if (mod(mpi_rank,2) == 0) then !even, own south, send north
+       if (mod(mpi_rank,2) == 0) then !EVEN, own south, send north
+          
           partner_hgridsize = partner_exchange_int(mysize_n)
           my_hgridsize = mysize_s
           mygrid_size =  mysize_s + partner_hgridsize
 
-          my_sendgrid_size = mysize_n
-       else !odd, own north, send south
+          my_sendgrid_size = mysize_n !i send to my partner
+
+       else !ODD, own north, send south
           partner_hgridsize = partner_exchange_int(mysize_s)
           my_hgridsize = mysize_n
           mygrid_size =  mysize_n + partner_hgridsize
 
-          my_sendgrid_size = mysize_s
+          my_sendgrid_size = mysize_s !i send to my partner
 
        endif
            
