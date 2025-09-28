@@ -112,7 +112,7 @@ module dist_solver_module
        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
        !TO DO (need a parallel matmult)
        ! z = matmul(lhs, pot_hl)
-       z = 0
+       z = 0.0
        !do i = 1,nlonlat
        !   do j = rowptr(i),rowptr(i+1)-1
        !      z(i) = z(i)+values_csr(j)*pot_hl_f(colind(j))
@@ -134,6 +134,9 @@ module dist_solver_module
      ! add FAC forcing to RHS
      !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
+        write(*,*) 'Debug: i=', i, 'rhs(i)=', rhs(i), 'z(i)=', z(i)
+        if (isnan(rhs(i))) write(*,*) 'rhs(i) is NaN'
+        if (isnan(z(i))) write(*,*) 'z(i) is NaN'
         rhs(i) = rhs(i)+z(i)
      enddo
 
@@ -1299,6 +1302,14 @@ module dist_solver_module
 
     call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
+
+
+    !real(c_double), allocatable :: ax(:)
+    !pass in z and a flag to know whether to matvec z = lhs*pot_h1_f
+    !pass in pot_h1_f?
+    ! then rhs = rhs + z (regardless of flag)
+    ! but then also need to return ax
+    !ierr = pdgsmv(n_loc, A, x, ax)
 
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector

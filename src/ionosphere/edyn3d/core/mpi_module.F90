@@ -10,6 +10,8 @@ module mpi_module
 
   implicit none
 
+!nmlon is also in params module, which can cause confusion
+  
   integer :: dynamo_world=-huge(1), &
     mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
     lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
