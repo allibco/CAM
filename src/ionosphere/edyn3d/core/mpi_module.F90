@@ -409,8 +409,9 @@ endfunction partner_exchange_int
 subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
      partner_rowptr, partner_values, partner_cols)
 
-
-!the south pole's denser row does not get sent (it's owned by rank 0, which is even & sends north)  
+  !send my csr matrix info and recv my partner's matrix info
+  
+  !note: the south pole's denser row does not get sent (it's owned by rank 0, which is even & sends north)  
 
 #ifdef PARALLEL
     use MPI
@@ -491,7 +492,7 @@ endsubroutine partner_exchange_hemisphere_mat
 !-----------------------------------------------------------------------
 
 subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
-  
+!send my_values to partner and recv partner_values  
 
 #ifdef PARALLEL
     use MPI

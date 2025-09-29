@@ -1161,15 +1161,15 @@ module dist_solver_module
        enddo
        !now we've done j=1, so increment
        j_start = 2
-    else !done with j=1 for procs owning j=1 (lat_rank = 0)
+    else !done with j=1 for procs owning j=1 (i.e., lat_rank = 0)
        j_start = mlat0
     endif !treatment for j=1
 
     write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
 
-    
+    !populate rhs_s and rhs_n
     !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
-    !here we need to not do the equator twice :) (only in the south)s
+    !here we need to not do the equator twice :) (onlysave with the south)
     do i = mlon0,mlon1
        do j = j_start,mlat1
           !SOUTH
@@ -1202,6 +1202,7 @@ module dist_solver_module
        !for N and S hemi, the even proc rows go first to maintain grid order
        !(so the south owning process)
        if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+          !copy rhs_s into rhs
           cnt = 0
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
@@ -1209,18 +1210,21 @@ module dist_solver_module
              if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
 
           enddo
+          !send rhs_n and get the rest from my partner
           istart = my_hgridsize + 1
-          call partner_exchange_hemisphere_vec(rhs(1:my_sendgrid_size), rhs(istart:istart+partner_hgridsize))
+          call partner_exchange_hemisphere_vec(rhs_n, rhs(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
           cnt = partner_hgridsize
+          copu rhs_n into ths
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              rhs(cnt) = rhs_n(ij)
              if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
           enddo
           istart = partner_hgridsize + 1
-          call partner_exchange_hemisphere_vec(rhs(istart:istart+my_sendgrid_size), rhs(1:partner_hgridsize))
+          !get the rest of the rhs info from partner
+          call partner_exchange_hemisphere_vec(rhs_s, rhs(1:partner_hgridsize))
           
        endif
      else !mpi_size = 1
