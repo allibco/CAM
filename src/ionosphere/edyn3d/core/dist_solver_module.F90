@@ -1302,6 +1302,10 @@ module dist_solver_module
     write(*,*)  "Grid init: nprocs=", nprocs, "nprow*npcol=", nprow*npcol
    
     call superlu_gridinit(dynamo_world, nprow, npcol, grid)
+    if (.not. c_associated(grid)) then
+       write(*,*) "ERROR rank ", mpi_rank, ": grid is NULL after gridinit"
+       call MPI_Abort(dynamo_world, 1, ierr)
+    endif
 
     first_row = task_csr_rowstarts(mpi_rank)     !these are 1-based 
     first_row = first_row -1 !make 0-based
@@ -1315,8 +1319,11 @@ module dist_solver_module
 
     call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
-
-
+    if (.not. c_associated(A)) then
+       write(*,*) "ERROR rank ", mpi_rank, ": A is NULL after creation"
+       call MPI_Abort(dynamo_world, 1, ierr)
+    endif
+    
     !real(c_double), allocatable :: ax(:)
     !pass in z and a flag to know whether to matvec z = lhs*pot_h1_f
     !pass in pot_h1_f?
@@ -1342,15 +1349,30 @@ module dist_solver_module
 
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
+    if (.not. c_associated(ScalePermstruct)) then
+       write(*,*) "ERROR rank ", mpi_rank, ": ScalePermstruct is NULL after init"
+       call MPI_Abort(dynamo_world, 1, ierr)
+    endif
+
     call dLUstructInit(n_global, LUstruct)
-    
+    if (.not. c_associated(LUstruct)) then
+       write(*,*) "ERROR rank ", mpi_rank, ": LUstruct is NULL after init"
+       call MPI_Abort(dynamo_world, 1, ierr)
+    endif
+ 
     ! Initialize the statistics variables
     call PStatInit(stat)
-
+    if (.not. c_associated(stat)) then
+       write(*,*) "ERROR rank ", mpi_rank, ": stat is NULL after init"
+       call MPI_Abort(dynamo_world, 1, ierr)
+    endif
+ 
     ! Call the linear equation solver (writes over rhs (sol))
+    write(*,*) "Before pdgssvx: rank=", mpi_rank, "n_loc=", n_loc, "info=", info
     call pdgssvx(c_loc(options), A, ScalePermstruct, c_loc(sol),&
          n_loc, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
+    write(*,*) "After pdgssvx: rank=", mpi_rank, "info=", info
     
     if (info /= 0) then
        write(iulog,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
