@@ -51,7 +51,7 @@ module superlu_mod
             integer(c_int), value :: m, n       ! Global matrix dimensions
             integer(c_int), value :: nnz_loc    ! Local non-zeros
             integer(c_int), value :: m_loc      ! Local rows
-            integer(c_int), value :: fst_row    ! First row (1-based)
+            integer(c_int), value :: fst_row    ! First row (o-based)
             type(c_ptr), value :: nzval         ! Pointer to values
             type(c_ptr), value :: colind        ! Pointer to column indices  
             type(c_ptr), value :: rowptr        ! Pointer to row pointers
@@ -64,7 +64,7 @@ module superlu_mod
         subroutine set_default_options_dist(options) &
             bind(c, name='set_default_options_dist')
             use iso_c_binding
-            type(c_ptr) :: options
+            type(c_ptr), value :: options
         end subroutine
 
         ! Initialize scale/permutation structure
