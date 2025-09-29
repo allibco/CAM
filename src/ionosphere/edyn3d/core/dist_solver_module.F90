@@ -1216,7 +1216,7 @@ module dist_solver_module
           
        else !odd, own north, **send south**
           cnt = partner_hgridsize
-          copu rhs_n into ths
+          !copy rhs_n into rhs
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              rhs(cnt) = rhs_n(ij)
