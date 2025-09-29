@@ -1292,11 +1292,9 @@ module dist_solver_module
 
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
 
-    call MPI_Comm_size(dynamo_world, nprocs, ierr)
-    write(*,*)  "nprocs=", nprocs, "nprow*npcol=", nprow*npcol
-   
-   ! Initialize the SuperLU_DIST process grid
-   !i'll use the same layout as the dynamo
+       
+    ! Initialize the SuperLU_DIST process grid
+    !i'll use the same layout as the dynamo
     nprow = lat_size
     npcol = lon_size
 
