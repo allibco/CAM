@@ -1284,7 +1284,7 @@ module dist_solver_module
     type(c_ptr) :: stat
 
     ! Other variables
-    integer(kind=c_int) :: info
+    integer(kind=c_int) :: info, nprocs
     real(kind=c_double), target :: berr_array(nrhs)
  
     type(superlu_options_t), target :: options    
