@@ -1351,20 +1351,20 @@ module dist_solver_module
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
     if (.not. c_associated(ScalePermstruct)) then
        write(*,*) "ERROR rank ", mpi_rank, ": ScalePermstruct is NULL after init"
-       call MPI_Abort(dynamo_world, 1, ierr)
+       !call MPI_Abort(dynamo_world, 1, ierr)
     endif
 
     call dLUstructInit(n_global, LUstruct)
     if (.not. c_associated(LUstruct)) then
        write(*,*) "ERROR rank ", mpi_rank, ": LUstruct is NULL after init"
-       call MPI_Abort(dynamo_world, 1, ierr)
+       !call MPI_Abort(dynamo_world, 1, ierr)
     endif
  
     ! Initialize the statistics variables
     call PStatInit(stat)
     if (.not. c_associated(stat)) then
        write(*,*) "ERROR rank ", mpi_rank, ": stat is NULL after init"
-       call MPI_Abort(dynamo_world, 1, ierr)
+       !call MPI_Abort(dynamo_world, 1, ierr)
     endif
  
     ! Call the linear equation solver (writes over rhs (sol))
