@@ -1258,7 +1258,7 @@ module dist_solver_module
          superlu_gridexit, superlu_options_t
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank, mygrid_size
+         task_csr_rowstarts, mpi_rank
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer(kind=c_int),dimension(n_loc+1),intent(in), target :: rowptr
@@ -1349,7 +1349,7 @@ module dist_solver_module
 
     ! Call the linear equation solver (writes over rhs (sol))
     call pdgssvx(c_loc(options), A, ScalePermstruct, c_loc(sol),&
-         mygrid_size, nrhs, &
+         n_loc, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
     
     if (info /= 0) then
