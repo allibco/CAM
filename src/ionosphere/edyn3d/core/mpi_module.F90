@@ -394,7 +394,7 @@ function partner_exchange_int(intin) result(intout)
     call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
-    write(*,*) 'AB: intin = ', intin, '  intout = ' , inout
+    write(*,*) 'AB: intin = ', intin, '  intout = ' , intout
 
 #else
 
