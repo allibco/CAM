@@ -263,10 +263,10 @@ module dist_solver_module
     coef3_j1_buf = 0.0
 
     !   some debugging info
-    write(iulog, *) 'AB: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-    write(iulog, *) 'AB: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-    write(iulog, *) 'AB: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
-    write(iulog, *) 'AB: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+    write(*, *) 'AB: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    write(*, *) 'AB: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    write(*, *) 'AB: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
+    write(*, *) 'AB: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
 
     
     
@@ -1290,17 +1290,23 @@ module dist_solver_module
     type(superlu_options_t), target :: options    
 
 
-   write(iulog, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
+    write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
 
-    
-    ! Initialize the SuperLU_DIST process grid
-    !i'll use the same layout as the dynamo
+    call MPI_Comm_size(dynamo_world, nprocs, ierr)
+    write(*,*)  "nprocs=", nprocs, "nprow*npcol=", nprow*npcol
+   
+   ! Initialize the SuperLU_DIST process grid
+   !i'll use the same layout as the dynamo
     nprow = lat_size
     npcol = lon_size
+
+    call MPI_Comm_size(dynamo_world, nprocs, ierr)
+    write(*,*)  "Grid init: nprocs=", nprocs, "nprow*npcol=", nprow*npcol
+   
     call superlu_gridinit(dynamo_world, nprow, npcol, grid)
 
     first_row = task_csr_rowstarts(mpi_rank)     !these are 1-based 
-    first_row = first_row -1
+    first_row = first_row -1 !make 0-based
 
     
     !create the distributed compressed row matrix A
