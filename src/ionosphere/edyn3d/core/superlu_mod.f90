@@ -12,16 +12,21 @@ module superlu_mod
   type, bind(c) :: superlu_options_t
      integer(kind=c_int) :: Fact
      integer(kind=c_int) :: Equil
+     integer(kind=c_int) :: ParSymbFact
      integer(kind=c_int) :: ColPerm
-     integer(kind=c_int) :: RowPerm 
-     integer(kind=c_int) :: ReplaceTinyPivot
+     integer(kind=c_int) :: RowPerm
      integer(kind=c_int) :: IterRefine
-     integer(kind=c_int) :: Trans
-     integer(kind=c_int) :: SymmetricMode
+     integer(kind=c_int) :: DiagPivotThresh
+     integer(kind=c_int) :: ReplaceTinyPivot
+     integer(kind=c_int) :: SolveInitialized
+     integer(kind=c_int) :: RefineInitialized
      integer(kind=c_int) :: PrintStat
-     ! ... more fields exist but these are the most common
+     integer(kind=c_int) :: num_lookaheads
+     integer(kind=c_int) :: lookahead_etree
+     integer(kind=c_int) :: SymPattern
+     integer(kind=c_int) :: Trans
+     integer(kind=c_int) :: Algo3d
   end type superlu_options_t
-
   
  ! Interface declarations for SuperLU_DIST functions
     interface

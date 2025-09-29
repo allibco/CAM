@@ -1328,18 +1328,18 @@ module dist_solver_module
     sol=rhs ! Copy RHS to solution vector
 
     ! Set the default input options
+    call set_default_options_dist(c_loc(options))
 
+    !now some adjustments
     ! this disables row permutations (faster and better if reusing
     ! sparsity pattern - as long as diag entries are not small)
     !With both of these, you're telling SuperLU to perform factorization with
     ! no reordering at all, keeping your matrix structure exactly as provided.
     !options%RowPerm=7  !NO PERM
     !options%ColPerm=0 !NATURAL
-
     options%RowPerm=1 !LargeDiag_MC64 (default)
     options%ColPerm=3 !COLAMD (default) - best speed/fill reduction balance
 
-    call set_default_options_dist(c_loc(options))
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
     call dLUstructInit(n_global, LUstruct)
