@@ -1195,7 +1195,7 @@ module dist_solver_module
     enddo
 
 
-    !redistribution
+    !redistribution with partners
     if (mpi_size > 1) then
        !now do partner hemisphere exchange for continguous rows
        
@@ -1206,6 +1206,8 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              rhs(cnt) = rhs_s(ij)
+             if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
+
           enddo
           istart = my_hgridsize + 1
           call partner_exchange_hemisphere_vec(rhs(1:my_sendgrid_size), rhs(istart:istart+partner_hgridsize))
@@ -1215,6 +1217,7 @@ module dist_solver_module
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              rhs(cnt) = rhs_n(ij)
+             if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
           enddo
           istart = partner_hgridsize + 1
           call partner_exchange_hemisphere_vec(rhs(istart:istart+my_sendgrid_size), rhs(1:partner_hgridsize))

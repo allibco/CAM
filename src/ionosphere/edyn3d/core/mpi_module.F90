@@ -232,6 +232,7 @@ module mpi_module
 
 
     !Find partner for distributed grid (0,1), (2,3), (3,4) etc.
+    ! number of procs is even
     if (mpi_size > 1) then
        if (mpi_rank >=0 ) then !active
           if (mod(mpi_rank, 2) == 0) then
@@ -373,6 +374,7 @@ function partner_exchange_int(intin) result(intout)
     integer :: send_request, recv_request
 
     intout = 0
+
     
     !post receive
     call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
@@ -391,6 +393,8 @@ function partner_exchange_int(intin) result(intout)
     ! Wait for receive to complete
     call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    write(*,*) 'AB: intin = ', intin, '  intout = ' , inout
 
 #else
 
