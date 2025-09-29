@@ -14,10 +14,12 @@ module dist_solver_module
 !-----------------------------------------------------------------------
   subroutine dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, &
     bij,pot_hl,fac_hl,coef_ns,pot)
-! construct linear system based on bij and coef and solve in pot
+    ! construct linear system based on bij and coef and solve in pot
+
+    ! note: this is only called by the active processes
     
-! if FAC is read in, pot_hl is not used, only fac_hl is used
-! if potential is read in, pot_hl is used, fac_hl is output
+    ! if FAC is read in, pot_hl is not used, only fac_hl is used
+    ! if potential is read in, pot_hl is used, fac_hl is output
 
     
     use params_module, only:nmlat_h,nmlat_T1,nmlon
@@ -28,10 +30,10 @@ module dist_solver_module
                           sync_mlat_3d, sync_mlon_3d, &
                           mlat0, mlat1, mlon0, mlon1
     
-! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
-! nmlat_h => # mag latitudes in one hemisphere
-! nmlon => num of mag longitudes
-! nmlat_T1 = 2*nmlat_h-1 # num mag latitudes globally
+    ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
+    ! nmlat_h => # mag latitudes in one hemisphere
+    ! nmlon => num of mag longitudes
+    ! nmlat_T1 = 2*nmlat_h-1 # num mag latitudes globally
     
     ! input data here includes halo cells
     integer,intent(in) :: mlatd0,mlatd1,mlond0,mlond1
@@ -52,9 +54,7 @@ module dist_solver_module
 
     real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
 
-    
-    integer :: ier
-
+    integer :: ierr
     
     call t_startf('dist_linear_system')
 
@@ -134,21 +134,19 @@ module dist_solver_module
      ! add FAC forcing to RHS
      !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
-        !write(*,*) 'Debug: i=', i, 'rhs(i)=', rhs(i), 'z(i)=', z(i)
         if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
         if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
         rhs(i) = rhs(i)+z(i)
      enddo
 
      !superlu 
-     !need everything 0-based
+     !need matrix to be 0-based index for superlu
      colind=colind-1
      rowptr=rowptr-1
 
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
-
 
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
@@ -916,7 +914,7 @@ module dist_solver_module
        nnz_s = 0
        ! first row seperately
        cnt = rowcnt_s(1)
-       write(iulog,*) 'AB: mpi_rank 0, row1 count = ', cnt
+       !write(iulog,*) 'AB: mpi_rank 0, row1 count = ', cnt
        if (cnt + nnz_s > size(colind_s)) then
           write(iulog,*) 'AB: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
        endif
@@ -948,7 +946,7 @@ module dist_solver_module
     !now row_counter_s needs to be decremented by 1 so it = #rows of s
     num_row_s = row_counter_s -1
     nnz_south = nnz_s
-    write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
+    !write(iulog,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
     
     !loop through NORTH hemisphere
     rowptr_n(1) = 1
@@ -971,7 +969,7 @@ module dist_solver_module
     enddo
     num_row_n = row_counter_n - 1
     nnz_north = nnz_n
-    write(iulog,*) 'AB: mpi_rank, num_row_n, nnz_north =  ', mpi_rank, num_row_n, nnz_north
+    !write(iulog,*) 'AB: mpi_rank, num_row_n, nnz_north =  ', mpi_rank, num_row_n, nnz_north
 
 
     !SET UP BLOCK CSR (exchange with partner)
@@ -1000,7 +998,7 @@ module dist_solver_module
                 write(iulog,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
              endif
           
-             write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
+             !write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
 
              if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
                 write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
@@ -1027,7 +1025,7 @@ module dist_solver_module
              !nnz_north needs to be set from partner's info
              nnz_north = my_rowptr(mygrid_size + 1) -1  - nnz_south
 
-             write(iulog,*) 'AB: again: mpi_rank, nnz_north = ', mpi_rank, nnz_north
+             !write(iulog,*) 'AB: again: mpi_rank, nnz_north = ', mpi_rank, nnz_north
 
              
              if (nnz_south + nnz_north > size(my_colind)) then
@@ -1165,7 +1163,7 @@ module dist_solver_module
        j_start = mlat0
     endif !treatment for j=1
 
-    write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
+    !write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
 
     !populate rhs_s and rhs_n
     !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
@@ -1290,7 +1288,11 @@ module dist_solver_module
     real(kind=c_double), target :: berr_array(nrhs)
  
     type(superlu_options_t), target :: options    
-   
+
+
+   write(iulog, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
+
+    
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
     nprow = lat_size
