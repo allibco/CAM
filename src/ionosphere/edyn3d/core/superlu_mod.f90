@@ -72,7 +72,7 @@ module superlu_mod
             bind(c, name='dScalePermstructInit')
             use iso_c_binding
             integer(c_int), value :: m, n
-            type(c_ptr), value :: ScalePermstruct
+            type(c_ptr) :: ScalePermstruct
         end subroutine
 
         ! Initialize LU structure
@@ -87,7 +87,7 @@ module superlu_mod
         subroutine PStatInit(stat) &
             bind(c, name='PStatInit')
             use iso_c_binding
-            type(c_ptr), value :: stat
+            type(c_ptr) :: stat
           end subroutine PStatInit
           
         ! Main solver routine

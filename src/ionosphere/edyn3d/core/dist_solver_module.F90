@@ -1292,6 +1292,11 @@ module dist_solver_module
 
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
 
+    ! Initialize pointers to NULL
+    ScalePermstruct = c_null_ptr
+    LUstruct = c_null_ptr
+    stat = c_null_ptr
+    A = c_null_ptr
        
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
