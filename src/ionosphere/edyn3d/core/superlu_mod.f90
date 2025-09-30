@@ -157,7 +157,7 @@ module superlu_mod
             bind(c, name='pdgssvx')
           use iso_c_binding
           import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t, superlu_dist_options_t
-          type(superlu_dist_options_t), value :: options,
+          type(superlu_dist_options_t) :: options
           type(c_ptr), value:: A , grid
           type(dLUstruct_t) :: LUstruct
           type(SuperLUStat_t) :: stat
@@ -166,23 +166,14 @@ module superlu_mod
           integer(c_int), value :: ldx, nrhs
           type(c_ptr), value :: berr
           integer(c_int) :: info
-        end subroutine
-
-        !subroutine PStatPrint(options, stat, grid) &
-        !    bind(c, name="PStatPrint")
-        !  use iso_c_binding
-        !  import :: SuperLUStat_t
-        !  type(c_ptr), value :: options
-        !  type(SuperLUStat_t), value :: stat
-        !  type(c_ptr), value :: grid
-        !end subroutine PStatPrint
+        end subroutine pdgssvx
 
         subroutine PStatPrint(options, stat, grid) bind(C, name="PStatPrint")
           use iso_c_binding
           import :: superlu_dist_options_t, SuperLUStat_t
           type(superlu_dist_options_t) :: options
           type(SuperLUStat_t)          :: stat
-          type(C_PTR), value           :: grid   ! gridinfo_t*
+          type(c_ptr), value           :: grid   ! gridinfo_t*
         end subroutine PStatPrint
         
         !super lu matvec routine (internal - not typically called by user, would need the init also)
