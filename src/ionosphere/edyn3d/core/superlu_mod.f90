@@ -117,7 +117,8 @@ module superlu_mod
                           LUstruct, berr, stat, info) &
             bind(c, name='pdgssvx')
             use iso_c_binding
-            type(c_ptr), value :: options, A, ScalePermstruct, grid, LUstruct, stat
+            type(c_ptr), value :: options, A , grid, LUstruct, stat
+            type(ScalePermstruct_t) :: ScalePermstruct
             type(c_ptr), value :: X !input/ouput but ptr doesn't change
             integer(c_int), value :: ldx, nrhs
             type(c_ptr), value :: berr

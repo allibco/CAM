@@ -1359,10 +1359,12 @@ module dist_solver_module
 
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
-    if (.not. c_associated(ScalePermstruct)) then
-       write(*,*) "ERROR rank ", mpi_rank, ": ScalePermstruct is NULL after init"
-       !call MPI_Abort(dynamo_world, 1, ierr)
-    endif
+    write(*,*) "rank ", mpi_rank, ": After dScalePermstructInit:"
+    write(*,*) "  DiagScale = ", ScalePermstruct%DiagScale
+    write(*,*) "  perm_r associated? ", c_associated(ScalePermstruct%perm_r)
+    write(*,*) "  perm_c associated? ", c_associated(ScalePermstruct%perm_c)
+    write(*,*) "  R associated? ", c_associated(ScalePermstruct%R)
+    write(*,*) "  C associated? ", c_associated(ScalePermstruct%C)
 
     call dLUstructInit(n_global, LUstruct)
     if (.not. c_associated(LUstruct)) then
