@@ -1255,7 +1255,7 @@ module dist_solver_module
          set_default_options_dist, dScalePermstructInit, dLUstructInit, &
          PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
          dScalePermstructFree,dDestroy_LU,dLUStructFree,&
-         superlu_gridexit, superlu_options_t, ScalePermstruct_t
+         superlu_gridexit, superlu_options_t, ScalePermstruct_t, LUstruct_t, SuperLUStat_t
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
@@ -1284,10 +1284,9 @@ module dist_solver_module
 
     !type(c_ptr) :: ScalePermstruct
     type(ScalePermstruct_t), target :: ScalePermstruct
-    type(c_ptr) :: stat, LUstruct
-
-    !type(LUstruct_t), target :: LUstruct  
-    !type(SuperLUStat_t), target :: stat
+    !type(c_ptr) :: stat, LUstruct
+    type(LUstruct_t), target :: LUstruct  
+    type(SuperLUStat_t), target :: stat
     
     ! Other variables
     integer(kind=c_int) :: info, nprocs, ierr
@@ -1299,7 +1298,7 @@ module dist_solver_module
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
 
     ! Initialize pointers to NULL
-    LUstruct = c_null_ptr
+    !LUstruct = c_null_ptr
     stat = c_null_ptr
     A = c_null_ptr
        
@@ -1367,17 +1366,17 @@ module dist_solver_module
     write(*,*) "  C associated? ", c_associated(ScalePermstruct%C)
 
     call dLUstructInit(n_global, LUstruct)
-    if (.not. c_associated(LUstruct)) then
-       write(*,*) "ERROR rank ", mpi_rank, ": LUstruct is NULL after init"
+    !if (.not. c_associated(LUstruct)) then
+    !   write(*,*) "ERROR rank ", mpi_rank, ": LUstruct is NULL after init"
        !call MPI_Abort(dynamo_world, 1, ierr)
-    endif
+    !endif
  
     ! Initialize the statistics variables
     call PStatInit(stat)
-    if (.not. c_associated(stat)) then
-       write(*,*) "ERROR rank ", mpi_rank, ": stat is NULL after init"
+    !!if (.not. c_associated(stat)) then
+    !   write(*,*) "ERROR rank ", mpi_rank, ": stat is NULL after init"
        !call MPI_Abort(dynamo_world, 1, ierr)
-    endif
+    !endif
  
     ! Call the linear equation solver (writes over rhs (sol))
     

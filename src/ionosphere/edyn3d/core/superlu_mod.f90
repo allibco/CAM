@@ -99,40 +99,46 @@ module superlu_mod
 
         ! Initialize LU structure
         subroutine dLUstructInit(n, LUstruct) &
-            bind(c, name='dLUstructInit')
-            use iso_c_binding
-            integer(c_int), value :: n
-            type(c_ptr) :: LUstruct
+             bind(c, name='dLUstructInit')
+          use iso_c_binding
+          import :: LUstruct_t
+          integer(c_int), value :: n
+          type(c_ptr) :: LUstruct
         end subroutine
 
         ! Initialize statistics
         subroutine PStatInit(stat) &
             bind(c, name='PStatInit')
-            use iso_c_binding
-            type(c_ptr) :: stat
-          end subroutine PStatInit
+          use iso_c_binding
+          import :: SuperLUStat_t
+          
+c        end subroutine PStatInit
           
         ! Main solver routine
         subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
                           LUstruct, berr, stat, info) &
             bind(c, name='pdgssvx')
           use iso_c_binding
-          import :: ScalePermstruct_t
+          import :: ScalePermstruct_t, LUstruct_t, SuperLUStat_t
 
-            type(c_ptr), value :: options, A , grid, LUstruct, stat
-            type(ScalePermstruct_t) :: ScalePermstruct
-            type(c_ptr), value :: X !input/ouput but ptr doesn't change
-            integer(c_int), value :: ldx, nrhs
-            type(c_ptr), value :: berr
-            integer(c_int) :: info
+          type(c_ptr), value :: options, A , grid
+          type(LUstruct_t) :: LUstruct
+          type(SuperLUStat_t) :: stat
+          type(ScalePermstruct_t) :: ScalePermstruct
+          type(c_ptr), value :: X !input/ouput but ptr doesn't change
+          integer(c_int), value :: ldx, nrhs
+          type(c_ptr), value :: berr
+          integer(c_int) :: info
         end subroutine
 
         subroutine PStatPrint(options, stat, grid) &
             bind(c, name="PStatPrint")
-            use iso_c_binding
-            type(c_ptr), value :: options
-            type(c_ptr), value :: stat
-            type(c_ptr), value :: grid
+          use iso_c_binding
+          import :: SuperLUStat_t
+          
+          type(c_ptr), value :: options
+          type(SuperLUStat_t), value :: stat
+          type(c_ptr), value :: grid
         end subroutine PStatPrint
 
         !super lu matvec routine (internal - not typically called by user)
@@ -164,9 +170,10 @@ module superlu_mod
         subroutine dDestroy_LU(n, grid, LUstruct) &
             bind(c, name="dDestroy_LU")
             use iso_c_binding
+            import :: LUstruct_t
             integer(c_int), value :: n  ! Problem size (number of columns in A)
             type(c_ptr), value    :: grid
-            type(c_ptr)           :: LUstruct
+            type(LUstruct_t)      :: LUstruct
         end subroutine dDestroy_LU
         
         subroutine dScalePermstructFree(ScalePermstruct) &
@@ -178,14 +185,17 @@ module superlu_mod
 
         subroutine dLUstructFree(LUstruct) &
             bind(c, name='dLUstructFree')
-            use iso_c_binding
-            type(c_ptr) :: LUstruct
+          use iso_c_binding
+          import :: LUstruct_t
+
+          type(LUstruct_t) :: LUstruct
         end subroutine
 
         subroutine PStatFree(stat) &
             bind(c, name='PStatFree')
             use iso_c_binding
-            type(c_ptr):: stat
+            import SuperLUStat_t
+            type(SuperLUStat_t) :: stat
         end subroutine
 
      end interface
