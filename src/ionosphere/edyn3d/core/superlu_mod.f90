@@ -116,7 +116,9 @@ module superlu_mod
         subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
                           LUstruct, berr, stat, info) &
             bind(c, name='pdgssvx')
-            use iso_c_binding
+          use iso_c_binding
+          import :: ScalePermstruct_t
+
             type(c_ptr), value :: options, A , grid, LUstruct, stat
             type(ScalePermstruct_t) :: ScalePermstruct
             type(c_ptr), value :: X !input/ouput but ptr doesn't change
