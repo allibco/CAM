@@ -1368,7 +1368,7 @@ module dist_solver_module
     endif
  
     ! Call the linear equation solver (writes over rhs (sol))
-    write(*,*) "Before pdgssvx: rank=", mpi_rank, "n_loc=", n_loc, "info=", info
+    
     call pdgssvx(c_loc(options), A, ScalePermstruct, c_loc(sol),&
          n_loc, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
