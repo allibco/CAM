@@ -111,8 +111,8 @@ module superlu_mod
             bind(c, name='PStatInit')
           use iso_c_binding
           import :: SuperLUStat_t
-          
-c        end subroutine PStatInit
+          type(SuperLUStat_t) :: stat
+        end subroutine PStatInit
           
         ! Main solver routine
         subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
@@ -194,7 +194,7 @@ c        end subroutine PStatInit
         subroutine PStatFree(stat) &
             bind(c, name='PStatFree')
             use iso_c_binding
-            import SuperLUStat_t
+            import 
             type(SuperLUStat_t) :: stat
         end subroutine
 
