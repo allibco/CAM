@@ -28,7 +28,7 @@ module superlu_mod
      integer(kind=c_int) :: Algo3d
   end type superlu_options_t
 
-! Add to superlu_mod:
+
   type, bind(c) :: ScalePermstruct_t
      integer(c_int) :: DiagScale
      type(c_ptr) :: perm_r
@@ -89,10 +89,12 @@ module superlu_mod
 
         ! Initialize scale/permutation structure
         subroutine dScalePermstructInit(m, n, ScalePermstruct) &
-            bind(c, name='dScalePermstructInit')
-            use iso_c_binding
-            integer(c_int), value :: m, n
-            type(ScalePermstruct_t) :: ScalePermstruct
+             bind(c, name='dScalePermstructInit')
+          use iso_c_binding
+          import :: ScalePermstruct_t
+
+          integer(c_int), value :: m, n
+          type(ScalePermstruct_t) :: ScalePermstruct
         end subroutine
 
         ! Initialize LU structure
@@ -167,6 +169,7 @@ module superlu_mod
         subroutine dScalePermstructFree(ScalePermstruct) &
             bind(c, name='dScalePermstructFree')
             use iso_c_binding
+            import :: ScalePermstruct_t
             type(ScalePermstruct_t) :: ScalePermstruct
         end subroutine
 
