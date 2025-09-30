@@ -1299,7 +1299,7 @@ module dist_solver_module
 
     ! Initialize pointers to NULL
     !LUstruct = c_null_ptr
-    stat = c_null_ptr
+    !stat = c_null_ptr
     A = c_null_ptr
        
     ! Initialize the SuperLU_DIST process grid
