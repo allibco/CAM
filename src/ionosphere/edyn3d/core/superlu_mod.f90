@@ -103,7 +103,7 @@ module superlu_mod
           use iso_c_binding
           import :: LUstruct_t
           integer(c_int), value :: n
-          type(c_ptr) :: LUstruct
+          type(LUstruct_t) :: LUstruct
         end subroutine
 
         ! Initialize statistics
