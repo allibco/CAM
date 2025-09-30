@@ -44,7 +44,12 @@ module superlu_mod
   end type LUstruct_t
 
   type, bind(c) :: SuperLUStat_t
-     integer(c_int) :: padding(50)
+    integer(c_int) :: panel_histo(10)   ! Panel size histogram
+    real(c_double) :: utime(8)          ! Time statistics
+    real(c_double) :: ops(1)            ! Operation counts
+    integer(c_int) :: TinyPivots        ! Number of tiny pivots
+    integer(c_int) :: RefineSteps       ! Iterative refinement steps
+    integer(c_int) :: padding(30)      ! Extra space
   end type SuperLUStat_t
   
   
