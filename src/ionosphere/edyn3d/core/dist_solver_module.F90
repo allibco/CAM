@@ -1383,7 +1383,7 @@ module dist_solver_module
     !Also need to do a matvec here with A
     
     !print statistics
-    call PStatPrint(c_loc(options),stat,grid)
+    call PStatPrint(options,stat,grid)
 
     ! result is sol (already assigned by reference in pdgssvx)
 

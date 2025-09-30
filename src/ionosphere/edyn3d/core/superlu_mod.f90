@@ -156,8 +156,9 @@ module superlu_mod
                           LUstruct, berr, stat, info) &
             bind(c, name='pdgssvx')
           use iso_c_binding
-          import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t
-          type(c_ptr), value :: options, A , grid
+          import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t, superlu_dist_options_t
+          type(superlu_dist_options_t), value :: options,
+          type(c_ptr), value:: A , grid
           type(dLUstruct_t) :: LUstruct
           type(SuperLUStat_t) :: stat
           type(ScalePermstruct_t) :: ScalePermstruct
