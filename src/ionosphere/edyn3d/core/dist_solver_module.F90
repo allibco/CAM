@@ -1255,7 +1255,8 @@ module dist_solver_module
          set_default_options_dist, dScalePermstructInit, dLUstructInit, &
          PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
          dScalePermstructFree,dDestroy_LU,dLUStructFree,&
-         superlu_gridexit, superlu_options_t, ScalePermstruct_t, LUstruct_t, SuperLUStat_t
+         superlu_gridexit, superlu_dist_options_t, &
+         ScalePermstruct_t, dLUstruct_t, SuperLUStat_t
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
@@ -1282,17 +1283,15 @@ module dist_solver_module
     ! SuperLU_DIST structures (opaque handles)
     type(c_ptr) :: A, grid
 
-    !type(c_ptr) :: ScalePermstruct
     type(ScalePermstruct_t), target :: ScalePermstruct
-    !type(c_ptr) :: stat, LUstruct
-    type(LUstruct_t), target :: LUstruct  
+    type(dLUstruct_t), target :: LUstruct  
     type(SuperLUStat_t), target :: stat
     
     ! Other variables
     integer(kind=c_int) :: info, nprocs, ierr
     real(kind=c_double), target :: berr_array(nrhs)
  
-    type(superlu_options_t), target :: options    
+    type(superlu_dist_options_t), target :: options    
 
 
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
