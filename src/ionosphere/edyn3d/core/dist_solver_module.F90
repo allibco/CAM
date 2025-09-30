@@ -1255,7 +1255,7 @@ module dist_solver_module
          set_default_options_dist, dScalePermstructInit, dLUstructInit, &
          PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
          dScalePermstructFree,dDestroy_LU,dLUStructFree,&
-         superlu_gridexit, superlu_options_t
+         superlu_gridexit, superlu_options_t, ScalePermstruct_t
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
@@ -1280,9 +1280,15 @@ module dist_solver_module
     integer :: i,iopt, first_row, nprow, npcol
 
     ! SuperLU_DIST structures (opaque handles)
-    type(c_ptr) :: A, grid, ScalePermstruct, LUstruct
-    type(c_ptr) :: stat
+    type(c_ptr) :: A, grid
 
+    !type(c_ptr) :: ScalePermstruct
+    type(ScalePermstruct_t), target :: ScalePermstruct
+    type(c_ptr) :: stat, LUstruct
+
+    !type(LUstruct_t), target :: LUstruct  
+    !type(SuperLUStat_t), target :: stat
+    
     ! Other variables
     integer(kind=c_int) :: info, nprocs, ierr
     real(kind=c_double), target :: berr_array(nrhs)
@@ -1353,7 +1359,7 @@ module dist_solver_module
     options%ColPerm=3 !COLAMD (default) - best speed/fill reduction balance
 
     
-    call dScalePermstructInit(n_global, n_global, ScalePermstruct)
+    call dScalePermstructInit(n_global, n_global, c_loc(ScalePermstruct))
     if (.not. c_associated(ScalePermstruct)) then
        write(*,*) "ERROR rank ", mpi_rank, ": ScalePermstruct is NULL after init"
        !call MPI_Abort(dynamo_world, 1, ierr)

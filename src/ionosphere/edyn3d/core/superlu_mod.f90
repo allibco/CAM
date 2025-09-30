@@ -6,7 +6,7 @@ module superlu_mod
 
 !----------------------------------------------------
   ! This module contains c bindings for superlu functions
-  ! that I am using
+  ! that I am using - version 9.1.0
 !----------------------------------------------------
 
   type, bind(c) :: superlu_options_t
@@ -27,6 +27,26 @@ module superlu_mod
      integer(kind=c_int) :: Trans
      integer(kind=c_int) :: Algo3d
   end type superlu_options_t
+
+! Add to superlu_mod:
+  type, bind(c) :: ScalePermstruct_t
+     integer(c_int) :: DiagScale
+     type(c_ptr) :: perm_r
+     type(c_ptr) :: perm_c
+     type(c_ptr) :: R
+     type(c_ptr) :: C
+     ! Add more fields or just padding
+     integer(c_int) :: padding(50)
+  end type ScalePermstruct_t
+
+  type, bind(c) :: LUstruct_t
+     integer(c_int) :: padding(100)
+  end type LUstruct_t
+
+  type, bind(c) :: SuperLUStat_t
+     integer(c_int) :: padding(50)
+  end type SuperLUStat_t
+  
   
  ! Interface declarations for SuperLU_DIST functions
     interface
@@ -72,7 +92,7 @@ module superlu_mod
             bind(c, name='dScalePermstructInit')
             use iso_c_binding
             integer(c_int), value :: m, n
-            type(c_ptr) :: ScalePermstruct
+            type(ScalePermstruct_t) :: ScalePermstruct
         end subroutine
 
         ! Initialize LU structure
@@ -147,7 +167,7 @@ module superlu_mod
         subroutine dScalePermstructFree(ScalePermstruct) &
             bind(c, name='dScalePermstructFree')
             use iso_c_binding
-            type(c_ptr) :: ScalePermstruct
+            type(ScalePermstruct_t) :: ScalePermstruct
         end subroutine
 
         subroutine dLUstructFree(LUstruct) &
