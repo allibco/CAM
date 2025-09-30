@@ -11,7 +11,6 @@ module superlu_mod
 
  
   type, bind(C) :: superlu_dist_options_t
-    sequence
     integer(C_INT) :: Fact              ! fact_t
     integer(C_INT) :: Equil             ! yes_no_t
     integer(C_INT) :: DiagInv           ! yes_no_t
@@ -157,10 +156,9 @@ module superlu_mod
                           LUstruct, berr, stat, info) &
             bind(c, name='pdgssvx')
           use iso_c_binding
-          import :: ScalePermstruct_t, LUstruct_t, SuperLUStat_t
-
+          import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t
           type(c_ptr), value :: options, A , grid
-          type(LUstruct_t) :: LUstruct
+          type(dLUstruct_t) :: LUstruct
           type(SuperLUStat_t) :: stat
           type(ScalePermstruct_t) :: ScalePermstruct
           type(c_ptr), value :: X !input/ouput but ptr doesn't change

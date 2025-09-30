@@ -1272,9 +1272,6 @@ module dist_solver_module
     real(kind=c_double),dimension(n_loc),intent(in) :: rhs
     real(kind=c_double),dimension(n_loc), target :: sol
 
-    !we might not want to assume that kind=rp is same as c_double
-    !real(kind=c_double), dimension(n_loc), target :: sol_c
-
     
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
@@ -1343,7 +1340,7 @@ module dist_solver_module
     sol=rhs ! Copy RHS to solution vector
 
     ! Set the default input options
-    call set_default_options_dist(c_loc(options))
+    call set_default_options_dist(options)
 
     !now some adjustments
     ! this disables row permutations (faster and better if reusing
@@ -1357,29 +1354,21 @@ module dist_solver_module
 
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
-    write(*,*) "rank ", mpi_rank, ": After dScalePermstructInit:"
-    write(*,*) "  DiagScale = ", ScalePermstruct%DiagScale
-    write(*,*) "  perm_r associated? ", c_associated(ScalePermstruct%perm_r)
-    write(*,*) "  perm_c associated? ", c_associated(ScalePermstruct%perm_c)
-    write(*,*) "  R associated? ", c_associated(ScalePermstruct%R)
-    write(*,*) "  C associated? ", c_associated(ScalePermstruct%C)
+    !write(*,*) "rank ", mpi_rank, ": After dScalePermstructInit:"
+    !write(*,*) "  DiagScale = ", ScalePermstruct%DiagScale
+    !write(*,*) "  perm_r associated? ", c_associated(ScalePermstruct%perm_r)
+    !write(*,*) "  perm_c associated? ", c_associated(ScalePermstruct%perm_c)
+    !write(*,*) "  R associated? ", c_associated(ScalePermstruct%R)
+    !write(*,*) "  C associated? ", c_associated(ScalePermstruct%C)
 
     call dLUstructInit(n_global, LUstruct)
-    !if (.not. c_associated(LUstruct)) then
-    !   write(*,*) "ERROR rank ", mpi_rank, ": LUstruct is NULL after init"
-       !call MPI_Abort(dynamo_world, 1, ierr)
-    !endif
  
     ! Initialize the statistics variables
     call PStatInit(stat)
-    !!if (.not. c_associated(stat)) then
-    !   write(*,*) "ERROR rank ", mpi_rank, ": stat is NULL after init"
-       !call MPI_Abort(dynamo_world, 1, ierr)
-    !endif
  
     ! Call the linear equation solver (writes over rhs (sol))
     
-    call pdgssvx(c_loc(options), A, ScalePermstruct, c_loc(sol),&
+    call pdgssvx(options, A, ScalePermstruct, c_loc(sol),&
          n_loc, nrhs, &
          grid, LUstruct, c_loc(berr_array), stat, info)
     write(*,*) "After pdgssvx: rank=", mpi_rank, "info=", info
