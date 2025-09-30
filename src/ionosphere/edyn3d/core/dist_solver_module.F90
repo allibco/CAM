@@ -1358,7 +1358,7 @@ module dist_solver_module
     options%ColPerm=3 !COLAMD (default) - best speed/fill reduction balance
 
     
-    call dScalePermstructInit(n_global, n_global, c_loc(ScalePermstruct))
+    call dScalePermstructInit(n_global, n_global, ScalePermstruct)
     if (.not. c_associated(ScalePermstruct)) then
        write(*,*) "ERROR rank ", mpi_rank, ": ScalePermstruct is NULL after init"
        !call MPI_Abort(dynamo_world, 1, ierr)
