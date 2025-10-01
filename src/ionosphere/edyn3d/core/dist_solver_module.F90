@@ -1312,9 +1312,7 @@ module dist_solver_module
        call MPI_Abort(dynamo_world, 1, ierr)
     endif
 
-    first_row = task_csr_rowstarts(mpi_rank)     !these are 1-based 
-    first_row = first_row -1 !make 0-based
-
+    first_row = task_csr_rowstarts(mpi_rank)     !these are 0-based already 
     
     !create the distributed compressed row matrix A
     ! matrix type parameters
