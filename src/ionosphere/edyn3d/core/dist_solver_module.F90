@@ -1280,15 +1280,15 @@ module dist_solver_module
     ! SuperLU_DIST structures (opaque handles)
     type(c_ptr) :: A, grid
 
-    type(ScalePermstruct_t), target :: ScalePermstruct
-    type(dLUstruct_t), target :: LUstruct  
-    type(SuperLUStat_t), target :: stat
+    type(ScalePermstruct_t) :: ScalePermstruct
+    type(dLUstruct_t) :: LUstruct  
+    type(SuperLUStat_t) :: stat
     
     ! Other variables
     integer(kind=c_int) :: info, nprocs, ierr
     real(kind=c_double), target :: berr_array(nrhs)
  
-    type(superlu_dist_options_t), target :: options    
+    type(superlu_dist_options_t):: options    
 
 
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
@@ -1321,7 +1321,16 @@ module dist_solver_module
     ! SLU_NR_loc  /* distributed compressed row format  */ 
     ! SLU_D     /* 1 = double precision real */
     ! SLU_GE,    /* 0 = general */
+    if (.not. c_associated(c_loc(values))) stop "values pointer invalid"
+    if (.not. c_associated(c_loc(colind))) stop "colind pointer invalid"
+    if (.not. c_associated(c_loc(rowptr))) stop "rowptr pointer invalid"
+    if (rowptr(n_loc+1) /= nnz_loc) stop "rowptr(n_loc+1) /= nnz_loc"
+    if (minval(colind) < 0 .or. maxval(colind) >= n_global) stop "colind out of bounds"
+    if (first_row < 0 .or. first_row >= n_global) stop "first_row out of range"
 
+    write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
+    write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
+    write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
     call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
     if (.not. c_associated(A)) then
@@ -1354,12 +1363,6 @@ module dist_solver_module
 
     
     call dScalePermstructInit(n_global, n_global, ScalePermstruct)
-    !write(*,*) "rank ", mpi_rank, ": After dScalePermstructInit:"
-    !write(*,*) "  DiagScale = ", ScalePermstruct%DiagScale
-    !write(*,*) "  perm_r associated? ", c_associated(ScalePermstruct%perm_r)
-    !write(*,*) "  perm_c associated? ", c_associated(ScalePermstruct%perm_c)
-    !write(*,*) "  R associated? ", c_associated(ScalePermstruct%R)
-    !write(*,*) "  C associated? ", c_associated(ScalePermstruct%C)
 
     call dLUstructInit(n_global, LUstruct)
  
