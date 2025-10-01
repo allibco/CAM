@@ -295,7 +295,8 @@ module mpi_module
 
        endif
            
-       !now we need to calculate the rowstarts for the csr martix
+       !now we need to calculate the rowstarts for the global block
+       !csr martix - this will be 0-based indeing for superlu
        !do an allgather to get each procs grid size
        task_mygrid_size = all_gather_int(mygrid_size)
        

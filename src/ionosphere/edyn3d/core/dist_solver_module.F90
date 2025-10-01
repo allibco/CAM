@@ -1324,9 +1324,9 @@ module dist_solver_module
     if (.not. c_associated(c_loc(rowptr))) stop "rowptr pointer invalid"
     if (rowptr(n_loc+1) /= nnz_loc) stop "rowptr(n_loc+1) /= nnz_loc"
     if (minval(colind) < 0 .or. maxval(colind) >= n_global) stop "colind out of bounds"
-    if (first_row < 0 .or. first_row >= n_global) then
-       write(*,*) 'first_row = ', first_row
-    endif
+    !if (first_row < 0 .or. first_row >= n_global) then
+    write(*,*) 'first_row = ', first_row
+    !endif
     
     if (first_row < 0 .or. first_row >= n_global) stop "first_row out of range"
 
