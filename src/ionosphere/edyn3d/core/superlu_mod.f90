@@ -54,13 +54,13 @@ module superlu_mod
   end type superlu_dist_options_t
 
 
-  type, bind(C) :: ScalePermstruct_t
+  type, bind(C) :: dScalePermstruct_t
      integer(C_INT) :: DiagScale   ! DiagScale_t enum
      type(C_PTR)    :: R           ! double*
      type(C_PTR)    :: C           ! double*
      type(C_PTR)    :: perm_r      ! int_t* (maps to C int*)
      type(C_PTR)    :: perm_c      ! int_t*
-  end type ScalePermstruct_t
+  end type dScalePermstruct_t
  
   type, bind(C) :: dLUstruct_t
     type(C_PTR) :: etree         ! int_t*
@@ -128,9 +128,9 @@ module superlu_mod
         subroutine dScalePermstructInit(m, n, ScalePermstruct) &
              bind(c, name='dScalePermstructInit')
           use iso_c_binding
-          import :: ScalePermstruct_t
+          import :: dScalePermstruct_t
           integer(c_int), value :: m, n
-          type(ScalePermstruct_t) :: ScalePermstruct
+          type(dScalePermstruct_t) :: ScalePermstruct
         end subroutine
 
         ! Initialize LU structure
@@ -155,10 +155,10 @@ module superlu_mod
         subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, LUstruct, &
                    SolveStruct, berr, stat, info) bind(c, name='pdgssvx')
           use iso_c_binding
-          import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t, superlu_dist_options_t
+          import :: dScalePermstruct_t, dLUstruct_t, SuperLUStat_t, superlu_dist_options_t
           type(superlu_dist_options_t) :: options         ! by reference
           type(c_ptr), value :: A, grid                   ! c_ptr to SuperMatrix and grid
-          type(ScalePermstruct_t) :: ScalePermstruct      ! by reference
+          type(dScalePermstruct_t) :: ScalePermstruct      ! by reference
           type(c_ptr), value :: X                          ! c_loc(sol)
           integer(c_int), value :: ldx, nrhs
           type(dLUstruct_t) :: LUstruct                    ! by reference
@@ -214,8 +214,8 @@ module superlu_mod
         subroutine dScalePermstructFree(ScalePermstruct) &
             bind(c, name='dScalePermstructFree')
             use iso_c_binding
-            import :: ScalePermstruct_t
-            type(ScalePermstruct_t) :: ScalePermstruct
+            import :: dScalePermstruct_t
+            type(dScalePermstruct_t) :: ScalePermstruct
         end subroutine dScalePermstructFree
 
         subroutine dLUstructFree(LUstruct) &

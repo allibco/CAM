@@ -1280,7 +1280,7 @@ module dist_solver_module
     ! SuperLU_DIST structures (opaque handles)
     type(c_ptr) :: A, grid
 
-    type(ScalePermstruct_t) :: ScalePermstruct
+    type(dScalePermstruct_t) :: ScalePermstruct
     type(dLUstruct_t) :: LUstruct  
     type(SuperLUStat_t) :: stat
     
