@@ -1256,7 +1256,7 @@ module dist_solver_module
          PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
          dScalePermstructFree,dDestroy_LU,dLUStructFree,&
          superlu_gridexit, superlu_dist_options_t, &
-         ScalePermstruct_t, dLUstruct_t, SuperLUStat_t
+         dScalePermstruct_t, dLUstruct_t, SuperLUStat_t
     
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
