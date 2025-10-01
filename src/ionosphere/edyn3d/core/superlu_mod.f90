@@ -152,20 +152,20 @@ module superlu_mod
 
         
         ! Main solver routine
-        subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, &
-                          LUstruct, berr, stat, info) &
-            bind(c, name='pdgssvx')
+        subroutine pdgssvx(options, A, ScalePermstruct, X, ldx, nrhs, grid, LUstruct, &
+                   SolveStruct, berr, stat, info) bind(c, name='pdgssvx')
           use iso_c_binding
           import :: ScalePermstruct_t, dLUstruct_t, SuperLUStat_t, superlu_dist_options_t
-          type(superlu_dist_options_t) :: options
-          type(c_ptr), value:: A , grid
-          type(dLUstruct_t) :: LUstruct
-          type(SuperLUStat_t) :: stat
-          type(ScalePermstruct_t) :: ScalePermstruct
-          type(c_ptr), value :: X !input/ouput but ptr doesn't change
+          type(superlu_dist_options_t) :: options         ! by reference
+          type(c_ptr), value :: A, grid                   ! c_ptr to SuperMatrix and grid
+          type(ScalePermstruct_t) :: ScalePermstruct      ! by reference
+          type(c_ptr), value :: X                          ! c_loc(sol)
           integer(c_int), value :: ldx, nrhs
-          type(c_ptr), value :: berr
-          integer(c_int) :: info
+          type(dLUstruct_t) :: LUstruct                    ! by reference
+          type(c_ptr), value :: SolveStruct               ! pass c_null_ptr if unused
+          type(c_ptr), value :: berr                       ! c_loc(berr_array)
+          type(SuperLUStat_t) :: stat                      ! by reference
+          integer(c_int) :: info                            ! by reference
         end subroutine pdgssvx
 
         subroutine PStatPrint(options, stat, grid) bind(C, name="PStatPrint")

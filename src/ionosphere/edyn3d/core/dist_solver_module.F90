@@ -1373,7 +1373,7 @@ module dist_solver_module
     
     call pdgssvx(options, A, ScalePermstruct, c_loc(sol),&
          n_loc, nrhs, &
-         grid, LUstruct, c_loc(berr_array), stat, info)
+         grid, LUstruct, c_null_ptr, c_loc(berr_array), stat, info)
     write(*,*) "After pdgssvx: rank=", mpi_rank, "info=", info
     
     if (info /= 0) then
