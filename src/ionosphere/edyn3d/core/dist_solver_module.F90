@@ -68,7 +68,7 @@ module dist_solver_module
          mygridsize_id, nmlaatt1_idd, nmlon_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, &
          rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
-         countB(1), startB(1) &
+         countB(1), startB(1) 
     character(len=*),parameter ::  &
           newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
 
