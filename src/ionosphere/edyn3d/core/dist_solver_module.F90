@@ -7,9 +7,6 @@ module dist_solver_module
 
   include 'netcdf.inc'
 
-  
-  implicit none
-
   !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
   
@@ -64,7 +61,7 @@ module dist_solver_module
     
     !for optional output
     logical :: output_matrix
-    integer :: ierr, fileid, dd(4), &
+    integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, &
          rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
