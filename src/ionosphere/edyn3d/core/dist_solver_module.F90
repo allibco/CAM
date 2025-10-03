@@ -1333,6 +1333,8 @@ module dist_solver_module
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
 
+#include "superlu_dist_config.fh"
+
     use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
