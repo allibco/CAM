@@ -66,8 +66,7 @@ module dist_solver_module
          nnz_id, mygridsizep1_id, &
          rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          countB(1), startB(1) 
-    character(len=*),parameter ::  &
-          newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
+    character(len=200) :: newfile
 
     output_matrix = .false.
     
@@ -162,10 +161,13 @@ module dist_solver_module
      !do we want to output matirx and rhs for debugging
      if (output_matrix == .true. ) then
 
-         !first_row = task_csr_rowstarts(mpi_rank)     !these are 0-based already 
+        !newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
+         write(newfile,'(A,".",I4.4,".nc")') &
+             '/glade/derecho/scratch/abaker/dynamo_test', mpi_rank
+         !trim it
+         newfile = trim(fbuf)//c_null_char
 
-        
-         write(*,*) 'creating nc-file:', newfile
+         write(*,*) 'creating nc-file:', newfile)
          ierr = nf_create(newfile, NF_CLOBBER, fileid)
 
          !Define the dimensions
