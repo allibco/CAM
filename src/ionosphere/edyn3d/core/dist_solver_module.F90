@@ -72,6 +72,7 @@ module dist_solver_module
     character(len=*),parameter ::  &
           newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
 
+    output_matrix = .false.
     
     call t_startf('dist_linear_system')
 
@@ -175,7 +176,7 @@ module dist_solver_module
          ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
          ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
          ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
-         ierr = nf_def_dim(fileid,'global_sizep1', nlonlat 1, sizep1_id)
+         ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
          ierr = nf_def_dim(fileid, 'nnz', nnz, nnz_id)
          ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
 
