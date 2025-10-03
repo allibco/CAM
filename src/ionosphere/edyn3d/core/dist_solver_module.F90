@@ -66,7 +66,8 @@ module dist_solver_module
          nnz_id, mygridsizep1_id, &
          rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          countB(1), startB(1) 
-    character(len=200) :: newfile
+    character(len=200) :: fbuf
+    character(kind=c_char,len=:), allocatable :: newfile
 
     output_matrix = .false.
     
@@ -162,7 +163,7 @@ module dist_solver_module
      if (output_matrix == .true. ) then
 
         !newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
-         write(newfile,'(A,".",I4.4,".nc")') &
+         write(fbuf,'(A,".",I4.4,".nc")') &
              '/glade/derecho/scratch/abaker/dynamo_test', mpi_rank
          !trim it
          newfile = trim(fbuf)//c_null_char
