@@ -167,7 +167,7 @@ module dist_solver_module
          !trim it
          newfile = trim(fbuf)//c_null_char
 
-         write(*,*) 'creating nc-file:', newfile)
+         write(*,*) 'creating nc-file:', newfile
          ierr = nf_create(newfile, NF_CLOBBER, fileid)
 
          !Define the dimensions
