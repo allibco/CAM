@@ -1448,7 +1448,7 @@ module dist_solver_module
 
     !  deallocate the storage allocated by SuperLU_DIST
     call f_PStatFree(stat)
-    !  call f_Destroy_CompRowLoc_Mat_dist(A)
+    !do not call - tries to free the fortran-allocated rowptr,colind and nzval array               !  call f_Destroy_CompRowLoc_Mat_dist(A)
     call f_dScalePermstructFree(ScalePermstruct)
     call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
 
