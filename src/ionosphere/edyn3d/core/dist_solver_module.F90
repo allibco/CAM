@@ -5,6 +5,9 @@ module dist_solver_module
   use iso_c_binding
   use cam_logfile, only: iulog
 
+  include 'netcdf.inc'
+
+  
   implicit none
 
   !max nonzeros per row (this does not incl the dense row at the pole)
@@ -28,7 +31,8 @@ module dist_solver_module
                           nmlat_task,nmlon_task,mygrid_size,&
                           sync_mlat_5d, sync_mlon_5d,& 
                           sync_mlat_3d, sync_mlon_3d, &
-                          mlat0, mlat1, mlon0, mlon1
+                          mlat0, mlat1, mlon0, mlon1, &
+                          task_csr_rowstarts
     
     ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
     ! nmlat_h => # mag latitudes in one hemisphere
@@ -55,6 +59,19 @@ module dist_solver_module
     real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
 
     integer :: ierr
+
+  
+    
+    !for optional output
+    logical :: output_matrix
+    integer :: ierr, fileid, dd(4), &
+         mygridsize_id, nmlaatt1_idd, nmlon_id, size_id, sizep1_id, &
+         nnz_id, mygridsizep1_id, &
+         rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
+         countB(1), startB(1) &
+    character(len=*),parameter ::  &
+          newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
+
     
     call t_startf('dist_linear_system')
 
@@ -144,10 +161,73 @@ module dist_solver_module
      colind=colind-1
      rowptr=rowptr-1
 
+     !do we want to output matirx and rhs for debugging
+     if (output_matrix == .true. ) then
+
+         !first_row = task_csr_rowstarts(mpi_rank)     !these are 0-based already 
+
+        
+         write(*,*) 'creating nc-file:', newfile
+         ierr = nf_create(newfile, NF_CLOBBER, fileid)
+
+         !Define the dimensions
+         ierr = nf_def_dim(fileid,'mygrid_size', mygrid_size, mygridsize_id)
+         ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
+         ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
+         ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
+         ierr = nf_def_dim(fileid,'global_sizep1', nlonlat 1, sizep1_id)
+         ierr = nf_def_dim(fileid, 'nnz', nnz, nnz_id)
+         ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
+
+         ! define vars and their associated dimensions         
+         dd(1) = mygridsize_id
+         ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
+         dd(1) = mygridsize_id
+         ierr = nf_def_var(fileid, 'X', NF_DOUBLE, 1, dd, Xid)
+         dd(1) = nnz_id
+         ierr = nf_def_var(fileid, 'valuesA', NF_DOUBLE, 1, dd, valuesid)
+         dd(1) = nnz_id
+         ierr = nf_def_var(fileid, 'colindxA',NF_INT, 1, dd, colsid)
+         dd(1) = mygridsizep1_id
+         ierr = nf_def_var(fileid, 'rowptrA',NF_INT, 1, dd, rowptrid)
+         dd(1) = sizep1_id
+         ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
+
+         !now fill fields TO DO
+         !change mode
+         ierr=nf_enddef(fileid)
+         !Output the  b
+         startB(1)=1
+         countB(1)=mygrid_size
+         ierr=NF_PUT_VARA_DOUBLE(fileid,rhsBid,startB,countB,rhs)
+         !Output A in CSR format
+         startB(1)=1
+         countB(1)=mygrid_size +1
+         ierr=NF_PUT_VARA_INT(fileid,rowptrid,startB,countB,rowptr)
+         startB(1)=1
+         countB(1)=nnz
+         ierr=NF_PUT_VARA_INT(fileid,colsid,startB,countB,colind)
+         startB(1)=1
+         countB(1)=nnz
+         ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
+         !Close the file up (later after solve)
+         
+      endif
+     
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
 
+     ! if output turned on for debugging 
+     !if (output_matrix == .true.) then
+     !   startB(1)=1
+     !   countB(1)=mygridsize
+     !   ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,sol)
+     !   !close file
+     !   ierr=NF_CLOSE(fileid)
+     !endif
+
+     
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
@@ -1251,96 +1331,73 @@ module dist_solver_module
   
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
-    use superlu_mod, only: dCreate_CompRowLoc_Matrix_dist, superlu_gridinit, &
-         set_default_options_dist, dScalePermstructInit, dLUstructInit, &
-         PStatInit, pdgssvx, PStatPrint, PStatFree, Destroy_SuperMatrix_Store_dist, &
-         dScalePermstructFree,dDestroy_LU,dLUStructFree,&
-         superlu_gridexit, superlu_dist_options_t, &
-         dScalePermstruct_t, dLUstruct_t, SuperLUStat_t
-    
+
+    use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
-    integer(kind=c_int),dimension(n_loc+1),intent(in), target :: rowptr
-    integer(kind=c_int),dimension(nnz_loc),intent(in), target :: colind
-    real(kind=c_double),dimension(nnz_loc),intent(in), target :: values
+    integer(kind=c_int),dimension(n_loc+1),intent(in) :: rowptr
+    integer(kind=c_int),dimension(nnz_loc),intent(in) :: colind
+    real(kind=c_double),dimension(nnz_loc),intent(in) :: values
 
     !warning! we assume that kind=rp is same as c_double for values
     !and rhs input
 
     real(kind=c_double),dimension(n_loc),intent(in) :: rhs
-    real(kind=c_double),dimension(n_loc), target :: sol
-
+    real(kind=c_double),dimension(n_loc) :: sol
     
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
     integer :: i,iopt, first_row, nprow, npcol
 
-    ! SuperLU_DIST structures (opaque handles)
-    type(c_ptr) :: A, grid
-
-    type(dScalePermstruct_t) :: ScalePermstruct
-    type(dLUstruct_t) :: LUstruct  
-    type(SuperLUStat_t) :: stat
-    
+    !superlu structures
+    integer(superlu_ptr) :: grid
+    integer(superlu_ptr) :: options
+    integer(superlu_ptr) :: ScalePermstruct
+    integer(superlu_ptr) :: LUstruct
+    integer(superlu_ptr) :: SOLVEstruct
+    integer(superlu_ptr) :: A
+    integer(superlu_ptr) :: stat
+      
     ! Other variables
-    integer(kind=c_int) :: info, nprocs, ierr
+    integer(kind=c_int) :: info, ierr
     real(kind=c_double), target :: berr_array(nrhs)
  
-    type(superlu_dist_options_t):: options    
-
+    ! Create Fortran handles for the C structures used in SuperLU_DIST
+    call f_create_gridinfo_handle(grid)
+    call f_create_options_handle(options)
+    call f_dcreate_ScalePerm_handle(ScalePermstruct)
+    call f_dcreate_LUstruct_handle(LUstruct)
+    call f_dcreate_SOLVEstruct_handle(SOLVEstruct)
+    call f_create_SuperMatrix_handle(A)
+    call f_create_SuperLUStat_handle(stat)
 
     write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
-
-    ! Initialize pointers to NULL
-    !LUstruct = c_null_ptr
-    !stat = c_null_ptr
-    A = c_null_ptr
-       
+           
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
     nprow = lat_size
     npcol = lon_size
 
-    call MPI_Comm_size(dynamo_world, nprocs, ierr)
-    write(*,*)  "Grid init: nprocs=", nprocs, "nprow*npcol=", nprow*npcol
-   
-    call superlu_gridinit(dynamo_world, nprow, npcol, grid)
-    if (.not. c_associated(grid)) then
-       write(*,*) "ERROR rank ", mpi_rank, ": grid is NULL after gridinit"
-       call MPI_Abort(dynamo_world, 1, ierr)
-    endif
+    call f_superlu_gridinit(dynamo_world, nprow, npcol, grid)
 
+    
+    !get my first row in distributed matrix
     first_row = task_csr_rowstarts(mpi_rank)     !these are 0-based already 
     
     !create the distributed compressed row matrix A
-    ! matrix type parameters
-    ! SLU_NR_loc  /* distributed compressed row format  */ 
-    ! SLU_D     /* 1 = double precision real */
-    ! SLU_GE,    /* 0 = general */
-    if (.not. c_associated(c_loc(values))) stop "values pointer invalid"
-    if (.not. c_associated(c_loc(colind))) stop "colind pointer invalid"
-    if (.not. c_associated(c_loc(rowptr))) stop "rowptr pointer invalid"
+    !some debugging
     if (rowptr(n_loc+1) /= nnz_loc) stop "rowptr(n_loc+1) /= nnz_loc"
     if (minval(colind) < 0 .or. maxval(colind) >= n_global) stop "colind out of bounds"
-    !if (first_row < 0 .or. first_row >= n_global) then
     write(*,*) 'first_row = ', first_row
-    !endif
-    
     if (first_row < 0 .or. first_row >= n_global) stop "first_row out of range"
+    !write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
+    !write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
+    !write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
+    call f_dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+         values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
-    write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
-    write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
-    write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
-    call dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
-         c_loc(values), c_loc(colind), c_loc(rowptr), 0, 1, 0) ! SLU_NR_loc, SLU_D, SLU_GE
-    if (.not. c_associated(A)) then
-       write(*,*) "ERROR rank ", mpi_rank, ": A is NULL after creation"
-       call MPI_Abort(dynamo_world, 1, ierr)
-    endif
-    
-    !real(c_double), allocatable :: ax(:)
     !pass in z and a flag to know whether to matvec z = lhs*pot_h1_f
     !pass in pot_h1_f?
     ! then rhs = rhs + z (regardless of flag)
@@ -1351,32 +1408,26 @@ module dist_solver_module
     sol=rhs ! Copy RHS to solution vector
 
     ! Set the default input options
-    call set_default_options_dist(options)
+    call f_set_default_options_dist(options)
 
-    !now some adjustments
-    ! this disables row permutations (faster and better if reusing
-    ! sparsity pattern - as long as diag entries are not small)
-    !With both of these, you're telling SuperLU to perform factorization with
-    ! no reordering at all, keeping your matrix structure exactly as provided.
-    !options%RowPerm=7  !NO PERM
-    !options%ColPerm=0 !NATURAL
-    options%RowPerm=1 !LargeDiag_MC64 (default)
-    options%ColPerm=3 !COLAMD (default) - best speed/fill reduction balance
-
-    
-    call dScalePermstructInit(n_global, n_global, ScalePermstruct)
-
-    call dLUstructInit(n_global, LUstruct)
+    ! Change one or more options
+    !could also try (diabling row perms is good if reusing sparsity pattern
+    !- also faster: ColPerm=NATURAL, RowPerm=NOROWPERM)
+    !these below are the defaults
+    call set_superlu_options(options,ColPerm=COLAMD)
+    call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+  
+    ! Initialize ScalePermstruct and LUstruct
+    call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
+    call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+    call f_dLUstructInit(n_global, n_global, LUstruct)
  
     ! Initialize the statistics variables
-    call PStatInit(stat)
+    call f_PStatInit(stat)
  
     ! Call the linear equation solver (writes over rhs (sol))
-    
-    call pdgssvx(options, A, ScalePermstruct, c_loc(sol),&
-         n_loc, nrhs, &
-         grid, LUstruct, c_null_ptr, c_loc(berr_array), stat, info)
-    write(*,*) "After pdgssvx: rank=", mpi_rank, "info=", info
+    call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
+         grid, LUstruct, SOLVEstruct, berr_array, stat, info)
     
     if (info /= 0) then
        write(iulog,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
@@ -1385,15 +1436,32 @@ module dist_solver_module
        write(iulog,*) 'Backward error: ', berr_array(1)
     endif
 
-    !Also need to do a matvec here with A
+    !Also need to do a matvec here with
     
-    !print statistics
-    call PStatPrint(options,stat,grid)
-
     ! result is sol (already assigned by reference in pdgssvx)
 
     !TO DO Can I save some of the LU structures after the first time since
     !the sparsity pattern of A will not change
+
+    !  deallocate the storage allocated by SuperLU_DIST
+    call f_PStatFree(stat)
+    !  call f_Destroy_CompRowLoc_Mat_dist(A)
+    call f_dScalePermstructFree(ScalePermstruct)
+    call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
+
+    
+    ! Release the SuperLU process grid
+    call f_superlu_gridexit(grid)
+
+    ! Deallocate the C structures pointed to by the Fortran handles
+    call f_destroy_gridinfo_handle(grid)
+    call f_destroy_options_handle(options)
+    call f_destroy_ScalePerm_handle(ScalePermstruct)
+    call f_destroy_LUstruct_handle(LUstruct)
+    call f_destroy_SOLVEstruct_handle(SOLVEstruct)
+    call f_destroy_SuperMatrix_handle(A)
+    call f_destroy_SuperLUStat_handle(stat)
+  
     
     !clean up 
     call PStatFree(stat)
@@ -1401,7 +1469,6 @@ module dist_solver_module
     call dScalePermstructFree(ScalePermstruct)
     call dDestroy_LU(n_global,grid,LUstruct)
     call dLUStructFree(LUStruct)
-    call superlu_gridexit(grid)
 
 
     
