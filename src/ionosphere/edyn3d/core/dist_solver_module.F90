@@ -1333,8 +1333,7 @@ module dist_solver_module
 !-----------------------------------------------------------------------
   function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
 
-#include "superlu_dist_config.fh"
-
+    #include "superlu_dist_config.fh"
     use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
          task_csr_rowstarts, mpi_rank
@@ -1398,7 +1397,7 @@ module dist_solver_module
     !write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
     !write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
     !write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
-    call f_dCreate_CompRowLoc_Matrix_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+    call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
     !pass in z and a flag to know whether to matvec z = lhs*pot_h1_f
@@ -1411,7 +1410,7 @@ module dist_solver_module
     sol=rhs ! Copy RHS to solution vector
 
     ! Set the default input options
-    call f_set_default_options_dist(options)
+    call f_set_default_options(options)
 
     ! Change one or more options
     !could also try (diabling row perms is good if reusing sparsity pattern
@@ -1451,8 +1450,7 @@ module dist_solver_module
     !do not call - tries to free the fortran-allocated rowptr,colind and nzval array               !  call f_Destroy_CompRowLoc_Mat_dist(A)
     call f_dScalePermstructFree(ScalePermstruct)
     call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
-
-    
+  
     ! Release the SuperLU process grid
     call f_superlu_gridexit(grid)
 
@@ -1465,15 +1463,6 @@ module dist_solver_module
     call f_destroy_SuperMatrix_handle(A)
     call f_destroy_SuperLUStat_handle(stat)
   
-    
-    !clean up 
-    call PStatFree(stat)
-    call Destroy_SuperMatrix_Store_dist(A)
-    call dScalePermstructFree(ScalePermstruct)
-    call dDestroy_LU(n_global,grid,LUstruct)
-    call dLUStructFree(LUStruct)
-
-
     
   endfunction dist_solve_superlu
 
