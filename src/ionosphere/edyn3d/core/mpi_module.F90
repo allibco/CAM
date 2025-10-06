@@ -173,7 +173,7 @@ module mpi_module
  
     !for dist
     allocate(task_csr_rowstarts(0:mpi_size))
-    allocate(task_csr_mapping(0:mpi_size))
+    allocate(task_csr_mapping(0:mpi_size-1))
     allocate(task_mygrid_size(0:mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
     task_csr_rowstarts = 0

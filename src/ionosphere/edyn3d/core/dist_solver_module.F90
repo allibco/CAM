@@ -75,7 +75,7 @@ module dist_solver_module
     if (output_matrix_count == 0) then
        output_matrix = .true.
        output_matrix_count = output_matrix_count + 1
-       write(*,*) 'Output matrix this time through ...'
+       write(*,*) 'AB: Output matrix this time through ...'
     endif
     
     call t_startf('dist_linear_system')
@@ -203,7 +203,7 @@ module dist_solver_module
          ierr = nf_def_var(fileid, 'rowptrA',NF_INT, 1, dd, rowptrid)
          dd(1) = nprocsp1_id
          ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
-         dd(1) = nprocsp1_id
+         dd(1) = nprocs_id
          ierr = nf_def_var(fileid, 'procMapping',NF_INT, 1, dd, procmappingid)
 
          !now fill fields 
@@ -227,7 +227,7 @@ module dist_solver_module
          countB(1)=mpi_size+1
          ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
          startB(1)=1
-         countB(1)=mpi_size+1
+         countB(1)=mpi_size
          ierr=NF_PUT_VARA_INT(fileid,procmappingid,startB,countB,task_csr_mapping)
 
 
@@ -1396,7 +1396,7 @@ module dist_solver_module
     call f_create_SuperMatrix_handle(A)
     call f_create_SuperLUStat_handle(stat)
 
-    write(*, *) 'AB SUPERLU: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
+    write(*, *) 'AB: SUPERLU mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
            
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
@@ -1409,15 +1409,15 @@ module dist_solver_module
     !get my first row in distributed matrix
     first_row = task_csr_rowstarts(task_csr_mapping(mpi_rank))     !these are 0-based already 
     
-    !create the distributed compressed row matrix A
+    !create the distributed compressed row matrix A (O-index)
     !some debugging
     if (rowptr(n_loc+1) /= nnz_loc) then
-       write(*,*)  "rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
+       write(*,*)  "AB: ERROR rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
     endif
     if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
-       write(*,*)  "colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
+       write(*,*)  "AB: Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
     endif
-    write(*,*) 'first_row (0-index) = ', first_row
+    write(*,*) 'AB: SUPERLU first_row (0-index) = ', first_row
     if (first_row < 0 .or. first_row >= n_global) then
        write(*,*)  "first_row out of range", first_row, n_global
     endif
