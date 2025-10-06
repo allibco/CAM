@@ -25,7 +25,8 @@ module mpi_module
   integer, dimension(:), allocatable :: &
     nmlat_task, mlat0_task, mlat1_task, &
     nmlon_task, mlon0_task, mlon1_task, &
-    task_lat_offset, task_csr_rowstarts 
+    task_lat_offset, task_csr_rowstarts, &
+    task_csr_mapping
 
 #ifdef PARALLEL
    integer :: host_group, dynamo_group
@@ -172,6 +173,7 @@ module mpi_module
  
     !for dist
     allocate(task_csr_rowstarts(0:mpi_size))
+    allocate(task_csr_mapping(0:mpi_size))
     allocate(task_mygrid_size(0:mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
     task_csr_rowstarts = 0
@@ -299,7 +301,7 @@ module mpi_module
           !do an allgather to get each procs grid size
           task_mygrid_size = all_gather_int(mygrid_size)
           
-          !now rowstarts - set all to zero
+          !now task_csr_rowstarts - set all to zero
           !south hemisphere is even, then northern is odd, so for 6 tasks
           ! the order of block rows:
           !1
@@ -308,12 +310,16 @@ module mpi_module
           !4
           !2
           !0
+          ! the task_csr_mapping will tell each task it's position in the rowstarts
+          ! according to above, so rank 1 needs to know that its accesses rowstarts(5)
+          ! so task_csr_mapping(1)= 5
           !south (even)
           cnt = 0
           do i=0, mpi_size-1, 2
              cnt = cnt + 1
              task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
                   + task_mygrid_size(i)
+             task_csr_mapping(i) = cnt - 1
           enddo
           !north 
           if (mpi_size > 1) then !mpi_size is even
@@ -321,6 +327,7 @@ module mpi_module
                 cnt = cnt + 1
                 task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
                      + task_mygrid_size(i)
+                task_csr_mapping(i) = cnt -1 
              enddo
           endif
        else !one proc

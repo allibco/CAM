@@ -30,7 +30,8 @@ module dist_solver_module
                           sync_mlat_5d, sync_mlon_5d,& 
                           sync_mlat_3d, sync_mlon_3d, &
                           mlat0, mlat1, mlon0, mlon1, &
-                          task_csr_rowstarts, mpi_size
+                          task_csr_rowstarts, mpi_size, &
+                          task_csr_mapping
     
     ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
     ! nmlat_h => # mag latitudes in one hemisphere
@@ -66,7 +67,7 @@ module dist_solver_module
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
          rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
-         countB(1), startB(1) 
+         procmappingid, countB(1), startB(1) 
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
 
@@ -202,6 +203,8 @@ module dist_solver_module
          ierr = nf_def_var(fileid, 'rowptrA',NF_INT, 1, dd, rowptrid)
          dd(1) = nprocsp1_id
          ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
+         dd(1) = nprocsp1_id
+         ierr = nf_def_var(fileid, 'procMapping',NF_INT, 1, dd, procmappingid)
 
          !now fill fields 
          !change mode
@@ -223,6 +226,11 @@ module dist_solver_module
          startB(1)=1
          countB(1)=mpi_size+1
          ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
+         startB(1)=1
+         countB(1)=mpi_size+1
+         ierr=NF_PUT_VARA_INT(fileid,procmappingid,startB,countB,task_csr_mapping)
+
+
          !Close the file up (later after solve)
 
          ierr=NF_CLOSE(fileid)
@@ -1115,7 +1123,7 @@ module dist_solver_module
              !north proc's data goes second
              !CHECK mygrid_size = num_row_s + partner_hgridsize
              if (mygrid_size /= num_row_s + partner_hgridsize) then
-                write(iulog, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
+                write(*, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
              endif
           
              !nnz_north needs to be set from partner's info
@@ -1125,7 +1133,7 @@ module dist_solver_module
 
              
              if (nnz_south + nnz_north > size(my_colind)) then
-                write(iulog,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
+                write(*,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
              endif
           
              do concurrent (i = 1:nnz_north)
@@ -1349,7 +1357,7 @@ module dist_solver_module
     #include "superlu_dist_config.fh"
     use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank
+         task_csr_rowstarts, mpi_rank, task_csr_mapping
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer(kind=c_int),dimension(n_loc+1),intent(in) :: rowptr
@@ -1399,7 +1407,7 @@ module dist_solver_module
 
     
     !get my first row in distributed matrix
-    first_row = task_csr_rowstarts(mpi_rank)     !these are 0-based already 
+    first_row = task_csr_rowstarts(task_csr_mapping(mpi_rank))     !these are 0-based already 
     
     !create the distributed compressed row matrix A
     !some debugging
