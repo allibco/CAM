@@ -337,6 +337,8 @@ module mpi_module
        mlond0 = mlon0 - 1
        mlond1 = mlon1 + 1
 
+       write(*, *) 'AB: TOPO2 mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
+       
     else !non-active
        mygrid_size = 0
        partner_hgridsize = 0

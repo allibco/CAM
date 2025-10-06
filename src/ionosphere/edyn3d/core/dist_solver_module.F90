@@ -174,7 +174,7 @@ module dist_solver_module
          !Define the dimensions
          ierr = nf_def_dim(fileid,'mygrid_size', mygrid_size, mygridsize_id)
          ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
-         ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_h, nmlath_id)
+         ierr = nf_def_dim(fileid,'nmlat_h', nmlat_h, nmlath_id)
          ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
          ierr = nf_def_dim(fileid,'nprocs', mpi_size, nprocs_id)
          ierr = nf_def_dim(fileid,'nprocsp1', mpi_size+1, nprocsp1_id)
@@ -350,10 +350,10 @@ module dist_solver_module
     coef3_j1_buf = 0.0
 
     !   some debugging info
-    write(*, *) 'AB: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-    write(*, *) 'AB: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-    write(*, *) 'AB: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
-    write(*, *) 'AB: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+    write(*, *) 'AB: LHS: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    write(*, *) 'AB: LHS: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    write(*, *) 'AB: LHS: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
+    write(*, *) 'AB: LHS: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
 
     
     
@@ -1250,8 +1250,6 @@ module dist_solver_module
        j_start = mlat0
     endif !treatment for j=1
 
-    !write(iulog,*) 'AB: rank, jstart for rhs = ', mpi_rank, j_start
-
     !populate rhs_s and rhs_n
     !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
     !here we need to not do the equator twice :) (onlysave with the south)
@@ -1381,7 +1379,7 @@ module dist_solver_module
     call f_create_SuperMatrix_handle(A)
     call f_create_SuperLUStat_handle(stat)
 
-    write(*, *) 'AB: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
+    write(*, *) 'AB SUPERLU: mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
            
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo
