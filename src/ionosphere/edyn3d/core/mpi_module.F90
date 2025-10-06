@@ -245,7 +245,7 @@ module mpi_module
        else !not active
           mpi_partner = -1
        endif
-    else
+    else !one proc
        mpi_partner = 0
     endif
 
@@ -269,9 +269,9 @@ module mpi_module
        !sizes in each hemisphere
        mysize_n =  (ij_stop_n -ij_start_n + 1)
        mysize_s = (ij_stop_s -ij_start_s + 1)
-       write(*,*) 'AB: SETUP TOPO mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
-       write(*, *) 'AB: TOPO mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, mysize_s
-       write(*, *) 'AB: TOPO mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n, mysize_n
+       write(*,*) 'AB: SETUP TOPO mysize_s, mysize_n', mysize_s, mysize_n
+       write(*, *) 'AB: TOPO ij_start_s, ij_stop_s, s_grid_pts = ', ij_start_s, ij_stop_s, mysize_s
+       write(*, *) 'AB: TOPO ij_start_n, ij_stop_n, n_grid_pts = ', ij_start_n, ij_stop_n, mysize_n
        
        !set global vars (n & s row counts will be diff for procs on equator)
        mygrid_size_n = mysize_n
@@ -1376,8 +1376,14 @@ endfunction all_gather_int
     integer:: m, my_numlat, jS, latrank, i, j
     
     if (mpi_size == 1) then
-      ij = (i_in-1)*nmlat_T1+j_in
-      return
+       ! this is not the same as the original ordering
+       !south and north hemispheres will be a numbered partition
+       !old: ij = (i_in-1)*nmlat_T1+j_in
+       if (j_in <= nmlat_h) then !south hemi or equator
+          ij = (i_in-1)*nmlat_h+j_in
+       else
+          ij = nmlat_h*nmlon + (i_in-1)*(nmlat_h-1) + (j_in-nmlat_h)
+       endif
     endif
 
     if (j_in <= nmlat_h) then !south hemi or equator
