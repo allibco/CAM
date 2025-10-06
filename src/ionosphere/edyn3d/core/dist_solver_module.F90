@@ -69,7 +69,7 @@ module dist_solver_module
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
 
-    output_matrix = .false.
+    output_matrix = .true.
     
     call t_startf('dist_linear_system')
 
@@ -212,22 +212,25 @@ module dist_solver_module
          countB(1)=nnz
          ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
          !Close the file up (later after solve)
-         
+
+         ierr=NF_CLOSE(fileid)
+
       endif
      
      call t_startf('linear_system->solve_superlu')
      sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
      call t_stopf('linear_system->solve_superlu')
 
-     ! if output turned on for debugging 
-     !if (output_matrix == .true.) then
-     !   startB(1)=1
-     !   countB(1)=mygridsize
-     !   ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,sol)
-     !   !close file
-     !   ierr=NF_CLOSE(fileid)
-     !endif
-
+#if 0
+     !if output turned on for debugging 
+     if (output_matrix == .true.) then
+        startB(1)=1
+        countB(1)=mygridsize
+        ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,rhs)
+        !close file
+        ierr=NF_CLOSE(fileid)
+     endif
+#endif
      
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
@@ -1204,7 +1207,7 @@ module dist_solver_module
     write(iulog, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
     write(iulog, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
     write(iulog, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
-    write(iulog, *) 'AB: RHS nmlat_h', nmlat_h
+    !write(iulog, *) 'AB: RHS nmlat_h', nmlat_h
 
     !first do j=1
     if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
