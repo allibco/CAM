@@ -197,7 +197,7 @@ module dist_solver_module
          dd(1) = nprocsp1_id
          ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
 
-         !now fill fields TO DO
+         !now fill fields 
          !change mode
          ierr=nf_enddef(fileid)
          !Output the  b
@@ -214,6 +214,9 @@ module dist_solver_module
          startB(1)=1
          countB(1)=nnz
          ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
+         startB(1)=1
+         countB(1)=mpi_size+1
+         ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
          !Close the file up (later after solve)
 
          ierr=NF_CLOSE(fileid)
@@ -1400,7 +1403,7 @@ module dist_solver_module
     if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
        write(*,*)  "colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
     endif
-    write(*,*) 'first_row = ', first_row
+    write(*,*) 'first_row (0-index) = ', first_row
     if (first_row < 0 .or. first_row >= n_global) then
        write(*,*)  "first_row out of range", first_row, n_global
     endif
