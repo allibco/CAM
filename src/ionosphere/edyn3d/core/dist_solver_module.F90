@@ -62,7 +62,7 @@ module dist_solver_module
   
     
     !for optional output
-    logical :: output_matrix = .false
+    logical :: output_matrix = .false.
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
