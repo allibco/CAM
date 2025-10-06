@@ -9,7 +9,8 @@ module dist_solver_module
 
   !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
-  
+  integer :: output_matrix_count=0
+
   contains
 !-----------------------------------------------------------------------
   subroutine dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, &
@@ -60,7 +61,7 @@ module dist_solver_module
   
     
     !for optional output
-    logical :: output_matrix
+    logical :: output_matrix = .false
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
@@ -69,7 +70,12 @@ module dist_solver_module
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
 
-    output_matrix = .true.
+
+    if (output_matrix_count == 0) then
+       output_matrix = .true.
+       output_matrix_count = output_matrix_count + 1
+       write(*,*) 'Output matrix this time through ...'
+    endif
     
     call t_startf('dist_linear_system')
 
@@ -173,6 +179,8 @@ module dist_solver_module
 
          !Define the dimensions
          ierr = nf_def_dim(fileid,'mygrid_size', mygrid_size, mygridsize_id)
+         ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
+         ierr = nf_def_dim(fileid, 'mynnz', nnz, nnz_id)
          ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
          ierr = nf_def_dim(fileid,'nmlat_h', nmlat_h, nmlath_id)
          ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
@@ -180,8 +188,6 @@ module dist_solver_module
          ierr = nf_def_dim(fileid,'nprocsp1', mpi_size+1, nprocsp1_id)
          ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
          ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
-         ierr = nf_def_dim(fileid, 'nnz', nnz, nnz_id)
-         ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
