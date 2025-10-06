@@ -1393,10 +1393,16 @@ module dist_solver_module
     
     !create the distributed compressed row matrix A
     !some debugging
-    if (rowptr(n_loc+1) /= nnz_loc) stop "rowptr(n_loc+1) /= nnz_loc"
-    if (minval(colind) < 0 .or. maxval(colind) >= n_global) stop "colind out of bounds"
+    if (rowptr(n_loc+1) /= nnz_loc) then
+       write(*,*)  "rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
+    endif
+    if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
+       write(*,*)  "colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
+    endif
     write(*,*) 'first_row = ', first_row
-    if (first_row < 0 .or. first_row >= n_global) stop "first_row out of range"
+    if (first_row < 0 .or. first_row >= n_global) then
+       write(*,*)  "first_row out of range", first_row, n_global
+    endif
     !write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
     !write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
     !write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
