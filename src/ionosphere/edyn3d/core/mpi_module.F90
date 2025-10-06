@@ -252,12 +252,11 @@ module mpi_module
     
     !initial matrix row start and stops
     if (mpi_rank >=0 ) then !active
-
        !s hemi
        ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
        ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
        !n hemi
-       !adjust j for n hemisphere
+       !corresponding j for n hemisphere
        mlat0_n = nmlat_T1 - mlat0 + 1
        mlat1_n =  nmlat_T1 - mlat1 + 1
        if (mlat1_n == nmlat_h) then !equator (don't double count)
@@ -270,60 +269,66 @@ module mpi_module
        !sizes in each hemisphere
        mysize_n =  (ij_stop_n -ij_start_n + 1)
        mysize_s = (ij_stop_s -ij_start_s + 1)
-       write(iulog,*) 'AB: SETUP TOPO mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
-
+       write(*,*) 'AB: SETUP TOPO mpi_rank, mysize_n, mysize_s', mpi_rank, mysize_n, mysize_s
+       write(*, *) 'AB: TOPO mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, mysize_s
+       write(*, *) 'AB: TOPO mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n, mysize_n
+       
        !set global vars (n & s row counts will be diff for procs on equator)
        mygrid_size_n = mysize_n
        mygrid_size_s = mysize_s
        
        !get partner sizes and then my grid size for block csr matrix
        !for each partner pair, even owns s hemi and odd owns north hemi
-       if (mod(mpi_rank,2) == 0) then !EVEN, own south, send north
+       if (mpi_size > 1) then
+          if (mod(mpi_rank,2) == 0) then !EVEN, own south, send north
+             partner_hgridsize = partner_exchange_int(mysize_n)
+             my_hgridsize = mysize_s
+             mygrid_size =  mysize_s + partner_hgridsize
+             my_sendgrid_size = mysize_n !i send to my partner
+             
+          else !ODD, own north, send south
+             partner_hgridsize = partner_exchange_int(mysize_s)
+             my_hgridsize = mysize_n
+             mygrid_size =  mysize_n + partner_hgridsize
+             my_sendgrid_size = mysize_s !i send to my partner
+             
+          endif
+      
+          !now we need to calculate the rowstarts for the global block
+          !csr martix - this will be 0-based indeing for superlu
+          !do an allgather to get each procs grid size
+          task_mygrid_size = all_gather_int(mygrid_size)
           
-          partner_hgridsize = partner_exchange_int(mysize_n)
-          my_hgridsize = mysize_s
-          mygrid_size =  mysize_s + partner_hgridsize
-
-          my_sendgrid_size = mysize_n !i send to my partner
-
-       else !ODD, own north, send south
-          partner_hgridsize = partner_exchange_int(mysize_s)
-          my_hgridsize = mysize_n
-          mygrid_size =  mysize_n + partner_hgridsize
-
-          my_sendgrid_size = mysize_s !i send to my partner
-
-       endif
-           
-       !now we need to calculate the rowstarts for the global block
-       !csr martix - this will be 0-based indeing for superlu
-       !do an allgather to get each procs grid size
-       task_mygrid_size = all_gather_int(mygrid_size)
-       
-       !now rowstarts - set all to zero
-       task_csr_rowstarts = 0
-       !south hemisphere is even, then northern is odd, so for 6 tasks
-       ! the order of block rows:
-       !1
-       !3
-       !5
-       !4
-       !2
-       !0
-       !south (even)
-       cnt = 0
-       do i=0, mpi_size-1, 2
-          cnt = cnt + 1
-          task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
-               + task_mygrid_size(i)
-       enddo
-       !north 
-       if (mpi_size > 1) then !mpi_size is even
-          do i= mpi_size-1, 1, -2
+          !now rowstarts - set all to zero
+          !south hemisphere is even, then northern is odd, so for 6 tasks
+          ! the order of block rows:
+          !1
+          !3
+          !5
+          !4
+          !2
+          !0
+          !south (even)
+          cnt = 0
+          do i=0, mpi_size-1, 2
              cnt = cnt + 1
              task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
                   + task_mygrid_size(i)
           enddo
+          !north 
+          if (mpi_size > 1) then !mpi_size is even
+             do i= mpi_size-1, 1, -2
+                cnt = cnt + 1
+                task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
+                     + task_mygrid_size(i)
+             enddo
+          endif
+       else !one proc
+          mygrid_size = mysize_n + mysize_s
+          partner_hgridsize = 0
+          my_sendgrid_size = 0
+          my_hgridsize = mysize_s
+          task_csr_rowstarts(1) = mygrid_size
        endif
        
        ! halos
