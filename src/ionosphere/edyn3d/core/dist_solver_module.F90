@@ -168,6 +168,7 @@ module dist_solver_module
 
      !do we want to output matirx and rhs for debugging
      if (output_matrix == .true. ) then
+        write(*,*) 'AB: writing netcdf file ...'
 
         !newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
          write(fbuf,'(A,".",I4.4,".nc")') &
