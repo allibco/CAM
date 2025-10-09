@@ -177,6 +177,7 @@ module mpi_module
     allocate(task_mygrid_size(0:mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
     task_csr_rowstarts = 0
+    task_csr_mapping = 0
     task_mygrid_size = 0
     task_lat_offset = 0
 
