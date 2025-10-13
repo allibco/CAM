@@ -76,6 +76,8 @@ module dist_solver_module
        output_matrix = .true.
        output_matrix_count = output_matrix_count + 1
        write(*,*) 'AB: Output matrix this time through ...'
+    else
+       output_matrix = .false.
     endif
     
     call t_startf('dist_linear_system')
@@ -437,7 +439,7 @@ module dist_solver_module
        coef3_j1_buf = gather_lon_1d(coef_s(3,j,mlon0:mlon1))
 
        counter = 0
-       if (lon_rank == 0) then !I also own i=1 (special case - 1 processor)
+       if (lon_rank == 0) then !I also own i=1 (special case - applies to 1 processor)
           i=1
           counter = counter + 1
           jcol1(counter) = calc_grid_ij(i,j,0) !this will be 1
@@ -506,14 +508,15 @@ module dist_solver_module
           rowcnt_n(ij) = rowcnt_n(ij)+1
           !the column will be the same i position but at j=1 (instead of j=15)
           ! TO DO: verify this (doesn't make intuive sense to me)
-          jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
+          !jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
+          jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,jN,0) ! j=jN, lat_rank=0
+
+
           nzval_n(rowcnt_n(ij),ij) = 1
 
           !sort by col indices
           call insert_sort(jcol_n(:,ij),nzval_n(:,ij),rowcnt_n(ij))
-          
-          
-       enddo
+        enddo
        
     endif !end of loop for procs owning j=1
 
