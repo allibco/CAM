@@ -226,6 +226,7 @@ module dist_solver_module
          startB(1)=1
          countB(1)=nnz
          ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
+
          startB(1)=1
          countB(1)=mpi_size+1
          ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
@@ -333,6 +334,7 @@ module dist_solver_module
     integer,dimension(ij_start_n:ij_stop_n) :: rowcnt_n
     
     real(kind=rp),dimension(nmlon) :: coef3_j1_buf
+    real(kind=rp),dimension(nmlon) :: coef9_j1_buf
 
     !csr for each hemisphere - south
     integer, dimension(mygrid_size_s+1):: rowptr_s
@@ -437,14 +439,18 @@ module dist_solver_module
        !so we need to communicate within proc lat_rank = 0 and gather to
        ! proc 0 (check scalability here at large proc counts)
        coef3_j1_buf = gather_lon_1d(coef_s(3,j,mlon0:mlon1))
+       !also needs coef9  for the whole row corres to j=1
+       coef9_j1_buf = gather_lon_1d(coef_s(9,j,mlon0:mlon1))
 
        counter = 0
        if (lon_rank == 0) then !I also own i=1 (special case - applies to 1 processor)
           i=1
           counter = counter + 1
           jcol1(counter) = calc_grid_ij(i,j,0) !this will be 1
-          nzval1(counter) = sum(coef_s(9,j,:))-bijSum
-
+          !this requires the whole row (needs to get the rest)
+          !nzval1(counter) = sum(coef_s(9,j,:))-bijSum
+          nzval1(counter) = sum(coef9_j1_buf(:))-bijSum
+          
           counter = counter + 1
           jcol1(counter) = calc_grid_ij(i,j+1,0) 
           nzval1(counter) = coef_s(3,j,i)
@@ -506,12 +512,8 @@ module dist_solver_module
           ij = calc_grid_ij(i,jN,lat_rank)
 
           rowcnt_n(ij) = rowcnt_n(ij)+1
-          !the column will be the same i position but at j=1 (instead of j=15)
           ! TO DO: verify this (doesn't make intuive sense to me)
-          !jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,1,0) ! j=1, lat_rank=1
-          jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,jN,0) ! j=jN, lat_rank=0
-
-
+          jcol_n(rowcnt_n(ij),ij) = calc_grid_ij(i,jN,0) ! j=jN, lat_rank=0 owns
           nzval_n(rowcnt_n(ij),ij) = 1
 
           !sort by col indices
