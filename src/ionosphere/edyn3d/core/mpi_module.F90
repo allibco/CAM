@@ -86,13 +86,13 @@ module mpi_module
           call MPI_Comm_rank(dynamo_world, mpi_rank, ierror)
           call MPI_Comm_size(dynamo_world, mpi_size, ierror)
        else
-          mpi_size = npes_edyn3d !let non-participating procs know the sizes for                   
-                                 !other function all need to know lat_size and lon_size            
+          mpi_size = npes_edyn3d !let non-participating procs know the sizes (for                   
+                                 !other functions, all need to know lat_size and lon_size)            
           mpi_rank = -1 !not participating                                                    
        endif
     else
     !just duplicate                                                                           
-       call MPI_Comm_dup(mpi_comm_host, dynamo_world, ierror)
+       call MPI_Comm_dup(mpi_comm_host, dynamo_world, ierror)1
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_dup', ierror)
 
        ! Get the rank in the new communicator                                                 

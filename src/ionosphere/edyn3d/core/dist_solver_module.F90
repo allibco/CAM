@@ -4,6 +4,7 @@ module dist_solver_module
   use prec,only:rp
   use iso_c_binding
   use cam_logfile, only: iulog
+  use dist_spmv_mod
 
   include 'netcdf.inc'
 
@@ -57,9 +58,9 @@ module dist_solver_module
 
     real(kind=rp),dimension(:), allocatable :: rhs,z,pot_hl_f,sol
 
-    integer :: ierr
+    integer :: ierr, fst_row
 
-  
+    type(halo_t) :: halo
     
     !for optional output
     logical :: output_matrix = .false.
@@ -90,7 +91,7 @@ module dist_solver_module
     !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
     !allocate space for rowptr,colind,values_csr
-    ! ABx why does MAX_NNZ=12? seems like 10 is max?
+    ! AB why does MAX_NNZ=12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
     if (mpi_rank == 0) then ! make room for dense row
        nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
@@ -105,6 +106,12 @@ module dist_solver_module
     allocate(pot_hl_f(mygrid_size))
     allocate(sol(mygrid_size))
 
+    rhs = 0.0
+    sol = 0.0
+    pot_hl_f = 0.0
+    colind = 0
+    row_ptr = 0
+    valuses_csr = 0.0
     
     ! for now, split two hemispheres (keep halo pts)
     do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, ic = 1:10)
@@ -118,10 +125,16 @@ module dist_solver_module
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     !need nnz for solver
     nnz = rowptr(mygrid_size+1)-1
-
+    write(*,*) "AB: (after lhs) nnz = ", nnz
+    
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
 
+    !0-based indexing 
+    !need matrix to be 0-based index for superlu and the matvec
+    colind=colind-1
+    rowptr=rowptr-1
+    
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
@@ -133,18 +146,17 @@ module dist_solver_module
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(pot_hl)
 
-       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-       !TO DO (need a parallel matmult)
-       ! z = matmul(lhs, pot_hl)
-       z = 0.0
-       !do i = 1,nlonlat
-       !   do j = rowptr(i),rowptr(i+1)-1
-       !      z(i) = z(i)+values_csr(j)*pot_hl_f(colind(j))
-       !   enddo
-       !enddo
-       !!!!!!!!!!!! TEMP for testing everything else
-                    
-       !!!!!!!!!!!   
+       !Parallel matmult
+       ! z = matmul(lhs, pot_hl_f)
+       fst_row = task_csr_rowstarts(mpi_rank)
+
+       !TO DO - this init should be called just the first timestep because the nonzero
+       !matrix pattern does not change
+       call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
+
+       call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
+
+       call dist_spmv_free(halo)
        
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
@@ -163,12 +175,12 @@ module dist_solver_module
         rhs(i) = rhs(i)+z(i)
      enddo
 
-     !superlu 
-     !need matrix to be 0-based index for superlu
+     !0-based indexing 
+     !need matrix to be 0-based index for superlu and the matvec
      colind=colind-1
      rowptr=rowptr-1
 
-     !do we want to output matirx and rhs for debugging
+     !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
         write(*,*) 'AB: writing netcdf file ...'
 
@@ -242,7 +254,7 @@ module dist_solver_module
       endif
      
      call t_startf('linear_system->solve_superlu')
-     sol = dist_solve_superlu(nlonlat,mygrid_size,nnz,rowptr,colind(1:nnz),values_csr(1:nnz),rhs)
+     sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
 #if 0
@@ -1358,7 +1370,7 @@ module dist_solver_module
  
   
 !-----------------------------------------------------------------------
-  function dist_solve_superlu(n_global,n_loc,nnz_loc,rowptr,colind,values,rhs) result(sol)
+  function dist_solve_superlu(n_global, n_loc, nnz_loc, rowptr, colind, values, rhs) result(sol)
 
     #include "superlu_dist_config.fh"
     use superlu_mod    
@@ -1378,7 +1390,7 @@ module dist_solver_module
     
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
-    integer :: i,iopt, first_row, nprow, npcol
+    integer :: i, iopt, first_row, nprow, npcol
 
     !superlu structures
     integer(superlu_ptr) :: grid
@@ -1410,7 +1422,9 @@ module dist_solver_module
     npcol = lon_size
 
     call f_superlu_gridinit(dynamo_world, nprow, npcol, grid)
-
+    if (nprow * npcol /= mpi_size) then
+       write(*,*) "ERROR: nprow*npcol != nprocs"
+    endif
     
     !get my first row in distributed matrix
     first_row = task_csr_rowstarts(task_csr_mapping(mpi_rank))     !these are 0-based already 
@@ -1427,9 +1441,7 @@ module dist_solver_module
     if (first_row < 0 .or. first_row >= n_global) then
        write(*,*)  "first_row out of range", first_row, n_global
     endif
-    !write(*,*) "rowptr(1:5)=", rowptr(1:min(5,n_loc+1))
-    !write(*,*) "colind(1:5)=", colind(1:min(5,nnz_loc))
-    !write(*,*) "values(1:5)=", values(1:min(5,nnz_loc))
+
     call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
@@ -1451,7 +1463,17 @@ module dist_solver_module
     !these below are the defaults
     call set_superlu_options(options,ColPerm=COLAMD)
     call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-  
+
+    ! These might help
+    ! Enable iterative refinement
+    call f_set_iter_refine(options, 'SLU_DOUBLE')  
+    ! Alternatives: 'NO', 'SLU_SINGLE', 'SLU_DOUBLE'
+    ! Optionally, enable equilibration/scaling for stability
+    call f_set_equil(options, .true.)
+
+
+
+    
     ! Initialize ScalePermstruct and LUstruct
     call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
     call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
