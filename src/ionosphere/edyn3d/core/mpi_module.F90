@@ -92,7 +92,7 @@ module mpi_module
        endif
     else
     !just duplicate                                                                           
-       call MPI_Comm_dup(mpi_comm_host, dynamo_world, ierror)1
+       call MPI_Comm_dup(mpi_comm_host, dynamo_world, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_dup', ierror)
 
        ! Get the rank in the new communicator                                                 
