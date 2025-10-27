@@ -494,9 +494,11 @@ contains
   end subroutine unique_inplace_int
 
 
-  subroutine print_array_int(name, arr)
+  subroutine print_array_int(name, arr, UNITNO)
     character(len=*), intent(in) :: name
     integer, intent(in) :: arr(:)
+    integer, intent(in) :: unitno
+
     integer :: n, i
     n = size(arr)
     write(unitno, '(A,I0)') trim(name)//' size = ', n
@@ -509,9 +511,10 @@ contains
     end if
   end subroutine print_array_int
 
-  subroutine print_array_real(name, arr)
+  subroutine print_array_real(name, arr, unitno)
     character(len=*), intent(in) :: name
     real(c_double), intent(in) :: arr(:)
+    integer, intent(in) :: unitno
     integer :: n, i
     n = size(arr)
     write(unitno, '(A,I0)') trim(name)//' size = ', n
@@ -553,17 +556,17 @@ contains
     write(unitno, '(A,2I10)') 'nhalo, nhalo_send = ', halo%nhalo, halo%nhalo_send
     
     !---- Print all allocated arrays
-    if (allocated(halo%halo_cols))   call print_array_int('halo_cols', halo%halo_cols)
-    if (allocated(halo%col_owners))  call print_array_int('col_owners', halo%col_owners)
-    if (allocated(halo%recvcounts))  call print_array_int('recvcounts', halo%recvcounts)
-    if (allocated(halo%rdispls))     call print_array_int('rdispls', halo%rdispls)
-    if (allocated(halo%sendcounts))  call print_array_int('sendcounts', halo%sendcounts)
-    if (allocated(halo%sdispls))     call print_array_int('sdispls', halo%sdispls)
-    if (allocated(halo%recv_from))   call print_array_int('recv_from', halo%recv_from)
-    if (allocated(halo%send_to))     call print_array_int('send_to', halo%send_to)
-    if (allocated(halo%send_cols))   call print_array_int('send_cols', halo%send_cols)
-    if (allocated(halo%sendbuf))     call print_array_real('sendbuf', halo%sendbuf)
-    if (allocated(halo%recvbuf))     call print_array_real('recvbuf', halo%recvbuf)
+    if (allocated(halo%halo_cols))   call print_array_int('halo_cols', halo%halo_cols, unitno)
+    if (allocated(halo%col_owners))  call print_array_int('col_owners', halo%col_owners, unitno)
+    if (allocated(halo%recvcounts))  call print_array_int('recvcounts', halo%recvcounts, unitno)
+    if (allocated(halo%rdispls))     call print_array_int('rdispls', halo%rdispls, unitno)
+    if (allocated(halo%sendcounts))  call print_array_int('sendcounts', halo%sendcounts, unitno)
+    if (allocated(halo%sdispls))     call print_array_int('sdispls', halo%sdispls, unitno)
+    if (allocated(halo%recv_from))   call print_array_int('recv_from', halo%recv_from, unitno)
+    if (allocated(halo%send_to))     call print_array_int('send_to', halo%send_to, unitno)
+    if (allocated(halo%send_cols))   call print_array_int('send_cols', halo%send_cols, unitno)
+    if (allocated(halo%sendbuf))     call print_array_real('sendbuf', halo%sendbuf, unitno)
+    if (allocated(halo%recvbuf))     call print_array_real('recvbuf', halo%recvbuf, unitno)
 
     close(unitno)
 
