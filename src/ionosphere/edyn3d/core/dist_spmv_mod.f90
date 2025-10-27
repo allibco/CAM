@@ -363,7 +363,15 @@ contains
        do j = rowptr(i), rowptr(i+1)-1 !for each col ind
           jp = j+1 !becuz rowptr is 0-based
           if (colind(jp) >= halo%fst_row .and. colind(jp) <= halo%last_row) then
-             loc =  colind(jp) - halo%fst_row + 1 !colind is 0-bases 
+             loc =  colind(jp) - halo%fst_row + 1 !colind is 0-based
+             !debugging
+             if (loc < 1 .or. loc > size(x_local)) then
+                print *, 'Rank', myrank, ': loc out of range =', loc, ' colind=', colind(jp), ' fst_row=', halo%fst_row
+             end if
+             if (x_local(loc) /= x_local(loc)) print *, 'NaN in x_local at loc=', loc, ' rank=', my_rank
+             if (nzval(jp) /= nzval(jp)) print *, 'NaN in nzval at jp=', jp
+
+             
              y_local(i) = y_local(i) + nzval(jp) * x_local(loc)
              !print*, 'S:iam = ', myrank, 'local i, jp', i,  jp
           else
