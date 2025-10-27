@@ -1466,14 +1466,16 @@ module dist_solver_module
 
     ! These might help
     ! Enable iterative refinement
-    call f_set_iter_refine(options, 'SLU_DOUBLE')  
-    ! Alternatives: 'NO', 'SLU_SINGLE', 'SLU_DOUBLE'
+    ! Turn on double precision iterative refinement
+    !call set_superlu_options(opt, IterRefine = 2)
+
+    !No refinement: (or none = 0 or  single = 1)
+     call set_superlu_options(options, IterRefine = 0)
+
     ! Optionally, enable equilibration/scaling for stability
-    call f_set_equil(options, .true.)
+    ! 1 - on, 0 = off
+    call set_superlu_options(options, Equil=1)
 
-
-
-    
     ! Initialize ScalePermstruct and LUstruct
     call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
     call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
