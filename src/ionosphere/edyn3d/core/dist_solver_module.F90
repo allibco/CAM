@@ -136,7 +136,7 @@ module dist_solver_module
     rowptr=rowptr-1
     
     ! determine FAC forcing (dense)
-    if (1111read_fac) then ! input is corrected fac_hl, pot_hl is not used
+    if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
        z = dist_flatten(fac_hl)
 
@@ -155,6 +155,7 @@ module dist_solver_module
        !TO DO - this init should be called just the first timestep because the nonzero
        !matrix pattern does not change
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
+
 
 
        call write_halo_to_file(halo, dynamo_world)
