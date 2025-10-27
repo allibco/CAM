@@ -493,5 +493,4 @@ contains
     n = k
   end subroutine unique_inplace_int
 
-  
 end module dist_spmv_mod

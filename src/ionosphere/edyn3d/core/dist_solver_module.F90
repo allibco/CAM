@@ -136,7 +136,7 @@ module dist_solver_module
     rowptr=rowptr-1
     
     ! determine FAC forcing (dense)
-    if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
+    if (1111read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
        z = dist_flatten(fac_hl)
 
@@ -149,11 +149,18 @@ module dist_solver_module
        !Parallel matmult
        ! z = matmul(lhs, pot_hl_f)
        fst_row = task_csr_rowstarts(mpi_rank)
+       write(*,*) "AB: fst_row = ", fst_row
+       write(*,*) "AB: POT_HL_F= ", pot_hl_f
 
        !TO DO - this init should be called just the first timestep because the nonzero
        !matrix pattern does not change
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
 
+
+       call write_halo_to_file(halo, dynamo_world)
+
+
+       
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
 
        call dist_spmv_free(halo)
@@ -384,10 +391,10 @@ module dist_solver_module
     coef3_j1_buf = 0.0
 
     !   some debugging info
-    write(*, *) 'AB: LHS: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-    write(*, *) 'AB: LHS: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-    write(*, *) 'AB: LHS: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
-    write(*, *) 'AB: LHS: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+    !write(*, *) 'AB: LHS: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    !write(*, *) 'AB: LHS: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    !write(*, *) 'AB: LHS: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
+    !write(*, *) 'AB: LHS: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
 
     
     
@@ -949,7 +956,7 @@ module dist_solver_module
           ij = calc_grid_ij(i,j,lat_rank)
           
           if (ij > ij_stop_s .or. ij < ij_start_s) then
-             write(iulog,*) 'AB: Error ij south index 4 for lhs', mpi_rank, ij
+             write(*,*) 'AB: Error ij south index 4 for lhs', mpi_rank, ij
           endif
 
           
@@ -1019,7 +1026,7 @@ module dist_solver_module
        do ij = ij_start_s, ij_stop_s
           cnt = rowcnt_s(ij) !entries in row
            if (nnz_s + cnt > size(colind_s)) then
-              write(iulog,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
+              write(*,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
            endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
@@ -1038,7 +1045,7 @@ module dist_solver_module
        cnt = rowcnt_s(1)
        !write(iulog,*) 'AB: mpi_rank 0, row1 count = ', cnt
        if (cnt + nnz_s > size(colind_s)) then
-          write(iulog,*) 'AB: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
+          write(*,*) 'AB: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
        endif
        do k = 1, cnt
           nnz_s = nnz_s + 1
@@ -1054,7 +1061,7 @@ module dist_solver_module
        do ij = ij_start_s+1, ij_stop_s
           cnt = rowcnt_s(ij)
           if (nnz_s + cnt > size(colind_s)) then
-             write(iulog,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
+             write(*,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
           endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
@@ -1110,20 +1117,20 @@ module dist_solver_module
              
              !my south (goes first into csr block)
              if (num_row_s + 1 > size(my_rowptr)) then
-                write(iulog,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
+                write(*,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
              endif
              do concurrent (i = 2:num_row_s + 1)
                 my_rowptr(i) = rowptr_s(i)
              enddo
              !nnz_south set above - but double check
              if (nnz_south /= my_rowptr(num_row_s + 1) - 1) then
-                write(iulog,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
+                write(*,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
              endif
           
              !write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
 
              if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
-                write(iulog,*) 'AB: Error: my_colind or my_values array too small for south data'
+                write(*,*) 'AB: Error: my_colind or my_values array too small for south data'
              endif
           
              do concurrent (i = 1:nnz_south)
@@ -1241,11 +1248,11 @@ module dist_solver_module
     rhs_s = 0.0
 
     !   some debugging info
-    write(*, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-    write(*, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-    write(*, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
-    write(*, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
-    write(*, *) 'AB: RHS nmlat_h', nmlat_h
+    !write(*, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+    !write(*, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+    !write(*, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
+    !write(*, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+    !write(*, *) 'AB: RHS nmlat_h', nmlat_h
 
     !first do j=1
     if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
