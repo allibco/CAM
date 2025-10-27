@@ -368,7 +368,7 @@ contains
              if (loc < 1 .or. loc > size(x_local)) then
                 print *, 'Rank', myrank, ': loc out of range =', loc, ' colind=', colind(jp), ' fst_row=', halo%fst_row
              end if
-             if (x_local(loc) /= x_local(loc)) print *, 'NaN in x_local at loc=', loc, ' rank=', my_rank
+             if (x_local(loc) /= x_local(loc)) print *, 'NaN in x_local at loc=', loc, ' rank=', myrank
              if (nzval(jp) /= nzval(jp)) print *, 'NaN in nzval at jp=', jp
 
              
