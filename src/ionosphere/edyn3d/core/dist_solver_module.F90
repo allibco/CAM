@@ -1657,6 +1657,10 @@ module dist_solver_module
 
           enddo
           istart = my_hgridsize + 1
+          !DEBUG
+          do i = 1,my_sendgrid_size
+             if (isnan(fout(i))) write(*,*) 'AB: SEND 1 fout(i) is NaN, i = ', i
+          enddo
           call partner_exchange_hemisphere_vec(fout(1:my_sendgrid_size), fout(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
@@ -1665,12 +1669,14 @@ module dist_solver_module
              cnt = cnt + 1
              fout(cnt) = fout_n(ij)
              if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(cnt) is NaN, cnt, ij = ', cnt, ij
-
           enddo
           istart = partner_hgridsize + 1
+          do i = istart,istart+ my_sendgrid_size
+             if (isnan(fout(i))) write(*,*) 'AB: SEND 2 fout(i) is NaN, i = ', i
+          enddo
           call partner_exchange_hemisphere_vec(fout(istart:istart+my_sendgrid_size), fout(1:partner_hgridsize))
        endif
-    endif
+    endif ! multiple procs
        
   endfunction dist_flatten
 
