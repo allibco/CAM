@@ -297,12 +297,13 @@ contains
     first_row = halo%fst_row
     call MPI_Comm_rank(comm, myrank, ierr)
 
-    ! Zero output
+    ! Zero output and buffersx
     y_local = 0.0d0
+    halo%sendbuf = 0.0
+    halo%recvbuf = 0.0
 
     
     ! Build send buffer: extract x values for halo_cols, packed in send_order
-    halo%sendbuf = 0.0
     do p = 1, halo%nhalo_send
        id = halo%send_cols(p) ! this is the global col id to send (0-based)
        halo%sendbuf(p) = x_local(id - first_row + 1) 
@@ -319,7 +320,6 @@ contains
     allocate(stats(MPI_STATUS_SIZE, total_reqs))
     reqs_count = 0
 
-    halo%recvbuf =0.0
     
     ! Irecv
     do k = 1, num_recvs
@@ -348,14 +348,14 @@ contains
        call MPI_Waitall(reqs_count, reqs, stats, ierr)
     end if
 
-    !print *, 'MATVEC: iam = ', myrank,'SENDbuf =', halo%sendbuf
-    !print *, 'MATVEC: iam = ', myrank,'RECVbuf =', halo%recvbuf
+    print *, 'MATVEC: iam = ', myrank,'SENDbuf =', halo%sendbuf
+    print *, 'MATVEC: iam = ', myrank,'RECVbuf =', halo%recvbuf
 
    ! for each owner O, the entries I receive from O correspond to
    ! those halo_cols i have whose owner == O, and in the same order as they appear in halo%send_cols for owner O.
    ! which matches my halo_cols by construction
 
-    !print*,'IN spmv: iam = ', myrank, 'm_loc = ', m_loc
+    print*,'IN spmv: iam = ', myrank, 'm_loc = ', m_loc
 
     ! Finally do local SpMV using halo_values when needed
     do i = 1, m_loc ! for each row
@@ -417,10 +417,6 @@ contains
     if (allocated(halo%recvbuf)) deallocate(halo%recvbuf)
     if (allocated(halo%sendbuf)) deallocate(halo%sendbuf)
   end subroutine dist_spmv_free
-
-  !----------------------------------------------------------------------
-  ! Helper: return x value for a global index using local x_local if owned
-  !----------------------------------------------------------------------
 
   !----------------------------------------------------------------------
   ! small utility: unique_sort_int 
@@ -565,8 +561,6 @@ contains
     if (allocated(halo%recv_from))   call print_array_int('recv_from', halo%recv_from, unitno)
     if (allocated(halo%send_to))     call print_array_int('send_to', halo%send_to, unitno)
     if (allocated(halo%send_cols))   call print_array_int('send_cols', halo%send_cols, unitno)
-    if (allocated(halo%sendbuf))     call print_array_real('sendbuf', halo%sendbuf, unitno)
-    if (allocated(halo%recvbuf))     call print_array_real('recvbuf', halo%recvbuf, unitno)
 
     close(unitno)
 

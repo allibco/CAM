@@ -146,22 +146,24 @@ module dist_solver_module
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(pot_hl)
 
+       do i = 1,mygrid_size
+          if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
+       enddo
+
+
+       
        !Parallel matmult
        ! z = matmul(lhs, pot_hl_f)
        fst_row = task_csr_rowstarts(mpi_rank)
        write(*,*) "AB: fst_row = ", fst_row
-       write(*,*) "AB: POT_HL_F= ", pot_hl_f
+       !write(*,*) "AB: POT_HL_F= ", pot_hl_f
 
        !TO DO - this init should be called just the first timestep because the nonzero
        !matrix pattern does not change
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
 
-
-
        call write_halo_to_file(halo, dynamo_world)
 
-
-       
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
 
        call dist_spmv_free(halo)
@@ -184,9 +186,7 @@ module dist_solver_module
      enddo
 
      !0-based indexing 
-     !need matrix to be 0-based index for superlu and the matvec
-     colind=colind-1
-     rowptr=rowptr-1
+     !moved above
 
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
