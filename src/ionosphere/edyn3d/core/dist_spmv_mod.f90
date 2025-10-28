@@ -348,8 +348,8 @@ contains
        call MPI_Waitall(reqs_count, reqs, stats, ierr)
     end if
 
-    print *, 'MATVEC: iam = ', myrank,'SENDbuf =', halo%sendbuf
-    print *, 'MATVEC: iam = ', myrank,'RECVbuf =', halo%recvbuf
+    !print *, 'MATVEC: iam = ', myrank,'SENDbuf =', halo%sendbuf
+    !print *, 'MATVEC: iam = ', myrank,'RECVbuf =', halo%recvbuf
 
    ! for each owner O, the entries I receive from O correspond to
    ! those halo_cols i have whose owner == O, and in the same order as they appear in halo%send_cols for owner O.

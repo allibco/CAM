@@ -146,6 +146,7 @@ module dist_solver_module
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(pot_hl)
 
+       !DEBUG
        do i = 1,mygrid_size
           if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
        enddo
@@ -154,7 +155,7 @@ module dist_solver_module
        
        !Parallel matmult
        ! z = matmul(lhs, pot_hl_f)
-       fst_row = task_csr_rowstarts(mpi_rank)
+       fst_row = task_csr_rowstarts(mpi_rank) ! 0-index
        write(*,*) "AB: fst_row = ", fst_row
        !write(*,*) "AB: POT_HL_F= ", pot_hl_f
 
@@ -162,6 +163,7 @@ module dist_solver_module
        !matrix pattern does not change
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
 
+       !DEBUG
        call write_halo_to_file(halo, dynamo_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
@@ -265,7 +267,6 @@ module dist_solver_module
      sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
-#if 0
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         startB(1)=1
@@ -274,7 +275,6 @@ module dist_solver_module
         !close file
         ierr=NF_CLOSE(fileid)
      endif
-#endif
      
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
@@ -1573,6 +1573,8 @@ module dist_solver_module
           !checkbounds
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout_s(ij) = fin(1,j,i)
+             if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
+
            else
              write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
           endif
@@ -1583,6 +1585,8 @@ module dist_solver_module
           !checkbounds
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout_n(ij) = fin(2,j,i)
+             if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+
           else
              write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
           endif
@@ -1603,6 +1607,7 @@ module dist_solver_module
           !checkbounds
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout_s(ij) = avg
+             if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
           else
              write(iulog,*) "Error in flatten 2 south, mpirank, ij = ", mpi_rank, ij
           endif
@@ -1617,6 +1622,8 @@ module dist_solver_module
           !checkbounds
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout_n(ij) = avg
+             if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+
           else
              write(iulog,*) "Error in flatten 2 north, mpirank, ij = ", mpi_rank, ij
           endif
@@ -1635,7 +1642,7 @@ module dist_solver_module
           cnt = cnt + 1
           fout(cnt) = fout_n(ij)
        enddo
-    else
+    else !multiple procs
 
        
        !now do partner hemisphere exchange for continguous rows
@@ -1646,6 +1653,8 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              fout(cnt) = fout_s(ij)
+             if (isnan(fout(ij))) write(*,*) 'AB: #1 fout(ij) is NaN, ij = ', ij
+
           enddo
           istart = my_hgridsize + 1
           call partner_exchange_hemisphere_vec(fout(1:my_sendgrid_size), fout(istart:istart+partner_hgridsize))
@@ -1655,6 +1664,8 @@ module dist_solver_module
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              fout(cnt) = fout_n(ij)
+             if (isnan(fout(ij))) write(*,*) 'AB: #2 fout(ij) is NaN, ij = ', ij
+
           enddo
           istart = partner_hgridsize + 1
           call partner_exchange_hemisphere_vec(fout(istart:istart+my_sendgrid_size), fout(1:partner_hgridsize))
