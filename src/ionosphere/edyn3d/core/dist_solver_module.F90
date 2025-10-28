@@ -1653,7 +1653,7 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              fout(cnt) = fout_s(ij)
-             if (isnan(fout(ij))) write(*,*) 'AB: #1 fout(ij) is NaN, ij = ', ij
+             if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
 
           enddo
           istart = my_hgridsize + 1
@@ -1664,7 +1664,7 @@ module dist_solver_module
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              fout(cnt) = fout_n(ij)
-             if (isnan(fout(ij))) write(*,*) 'AB: #2 fout(ij) is NaN, ij = ', ij
+             if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(cnt) is NaN, cnt, ij = ', cnt, ij
 
           enddo
           istart = partner_hgridsize + 1
