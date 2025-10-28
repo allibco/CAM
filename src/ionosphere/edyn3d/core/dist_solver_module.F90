@@ -258,8 +258,7 @@ module dist_solver_module
 
 
          !Close the file up (later after solve)
-
-         ierr=NF_CLOSE(fileid)
+         !ierr=NF_CLOSE(fileid)
 
       endif
      
@@ -1368,16 +1367,6 @@ module dist_solver_module
   endfunction dist_construct_rhs
  !-----------------------------------------------------------------------
 
-! function dist_matvec
-
-
-
-   
-
- !endfunction dist_matvec
- 
-  
-!-----------------------------------------------------------------------
   function dist_solve_superlu(n_global, n_loc, nnz_loc, rowptr, colind, values, rhs) result(sol)
 
     #include "superlu_dist_config.fh"
@@ -1504,7 +1493,7 @@ module dist_solver_module
        write(iulog,*) 'Backward error: ', berr_array(1)
     endif
 
-    !Also need to do a matvec here with
+    write(*,*) 'DONE WITH PDGSSSVX'
     
     ! result is sol (already assigned by reference in pdgssvx)
 
@@ -1513,7 +1502,8 @@ module dist_solver_module
 
     !  deallocate the storage allocated by SuperLU_DIST
     call f_PStatFree(stat)
-    !do not call - tries to free the fortran-allocated rowptr,colind and nzval array               !  call f_Destroy_CompRowLoc_Mat_dist(A)
+    !do not call - tries to free the fortran-allocated rowptr,colind and nzval array
+    !  call f_Destroy_CompRowLoc_Mat_dist(A)
     call f_dScalePermstructFree(ScalePermstruct)
     call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
   
