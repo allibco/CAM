@@ -1665,7 +1665,7 @@ module dist_solver_module
           cnt = 0
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
-             sendbuf(i) = fout_n(ij)
+             sendbuf(cnt) = fout_n(ij)
           enddo
           
           istart = my_hgridsize + 1
