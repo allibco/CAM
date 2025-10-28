@@ -1383,7 +1383,8 @@ module dist_solver_module
     #include "superlu_dist_config.fh"
     use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank, task_csr_mapping
+         task_csr_rowstarts, mpi_rank, task_csr_mapping, &
+         mpi_size
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer(kind=c_int),dimension(n_loc+1),intent(in) :: rowptr
