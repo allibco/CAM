@@ -1555,9 +1555,12 @@ module dist_solver_module
     integer :: istart
     real(kind=rp) :: avg
 
+    real(kind=rp),dimension(my_sendgrid_size) :: sendbuf
+
     ! Initialize arrays to avoid uninitialized values
     fout_s = 0.0
     fout_n = 0.0
+    sendbuf = 0.0
     fout = 0.0
     
     if (mlat0<jlatm_JT) then !includes jlatm_JT
@@ -1650,6 +1653,7 @@ module dist_solver_module
        !for N and S hemi, the even proc rows go first to maintain grid order
        !(so the south owning process)
        if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+          !copy south into fout
           cnt = 0
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
@@ -1657,25 +1661,41 @@ module dist_solver_module
              if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
 
           enddo
+          !copy north to send
+          cnt = 0
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             sendbuf(i) = fout_n(ij)
+          enddo
+          
           istart = my_hgridsize + 1
           !DEBUG
           do i = 1,my_sendgrid_size
-             if (isnan(fout(i))) write(*,*) 'AB: SEND 1 fout(i) is NaN, i = ', i
+             if (isnan(sendbuf(i))) write(*,*) 'AB: SEND 1 sendbuf(i) is NaN, i = ', i
           enddo
-          call partner_exchange_hemisphere_vec(fout(1:my_sendgrid_size), fout(istart:istart+partner_hgridsize))
+          !get partner's north
+          call partner_exchange_hemisphere_vec(sendbuf, fout(istart:istart+partner_hgridsize))
           
        else !odd, own north, **send south**
+          !copy north to fout
           cnt = partner_hgridsize
           do ij = ij_start_n, ij_stop_n
              cnt = cnt + 1
              fout(cnt) = fout_n(ij)
              if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(cnt) is NaN, cnt, ij = ', cnt, ij
           enddo
-          istart = partner_hgridsize + 1
-          do i = istart,istart+ my_sendgrid_size
-             if (isnan(fout(i))) write(*,*) 'AB: SEND 2 fout(i) is NaN, i = ', i
+
+          !copy south to sendbuf
+          cnt = 0
+          do ij = ij_start_s, ij_stop_s
+             cnt = cnt + 1
+             sendbuf(cnt) = fout_s(ij)
           enddo
-          call partner_exchange_hemisphere_vec(fout(istart:istart+my_sendgrid_size), fout(1:partner_hgridsize))
+          istart = partner_hgridsize + 1
+          do i = 1, my_sendgrid_size
+             if (isnan(sendbuf(i))) write(*,*) 'AB: SEND 2 sendbuf(i) is NaN, i = ', i
+          enddo
+          call partner_exchange_hemisphere_vec(sendbuf, fout(1:partner_hgridsize))
        endif
     endif ! multiple procs
        
