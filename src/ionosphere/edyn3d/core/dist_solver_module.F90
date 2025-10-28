@@ -1644,6 +1644,7 @@ module dist_solver_module
        enddo
     else !multiple procs
 
+       write(*,*) 'AB: flatten: mygrid_size,  my_sendgrid_size, my_hgridsize ', mygrid_size,  my_sendgrid_size, my_hgridsize 
        
        !now do partner hemisphere exchange for continguous rows
        !for N and S hemi, the even proc rows go first to maintain grid order
