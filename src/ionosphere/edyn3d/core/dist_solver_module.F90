@@ -67,7 +67,7 @@ module dist_solver_module
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
-         rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
+         potid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          procmappingid, countB(1), startB(1) 
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
@@ -164,7 +164,7 @@ module dist_solver_module
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
 
        !DEBUG
-       call write_halo_to_file(halo, dynamo_world)
+       !call write_halo_to_file(halo, dynamo_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
 
@@ -217,6 +217,8 @@ module dist_solver_module
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
+         ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, potid)
+         dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'X', NF_DOUBLE, 1, dd, Xid)
@@ -234,6 +236,10 @@ module dist_solver_module
          !now fill fields 
          !change mode
          ierr=nf_enddef(fileid)
+         !Output the  potential
+         startB(1)=1
+         countB(1)=mygrid_size
+         ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot_hl_f)
          !Output the  b
          startB(1)=1
          countB(1)=mygrid_size
@@ -1568,7 +1574,6 @@ module dist_solver_module
           if (ij >= ij_start_s .and. ij <= ij_stop_s) then
              fout_s(ij) = fin(1,j,i)
              if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
-
            else
              write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
           endif
@@ -1580,7 +1585,6 @@ module dist_solver_module
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout_n(ij) = fin(2,j,i)
              if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
-
           else
              write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
           endif
