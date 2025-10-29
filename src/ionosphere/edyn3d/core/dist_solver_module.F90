@@ -67,7 +67,7 @@ module dist_solver_module
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
-         potid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
+         potid, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          procmappingid, countB(1), startB(1) 
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
@@ -217,6 +217,8 @@ module dist_solver_module
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
+         ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, zid)
+         dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, potid)
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
@@ -240,6 +242,10 @@ module dist_solver_module
          startB(1)=1
          countB(1)=mygrid_size
          ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot_hl_f)
+         !Output the  z
+         startB(1)=1
+         countB(1)=mygrid_size
+         ierr=NF_PUT_VARA_DOUBLE(fileid,zid,startB,countB,z)
          !Output the  b
          startB(1)=1
          countB(1)=mygrid_size
