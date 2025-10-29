@@ -1455,12 +1455,6 @@ module dist_solver_module
     call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
-    !pass in z and a flag to know whether to matvec z = lhs*pot_h1_f
-    !pass in pot_h1_f?
-    ! then rhs = rhs + z (regardless of flag)
-    ! but then also need to return ax
-    !ierr = pdgsmv(n_loc, A, x, ax)
-
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
 
@@ -1510,23 +1504,22 @@ module dist_solver_module
 
     !  deallocate the storage allocated by SuperLU_DIST
     call f_PStatFree(stat)
-    !do not call - tries to free the fortran-allocated rowptr,colind and nzval array
-    !  call f_Destroy_CompRowLoc_Mat_dist(A)
-    call f_dScalePermstructFree(ScalePermstruct)
+    !do not call f_Destroy_CompRowLoc_Mat_dist(A)
+    ! - tries to free the fortran-allocated rowptr,colind and nzval array
     call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
-  
+    call f_dScalePermstructFree(ScalePermstruct)
     ! Release the SuperLU process grid
     call f_superlu_gridexit(grid)
 
     ! Deallocate the C structures pointed to by the Fortran handles
-    call f_destroy_gridinfo_handle(grid)
-    call f_destroy_options_handle(options)
-    call f_destroy_ScalePerm_handle(ScalePermstruct)
-    call f_destroy_LUstruct_handle(LUstruct)
+    call f_destroy_SuperLUStat_handle(stat)    
     call f_destroy_SOLVEstruct_handle(SOLVEstruct)
+    call f_destroy_LUstruct_handle(LUstruct)
+    call f_destroy_ScalePerm_handle(ScalePermstruct)
+    call f_destroy_options_handle(options)
     call f_destroy_SuperMatrix_handle(A)
-    call f_destroy_SuperLUStat_handle(stat)
-  
+    call f_destroy_gridinfo_handle(grid)
+
     
   endfunction dist_solve_superlu
 
