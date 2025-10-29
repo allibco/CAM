@@ -1506,7 +1506,10 @@ module dist_solver_module
     call f_PStatFree(stat)
     !do not call f_Destroy_CompRowLoc_Mat_dist(A)
     ! - tries to free the fortran-allocated rowptr,colind and nzval array
+
+    !TEMP: temp becuase of tree issues
     call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
+
     call f_dScalePermstructFree(ScalePermstruct)
     ! Release the SuperLU process grid
     call f_superlu_gridexit(grid)
