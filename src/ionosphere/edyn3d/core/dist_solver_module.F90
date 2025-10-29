@@ -1474,17 +1474,12 @@ module dist_solver_module
     call set_superlu_options(options,ColPerm=COLAMD)
     call set_superlu_options(options,RowPerm=LargeDiag_MC64)
 
-    ! These might help
-    ! Enable iterative refinement
-    ! Turn on double precision iterative refinement
-    !call set_superlu_options(opt, IterRefine = 2)
-
-    !No refinement: (or none = 0 or  single = 1)
+    !refinement: (or none = 0 or  single = 1, double = 2)
      call set_superlu_options(options, IterRefine = 0)
 
     ! Optionally, enable equilibration/scaling for stability
     ! 1 - on, 0 = off
-    call set_superlu_options(options, Equil=1)
+    call set_superlu_options(options, Equil=0)
 
     ! Initialize ScalePermstruct and LUstruct
     call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
