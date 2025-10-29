@@ -281,7 +281,7 @@ module dist_solver_module
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         startB(1)=1
-        countB(1)=mygridsize
+        countB(1)=mygrid_size
         ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,rhs)
         !close file
         ierr=NF_CLOSE(fileid)
