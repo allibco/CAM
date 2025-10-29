@@ -217,7 +217,7 @@ module dist_solver_module
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, zid)
+         ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, potid)
          dd(1) = mygridsize_id
