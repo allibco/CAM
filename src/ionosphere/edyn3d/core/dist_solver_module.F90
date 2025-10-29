@@ -1508,7 +1508,7 @@ module dist_solver_module
     ! - tries to free the fortran-allocated rowptr,colind and nzval array
 
     !TEMP: temp becuase of tree issues
-    call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
+    !call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
 
     call f_dScalePermstructFree(ScalePermstruct)
     ! Release the SuperLU process grid
