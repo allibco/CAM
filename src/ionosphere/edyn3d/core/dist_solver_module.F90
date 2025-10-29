@@ -1468,18 +1468,19 @@ module dist_solver_module
     call f_set_default_options(options)
 
     ! Change one or more options
-    !could also try (diabling row perms is good if reusing sparsity pattern
+    !could also try (disabling row perms is good if reusing sparsity pattern
     !- also faster: ColPerm=NATURAL, RowPerm=NOROWPERM)
+    !call set_superlu_options(options,ColPerm=COLAMD)
     !these below are the defaults
-    call set_superlu_options(options,ColPerm=COLAMD)
-    call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+    !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
+    !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
 
     !refinement: (or none = 0 or  single = 1, double = 2)
-     call set_superlu_options(options, IterRefine = 0)
+    !call set_superlu_options(options, IterRefine = 0)
 
     ! Optionally, enable equilibration/scaling for stability
     ! 1 - on, 0 = off
-    call set_superlu_options(options, Equil=0)
+    !call set_superlu_options(options, Equil=0)
 
     ! Initialize ScalePermstruct and LUstruct
     call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
