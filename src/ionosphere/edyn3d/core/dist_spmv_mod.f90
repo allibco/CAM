@@ -335,7 +335,7 @@ contains
    ! those halo_cols i have whose owner == O, and in the same order as they appear in halo%send_cols for owner O.
    ! which matches my halo_cols by construction
 
-    print*,'IN spmv: iam = ', myrank, 'm_loc = ', m_loc
+    !print*,'IN spmv: iam = ', myrank, 'm_loc = ', m_loc
 
     ! Finally do local SpMV using halo_values when needed
     do i = 1, m_loc ! for each row
@@ -350,10 +350,8 @@ contains
              end if
              if (x_local(loc) /= x_local(loc)) print *, 'NaN in x_local at loc=', loc, ' rank=', myrank
              if (nzval(jp) /= nzval(jp)) print *, 'NaN in nzval at jp=', jp
-
              
              y_local(i) = y_local(i) + nzval(jp) * x_local(loc)
-             !print*, 'S:iam = ', myrank, 'local i, jp', i,  jp
           else
              ! find index into halo_cols
              ! linear search; can be replaced with hash if halo large
@@ -362,7 +360,6 @@ contains
              do k = starter_k, halo%nhalo
                 if (halo%halo_cols(k) == colind(jp)) then
                    y_local(i) = y_local(i) + nzval(jp) * halo%recvbuf(k)
-                   !print*, 'S:iam = ', myrank, 'NOT local i, jp', i,  jp
                    starter_k = k+1
                    exit
                 end if

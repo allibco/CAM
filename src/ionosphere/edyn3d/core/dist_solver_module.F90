@@ -112,6 +112,7 @@ module dist_solver_module
     colind = 0
     row_ptr = 0
     valuses_csr = 0.0
+    z = 0.0
     
     ! for now, split two hemispheres (keep halo pts)
     do concurrent (i = mlond0:mlond1, j = mlatd0:mlatd1, ic = 1:10)
@@ -134,7 +135,8 @@ module dist_solver_module
     !need matrix to be 0-based index for superlu and the matvec
     colind=colind-1
     rowptr=rowptr-1
-    
+
+#if 0
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
@@ -150,13 +152,11 @@ module dist_solver_module
        do i = 1,mygrid_size
           if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
        enddo
-
-
        
        !Parallel matmult
        ! z = matmul(lhs, pot_hl_f)
        fst_row = task_csr_rowstarts(mpi_rank) ! 0-index
-       write(*,*) "AB: fst_row = ", fst_row
+       !write(*,*) "AB: fst_row = ", fst_row
        !write(*,*) "AB: POT_HL_F= ", pot_hl_f
 
        !TO DO - this init should be called just the first timestep because the nonzero
@@ -178,7 +178,7 @@ module dist_solver_module
        call sync_mlon_3d(fac_hl, 2)
        
      endif !FAC
-
+#endif
      ! add FAC forcing to RHS
      !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
@@ -1462,19 +1462,14 @@ module dist_solver_module
     call f_set_default_options(options)
 
     ! Change one or more options
-    !could also try (disabling row perms is good if reusing sparsity pattern
-    !- also faster: ColPerm=NATURAL, RowPerm=NOROWPERM)
-    !call set_superlu_options(options,ColPerm=COLAMD)
     !these below are the defaults
     !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-    call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-
+    !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
     !refinement: (or none = 0 or  single = 1, double = 2)
     !call set_superlu_options(options, IterRefine = 2)
-
     ! Optionally, enable equilibration/scaling for stability
     ! 1 - on, 0 = off
-    !call set_superlu_options(options, Equil=0)
+    !call set_superlu_options(options, Equil=1)
 
     ! Initialize ScalePermstruct and LUstruct
     call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
