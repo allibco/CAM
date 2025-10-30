@@ -174,8 +174,10 @@ module dist_solver_module
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
        !get ghost/halo points
-       call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
-       call sync_mlon_3d(fac_hl, 2)
+       if (mpi_size > 1) then
+          call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
+          call sync_mlon_3d(fac_hl, 2)
+       endif
        
      endif !FAC
 
@@ -286,13 +288,13 @@ module dist_solver_module
         !close file
         ierr=NF_CLOSE(fileid)
      endif
-#if 0     
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
-     call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
-     call sync_mlon_3d(pot, 2)
-#endif
+     if (mpi_size > 1) then
+        call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
+        call sync_mlon_3d(pot, 2)
+     endif
 
      !pot and fac_hl are ready to return (updated grid + halo)
 
