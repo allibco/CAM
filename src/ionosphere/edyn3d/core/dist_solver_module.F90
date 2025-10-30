@@ -1467,10 +1467,10 @@ module dist_solver_module
     !call set_superlu_options(options,ColPerm=COLAMD)
     !these below are the defaults
     !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-    !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+    call set_superlu_options(options,RowPerm=LargeDiag_MC64)
 
     !refinement: (or none = 0 or  single = 1, double = 2)
-    !call set_superlu_options(options, IterRefine = 0)
+    !call set_superlu_options(options, IterRefine = 2)
 
     ! Optionally, enable equilibration/scaling for stability
     ! 1 - on, 0 = off
@@ -1507,7 +1507,7 @@ module dist_solver_module
     !do not call f_Destroy_CompRowLoc_Mat_dist(A)
     ! - tries to free the fortran-allocated rowptr,colind and nzval array
 
-    !TEMP: temp becuase of tree issues
+    !TEMP: temp because of tree issues
     !call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
 
     call f_dScalePermstructFree(ScalePermstruct)
