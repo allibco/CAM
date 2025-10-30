@@ -1733,12 +1733,12 @@ module dist_solver_module
        !south
        do ij = ij_start_s, ij_stop_s
           cnt = cnt + 1
-          fout_s(ij) = fin(cnt)
+          fin_s(ij) = fin(cnt)
        enddo
        !north
        do ij = ij_start_n, ij_stop_n
           cnt = cnt + 1
-          fout_n(ij) = fin(cnt)
+          fin_n(ij) = fin(cnt)
        enddo
        !fill 3D array
        do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
@@ -1750,12 +1750,12 @@ module dist_solver_module
                 fout(2,j,i) = fin_s(ij)
              endif
           else
-             write(*,*) "Error in unravel south (1 proc case), ij, ij_start_s, ij_stop_s = "ij, ij_start_s, ij_stop_s
+             write(*,*) "Error in unravel south (1 proc case), ij, ij_start_s, ij_stop_s = ", j, ij_start_s, ij_stop_s
           endif
           if (j == nmlat_h) then
              cycle
           endif
-          jN =  jN = nmlat_T1-j+1 !north j
+          jN = nmlat_T1-j+1 !north j
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(2,j,i) = fin_n(ij)
