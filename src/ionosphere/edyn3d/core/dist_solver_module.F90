@@ -192,6 +192,7 @@ module dist_solver_module
      !0-based indexing 
      !moved above
 
+     !TO DO - put in a subroutine
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
         write(*,*) 'AB: writing netcdf file ...'
@@ -288,6 +289,9 @@ module dist_solver_module
         !close file
         ierr=NF_CLOSE(fileid)
      endif
+
+     print *, 'AB: done with netcdf file'
+     
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
@@ -296,6 +300,9 @@ module dist_solver_module
         call sync_mlon_3d(pot, 2)
      endif
 
+     print *, 'AB: done with unravel'
+
+     
      !pot and fac_hl are ready to return (updated grid + halo)
 
      ! Deallocate arrays to free memory
@@ -306,7 +313,11 @@ module dist_solver_module
      if (allocated(z)) deallocate(z)
      if (allocated(pot_hl_f)) deallocate(pot_hl_f)
      if (allocated(sol)) deallocate(sol)
-      
+
+     print *, 'AB: done with deallocating'
+
+
+     
      call t_stopf('dist_linear_system')
 
   endsubroutine dist_linear_system
@@ -1702,7 +1713,7 @@ module dist_solver_module
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
-         mygrid_size, mpi_rank, calc_grid_ij, &
+         mygrid_size, mpi_rank, calc_grid_ij, mpi_size, &
          partner_exchange_hemisphere_vec, my_sendgrid_size
 
 
@@ -1717,100 +1728,137 @@ module dist_solver_module
     !output 3D array for n=2 & s=1
     fout = 0.0
 
-    !first reverse the hemisphere swap
-    if (mod(mpi_rank,2) == 0) then !EVEN, own then south, send other
-                                   !half back to partner
-       !south
+    if (mpi_size == 1) then
        cnt = 0
-       !this is mine for the south, so copy
+       !south
        do ij = ij_start_s, ij_stop_s
           cnt = cnt + 1
-          fin_s(ij) = fin(cnt)
+          fout_s(ij) = fin(cnt)
        enddo
-       !now put south into 3D array
-       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-          jS = j
-          ij =  calc_grid_ij(i,jS,lat_rank)
-          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-             fout(1,j,i) = fin_s(ij)
-             if (j == nmlat_h) then !equator, set in north also
-                fout(2,j,i) = fin_s(ij)
-             endif
-          else
-             write(iulog,*) "Error in unravel south 1, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_s, ij_stop_s
-          endif
-       enddo
-       
-       !send other half info to partner and receive my north data
-       do i=1, partner_hgridsize
-          if ((cnt +i) <= mygrid_size) then 
-             buffer(i) = fin(cnt + i)
-          else
-             write(iulog,*) "Error in unravel buffer, mpirank, cnt+i = ", mpi_rank, cnt+i
-          endif
-       enddo
-
-       call partner_exchange_hemisphere_vec(buffer, fin_n)
-
-       !now fin_n contains my north data, so put back into 3D array   
-       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-          jN = nmlat_T1-j+1 !north j
-          if (j == nmlat_h) then !no equator data from north in fin_n
-             !(already populated)
-             cycle
-          endif
-          ij =  calc_grid_ij(i,jN,lat_rank)
-          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
-             fout(2,j,i) = fin_n(ij)
-           else
-             write(iulog,*) "Error in unravel north 1, mpirank, ij = ", mpi_rank, ij, ij_start_n, ij_stop_n
-          endif
-       enddo
-       
-    else !ODD, so own north, get south back from  partner
-       !first bit to send buffer
-       do i=1, partner_hgridsize
-          buffer(i) = fin(i)
-       enddo
-       
-       call partner_exchange_hemisphere_vec(buffer, fin_s)
-
-       do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-          jS = j
-          ij =  calc_grid_ij(i,jS,lat_rank)
-          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-             fout(1,j,i) = fin_s(ij)
-             if (j == nmlat_h) then !equator, set in north also
-                fout(2,j,i) = fin_s(ij)
-             endif
-          else
-             write(iulog,*) "Error in unravel south 2, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
-          endif
-       enddo
-       
-       !north (I own, so copy)
-       cnt = partner_hgridsize
+       !north
        do ij = ij_start_n, ij_stop_n
           cnt = cnt + 1
-          fin_n(ij) = fin(cnt)
+          fout_n(ij) = fin(cnt)
        enddo
-       !put in 3D array
+       !fill 3D array
        do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-          jN = nmlat_T1-j+1 !north index
-          if (j == nmlat_h) then !no equator data from north in fin_n
-             !(already populated)
+          jS = j
+          ij =  calc_grid_ij(i,jS,lat_rank)
+          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+             fout(1,j,i) = fin_s(ij)
+             if (j == nmlat_h) then !equator, set in north also
+                fout(2,j,i) = fin_s(ij)
+             endif
+          else
+             write(*,*) "Error in unravel south (1 proc case), ij, ij_start_s, ij_stop_s = "ij, ij_start_s, ij_stop_s
+          endif
+          if (j == nmlat_h) then
              cycle
           endif
+          jN =  jN = nmlat_T1-j+1 !north j
           ij =  calc_grid_ij(i,jN,lat_rank)
           if (ij >= ij_start_n .and. ij <= ij_stop_n) then
              fout(2,j,i) = fin_n(ij)
           else
-             write(iulog,*) "Error in unravel north 2, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_n, ij_stop_n
+             write(*,*) "Error in unravel north (1 proc case), ij = ",ij, ij_start_n, ij_stop_n
           endif
-          
-       enddo
-    endif !end north
+      enddo    
+    else ! multiple procs
        
+       !first reverse the hemisphere swap
+       if (mod(mpi_rank,2) == 0) then !EVEN, own then south, send other
+                                   !half back to partner
+          !south
+          cnt = 0
+          !this is mine for the south, so copy
+          do ij = ij_start_s, ij_stop_s
+             cnt = cnt + 1
+             fin_s(ij) = fin(cnt)
+          enddo
+          !now put south into 3D array
+          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
+             jS = j
+             ij =  calc_grid_ij(i,jS,lat_rank)
+             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+                fout(1,j,i) = fin_s(ij)
+                if (j == nmlat_h) then !equator, set in north also
+                   fout(2,j,i) = fin_s(ij)
+                endif
+             else
+                write(*,*) "Error in unravel south 1, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_s, ij_stop_s
+             endif
+          enddo
+       
+          !send other half info to partner and receive my north data
+          do i=1, partner_hgridsize
+             if ((cnt +i) <= mygrid_size) then 
+                buffer(i) = fin(cnt + i)
+             else
+                write(*,*) "Error in unravel buffer, mpirank, cnt+i = ", mpi_rank, cnt+i
+             endif
+          enddo
+
+          call partner_exchange_hemisphere_vec(buffer, fin_n)
+
+          !now fin_n contains my north data, so put back into 3D array   
+          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
+             jN = nmlat_T1-j+1 !north j
+             if (j == nmlat_h) then !no equator data from north in fin_n
+                !(already populated)
+                cycle
+             endif
+             ij =  calc_grid_ij(i,jN,lat_rank)
+             if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+                fout(2,j,i) = fin_n(ij)
+             else
+                write(*,*) "Error in unravel north 1, mpirank, ij = ", mpi_rank, ij, ij_start_n, ij_stop_n
+             endif
+          enddo
+          
+       else !ODD, so own north, get south back from  partner
+          !first bit to send buffer
+          do i=1, partner_hgridsize
+             buffer(i) = fin(i)
+          enddo
+          
+          call partner_exchange_hemisphere_vec(buffer, fin_s)
+          
+          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
+             jS = j
+             ij =  calc_grid_ij(i,jS,lat_rank)
+             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+                fout(1,j,i) = fin_s(ij)
+                if (j == nmlat_h) then !equator, set in north also
+                   fout(2,j,i) = fin_s(ij)
+                endif
+             else
+                write(iulog,*) "Error in unravel south 2, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
+             endif
+          enddo
+          
+          !north (I own, so copy)
+          cnt = partner_hgridsize
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             fin_n(ij) = fin(cnt)
+          enddo
+          !put in 3D array
+          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
+             jN = nmlat_T1-j+1 !north index
+             if (j == nmlat_h) then !no equator data from north in fin_n
+                !(already populated)
+                cycle
+             endif
+             ij =  calc_grid_ij(i,jN,lat_rank)
+             if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+                fout(2,j,i) = fin_n(ij)
+             else
+                write(iulog,*) "Error in unravel north 2, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_n, ij_stop_n
+             endif
+          
+          enddo
+       endif !end north
+    endif !multiprocs
   endfunction dist_unravel
   
    
