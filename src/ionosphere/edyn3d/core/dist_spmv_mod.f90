@@ -112,17 +112,9 @@ contains
     allocate(halo%sendcounts(halo%nprocs_local))
     halo%sendcounts = 0
 
-    !print *, 'D1: iam = ', myrank,'sendcounts:', halo%sendcounts
-    !print *, 'D1: iam = ', myrank,'recvcounts:', halo%recvcounts
-
-    
     call MPI_Alltoall(halo%recvcounts, 1, MPI_INTEGER, halo%sendcounts, 1, MPI_INTEGER, comm, ierr)
     !recvcounts is how many i need to recv from each proc
     !sendcounts is how many i need to send to each
-
-    !print *, 'D2: iam = ', myrank,'sendcounts:', halo%sendcounts
-    !print *, 'D2: iam = ', myrank,'recvcounts:', halo%recvcounts
-
     
     ! 4) Compute displacements for data to recv (indexes into halo_cols)
     allocate(halo%rdispls(halo%nprocs_local))
@@ -177,18 +169,6 @@ contains
     end do
     send_to_size = nowners
 
-    
-    !print *, 'D3: iam = ', myrank,'send_to_size =', send_to_size
-    !print *, 'D3: iam = ', myrank,'recv_from_size =', recv_from_size
-    !print *, 'D3: iam = ', myrank,'recv_from =', halo%recv_from
-    !print *, 'D3: iam = ', myrank,'send_to =', halo%send_to
-    !print *, 'D3: iam = ', myrank,'rdispls =', halo%rdispls
-    !print *, 'D3: iam = ', myrank,'sdispls =', halo%sdispls
-    !print *, 'D3: iam = ', myrank,'halo_cols =', halo%halo_cols
-    !print *, 'D3: iam = ', myrank,'nhalo_send =', halo%nhalo_send
-    !print *, 'D3: iam = ', myrank,'nhalo =', halo%nhalo
-
-    
     !need to do a communication to get the indices to send (so i send what i need to recv in halo_cols)
     allocate(requests(recv_from_size + send_to_size))
     allocate(stats(MPI_STATUS_SIZE, recv_from_size + send_to_size))
@@ -237,14 +217,14 @@ contains
        endif
     enddo
 
-    !print*,'DID SEND & RECV: iam = ', myrank
+    print*,'DID SEND & RECV: iam = ', myrank
     
     call MPI_Waitall(recv_from_size+send_to_size, requests, stats, ierr)
 
     !print *, 'D5: iam = ', myrank,'send_cols =', halo%send_cols
 
     
-    !print*,'DID WAITALL: iam = ', myrank
+    print*,'DID WAITALL: iam = ', myrank
 
     !allocate the sendbuf and recvbuf here so they can be reusued
     ! Build send buffer:for the data we will send to other procs
