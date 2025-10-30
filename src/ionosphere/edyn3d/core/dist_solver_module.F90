@@ -136,7 +136,7 @@ module dist_solver_module
     colind=colind-1
     rowptr=rowptr-1
 
-#if 0
+
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
 
@@ -178,7 +178,7 @@ module dist_solver_module
        call sync_mlon_3d(fac_hl, 2)
        
      endif !FAC
-#endif
+
      ! add FAC forcing to RHS
      !(these are both hemisphere swapped for contiguous rows already)
      do i = 1,mygrid_size
@@ -286,13 +286,13 @@ module dist_solver_module
         !close file
         ierr=NF_CLOSE(fileid)
      endif
-     
+#if 0     
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
      call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
      call sync_mlon_3d(pot, 2)
-
+#endif
 
      !pot and fac_hl are ready to return (updated grid + halo)
 
