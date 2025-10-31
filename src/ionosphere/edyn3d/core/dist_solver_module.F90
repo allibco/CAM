@@ -67,7 +67,7 @@ module dist_solver_module
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          mylatsize_id, mylonsize_id, &
-         nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id, hemsize_id, fachlid, potid, &
+         nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id, hemsize_id, fachlid, &
          potid, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          procmappingid, countB(3), startB(3) 
     character(len=200) :: fbuf
