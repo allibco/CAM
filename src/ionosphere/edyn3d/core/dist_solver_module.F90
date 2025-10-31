@@ -66,9 +66,10 @@ module dist_solver_module
     logical :: output_matrix = .false.
     integer :: fileid, dd(4), &
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
-         nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id,  &
+         mylatsize_id, mylonsize_id, &
+         nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id, hemsize_id, fachlid, potid, &
          potid, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
-         procmappingid, countB(1), startB(1) 
+         procmappingid, countB(3), startB(3) 
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
 
@@ -174,11 +175,9 @@ module dist_solver_module
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
        !get ghost/halo points
-       if (mpi_size > 1) then
-          call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
-          call sync_mlon_3d(fac_hl, 2)
-       endif
-       
+       call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
+       call sync_mlon_3d(fac_hl, 2)
+              
      endif !FAC
 
      ! add FAC forcing to RHS
@@ -217,6 +216,9 @@ module dist_solver_module
          ierr = nf_def_dim(fileid,'nprocsp1', mpi_size+1, nprocsp1_id)
          ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
          ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
+         ierr = nf_def_dim(fileid,'hem', 2, hemsize_id)
+         ierr = nf_def_dim(fileid,'mylat_size', mlat1-mlat0+1+2, mylatsize_id)
+         ierr = nf_def_dim(fileid,'mylon_size',mlon1-mlon0+1+2, mylonsize_id)
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
@@ -237,6 +239,14 @@ module dist_solver_module
          ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
          dd(1) = nprocs_id
          ierr = nf_def_var(fileid, 'procMapping',NF_INT, 1, dd, procmappingid)
+         dd(1) = hemsize_id
+         dd(2) = mylatsize_id
+         dd(3) = mylonsize_id
+         ierr = nf_def_var(fileid, 'fac_hl',NF_DOUBLE, 3, dd, fachlid)
+         dd(1) = hemsize_id
+         dd(2) = mylatsize_id
+         dd(3) = mylonsize_id
+         ierr = nf_def_var(fileid, 'pot',NF_DOUBLE, 3, dd, potid)
 
          !now fill fields 
          !change mode
@@ -271,7 +281,16 @@ module dist_solver_module
          countB(1)=mpi_size
          ierr=NF_PUT_VARA_INT(fileid,procmappingid,startB,countB,task_csr_mapping)
 
+         startB(1)=1
+         countB(1)=2
+         startB(2)=1
+         countB(2)=mlat1-mlat0+1+2
+         startB(3)=1
+         countB(3)=mlon1-mlon0+1+2
+         ierr=NF_PUT_VARA_DOUBLE(fileid,fachlid,startB,countB,fac_hl)
 
+
+         
          !Close the file up (later after solve)
          !ierr=NF_CLOSE(fileid)
 
@@ -281,26 +300,36 @@ module dist_solver_module
      sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
+     ! reconstruct 2D distribution of potential based on the solution
+     pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
+     !get ghost/halo points
+     call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
+     call sync_mlon_3d(pot, 2)
+     
+     print *, 'AB: done with unravel'
+
+     
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         startB(1)=1
         countB(1)=mygrid_size
         ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,rhs)
+
+        startB(1)=1
+        countB(1)=2
+        startB(2)=1
+        countB(2)=mlat1-mlat0+1+2
+        startB(3)=1
+        countB(3)=mlon1-mlon0+1+2
+        ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot)
+
         !close file
         ierr=NF_CLOSE(fileid)
      endif
 
      print *, 'AB: done with netcdf file'
      
-     ! reconstruct 2D distribution of potential based on the solution
-     pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
-     !get ghost/halo points
-     if (mpi_size > 1) then
-        call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
-        call sync_mlon_3d(pot, 2)
-     endif
-
-     print *, 'AB: done with unravel'
+    
 
      
      !pot and fac_hl are ready to return (updated grid + halo)
