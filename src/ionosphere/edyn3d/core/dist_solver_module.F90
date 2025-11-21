@@ -224,7 +224,7 @@ module dist_solver_module
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
          dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, poyid)
+         ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, potid)
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
          dd(1) = mygridsize_id
