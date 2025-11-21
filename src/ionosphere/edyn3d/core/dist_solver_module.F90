@@ -68,7 +68,7 @@ module dist_solver_module
          mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
          mylatsize_id, mylonsize_id, &
          nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id, hemsize_id, fachlid, &
-         potid, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
+         potid, pot2id, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
          procmappingid, countB(3), startB(3) 
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
@@ -217,14 +217,14 @@ module dist_solver_module
          ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
          ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
          ierr = nf_def_dim(fileid,'hem', 2, hemsize_id)
-         ierr = nf_def_dim(fileid,'mylat_size', mlat1-mlat0+1+2, mylatsize_id)
-         ierr = nf_def_dim(fileid,'mylon_size',mlon1-mlon0+1+2, mylonsize_id)
+         ierr = nf_def_dim(fileid,'mylat_size', mlatd1-mlatd0+1, mylatsize_id)
+         ierr = nf_def_dim(fileid,'mylon_size',mlond1-mlond0+1, mylonsize_id)
 
          ! define vars and their associated dimensions         
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
          dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'pot', NF_DOUBLE, 1, dd, potid)
+         ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, poyid)
          dd(1) = mygridsize_id
          ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
          dd(1) = mygridsize_id
@@ -246,12 +246,12 @@ module dist_solver_module
          dd(1) = hemsize_id
          dd(2) = mylatsize_id
          dd(3) = mylonsize_id
-         ierr = nf_def_var(fileid, 'pot',NF_DOUBLE, 3, dd, potid)
+         ierr = nf_def_var(fileid, 'pot_2',NF_DOUBLE, 3, dd, pot2id)
 
          !now fill fields 
          !change mode
          ierr=nf_enddef(fileid)
-         !Output the  potential
+         !Output the  flat potential
          startB(1)=1
          countB(1)=mygrid_size
          ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot_hl_f)
@@ -284,11 +284,10 @@ module dist_solver_module
          startB(1)=1
          countB(1)=2
          startB(2)=1
-         countB(2)=mlat1-mlat0+1+2
+         countB(2)=mlatd1-mlatd0+1
          startB(3)=1
-         countB(3)=mlon1-mlon0+1+2
+         countB(3)=mlond1-mlond0+1
          ierr=NF_PUT_VARA_DOUBLE(fileid,fachlid,startB,countB,fac_hl)
-
 
          
          !Close the file up (later after solve)
@@ -300,6 +299,7 @@ module dist_solver_module
      sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
+     !TODO: does this work correctly for 1 process?
      ! reconstruct 2D distribution of potential based on the solution
      pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
@@ -308,20 +308,21 @@ module dist_solver_module
      
      print *, 'AB: done with unravel'
 
+     !pot is: dimension(2,mlatd0:mlatd1,mlond0:mlond1)
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         startB(1)=1
         countB(1)=mygrid_size
-        ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,rhs)
+        ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,sol)
 
         startB(1)=1
         countB(1)=2
         startB(2)=1
-        countB(2)=mlat1-mlat0+1+2
+        countB(2)=mlatd1-mlatd0+1
         startB(3)=1
-        countB(3)=mlon1-mlon0+1+2
-        ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot)
+        countB(3)=mlond1-mlond0+1
+        ierr=NF_PUT_VARA_DOUBLE(fileid,pot2id,startB,countB,pot)
 
         !close file
         ierr=NF_CLOSE(fileid)
