@@ -168,16 +168,25 @@ module dist_solver_module
        !call write_halo_to_file(halo, dynamo_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
-
        call dist_spmv_free(halo)
        
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       !get ghost/halo points
-       call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
-       call sync_mlon_3d(fac_hl, 2)
-              
+       !get ghost/halo points (TO DO _ UPDATE POT ALSO)
+       if (mpi_size > 0) then  
+          call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
+          call sync_mlon_3d(fac_hl, 2)
+       else ! add periodic points                                                     
+        do j = 1,nmlat_h
+          do isn = 1,2
+            fac_hl(isn,j,0) = fac_hl(isn,j,nmlon)
+            fac_hl(isn,j,nmlon+1) = fac_hl(isn,j,1)
+          enddo
+        enddo
+
+          
+       endif
      endif !FAC
 
      ! add FAC forcing to RHS
@@ -188,8 +197,7 @@ module dist_solver_module
         rhs(i) = rhs(i)+z(i)
      enddo
 
-     !0-based indexing 
-     !moved above
+     !did 0-based indexing already
 
      !TO DO - put in a subroutine
      !do we want to output matrix and rhs for debugging
@@ -299,12 +307,21 @@ module dist_solver_module
      sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
-     !TODO: does this work correctly for 1 process?
      ! reconstruct 2D distribution of potential based on the solution
-     pot(1:2,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
+     pot(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
      !get ghost/halo points
-     call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
-     call sync_mlon_3d(pot, 2)
+     if (mpi_size > 0) then
+        call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
+        call sync_mlon_3d(pot, 2)
+     else
+        !periodic points
+        do j = 1,nmlat_h
+           do isn = 1,2
+              pot(isn,j,0) = pot(isn,j,nmlon)
+              pot(isn,j,nmlon+1) = pot(isn,j,1)
+           enddo
+        enddo
+     endif
      
      print *, 'AB: done with unravel'
 
