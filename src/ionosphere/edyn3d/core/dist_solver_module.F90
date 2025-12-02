@@ -1392,9 +1392,9 @@ module dist_solver_module
 
     #include "superlu_dist_config.fh"
     use superlu_mod    
-    use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank, &
-         mpi_size
+    use mpi_module,only: lat_size,lon_size,union_world,&
+         task_csr_rowstarts, un_mpi_rank, &
+         un_mpi_size
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
     integer(kind=c_int),dimension(n_loc+1),intent(in) :: rowptr
@@ -1433,20 +1433,20 @@ module dist_solver_module
     call f_create_SuperMatrix_handle(A)
     call f_create_SuperLUStat_handle(stat)
 
-    write(*, *) 'AB: SUPERLU mpi_rank = ', mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
+    write(*, *) 'AB: SUPERLU un_mpi_rank = ', un_mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
            
     ! Initialize the SuperLU_DIST process grid
-    !i'll use the same layout as the dynamo
-    nprow = lat_size
+    !i'll use the same layout as the dynamo, but double the lat for the extra procs
+    nprow = 2*lat_size
     npcol = lon_size
 
-    call f_superlu_gridinit(dynamo_world, nprow, npcol, grid)
-    if (nprow * npcol /= mpi_size) then
+    call f_superlu_gridinit(union_world, nprow, npcol, grid)
+    if (nprow * npcol /= un_mpi_size) then
        write(*,*) "ERROR: nprow*npcol != nprocs"
     endif
     
     !get my first row in distributed matrix
-    first_row = task_csr_rowstarts(task_csr_mapping(mpi_rank))     !these are 0-based already 
+    first_row = task_csr_rowstarts(un_mpi_rank)     !these are 0-based already 
     
     !create the distributed compressed row matrix A (O-index)
     !some debugging
@@ -1493,10 +1493,10 @@ module dist_solver_module
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
     
     if (info /= 0) then
-       write(iulog,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
+       write(*,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
     endif
-    if (info == 0 .and. mpi_rank == 0) then
-       write(iulog,*) 'Backward error: ', berr_array(1)
+    if (info == 0 .and. un_mpi_rank == 0) then
+       write(*,*) 'Backward error: ', berr_array(1)
     endif
 
     write(*,*) 'DONE WITH PDGSSSVX'
