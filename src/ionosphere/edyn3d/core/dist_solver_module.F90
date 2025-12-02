@@ -154,15 +154,13 @@ module dist_solver_module
           if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
        enddo
        
-       !Parallel matmult
+       !Parallel matmult (uses union group)
        ! z = matmul(lhs, pot_hl_f)
-       fst_row = task_csr_rowstarts(mpi_rank) ! 0-index
-       !write(*,*) "AB: fst_row = ", fst_row
-       !write(*,*) "AB: POT_HL_F= ", pot_hl_f
+       fst_row = task_csr_rowstarts(un_mpi_rank) ! 0-index
 
        !TO DO - this init should be called just the first timestep because the nonzero
        !matrix pattern does not change
-       call dist_spmv_init(mygrid_size, fst_row, nlonlat, mpi_size, mpi_rank, rowptr, colind, task_csr_rowstarts, dynamo_world, halo, ierr)
+       call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
 
        !DEBUG
        !call write_halo_to_file(halo, dynamo_world)
@@ -173,7 +171,7 @@ module dist_solver_module
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       !get ghost/halo points (TO DO _ UPDATE POT ALSO)
+       !get ghost/halo points 
        if (mpi_size > 0) then  
           call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
           call sync_mlon_3d(fac_hl, 2)
@@ -183,9 +181,7 @@ module dist_solver_module
             fac_hl(isn,j,0) = fac_hl(isn,j,nmlon)
             fac_hl(isn,j,nmlon+1) = fac_hl(isn,j,1)
           enddo
-        enddo
-
-          
+        enddo   
        endif
      endif !FAC
 
@@ -348,8 +344,6 @@ module dist_solver_module
      print *, 'AB: done with netcdf file'
      
     
-
-     
      !pot and fac_hl are ready to return (updated grid + halo)
 
      ! Deallocate arrays to free memory
@@ -528,7 +522,7 @@ module dist_solver_module
        !the proc that owns j=1,i=1 (proc 0)  needs  coef(3,j=1,isub)
        !for isub=2:nmlon, but only owns 2:mlon1
        !so we need to communicate within proc lat_rank = 0 and gather to
-       ! proc 0 (check scalability here at large proc counts)
+       ! proc 0 
        coef3_j1_buf = gather_lon_1d(coef_s(3,j,mlon0:mlon1))
        !also needs coef9  for the whole row corres to j=1
        coef9_j1_buf = gather_lon_1d(coef_s(9,j,mlon0:mlon1))
@@ -1300,11 +1294,12 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
+         un_mpi_rank, &
          mlon0, mlon1, mlond0, mlond1, &
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
-         calc_grid_ij, partner_exchange_hemisphere_vec, mygrid_size, &
-         gather_lon_1d, mpi_size, my_sendgrid_size
+         calc_grid_ij, mpi_partner_vec, mygrid_size, &
+         gather_lon_1d, mpi_size, my_sendgrid_size, my_recvgrid_size
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
     real(kind=rp),dimension(mygrid_size) :: rhs
@@ -1316,115 +1311,103 @@ module dist_solver_module
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
     
     rhs = 0.0
-    rhs_n = 0.0
-    rhs_s = 0.0
 
-    !   some debugging info
-    !write(*, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-    !write(*, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-    !write(*, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
-    !write(*, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
-    !write(*, *) 'AB: RHS nmlat_h', nmlat_h
+    if (mpi_rank >= 0) then !dynamo procs
+    
+       rhs_n = 0.0
+       rhs_s = 0.0
 
-    !first do j=1
-    if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
-       j=1
-       !SOUTH POLE
-       !proc in lat_rows 0 have to share info with proc 0
-       coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
-       
-       if (lon_rank == 0) then !I also own i=1 (special case for 1 processor)
-          ! this is mpi_rank =  0 
-          ! for longitude i=1 at the south pole
-          i = 1
-          ij = calc_grid_ij(i,j, lat_rank) !this should be 1
+       !   some debugging info
+       !write(*, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
+       !write(*, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
+       !write(*, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
+       !write(*, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
+       !write(*, *) 'AB: RHS nmlat_h', nmlat_h
+
+       !first do j=1
+       if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
+          j=1
+          !SOUTH POLE
+          !proc in lat_rows 0 have to share info with proc 0
+          coef10_j1_buf = gather_lon_1d(coef_10_s(j,mlon0:mlon1))
           
-          if (ij > ij_stop_s .or. ij < ij_start_s) then
-             write(*,*) 'AB: Error ij south index for rhs', mpi_rank, ij
+          if (lon_rank == 0) then !I also own i=1 (special case for 1 processor)
+             ! this is mpi_rank =  0 
+             ! for longitude i=1 at the south pole
+             i = 1
+             ij = calc_grid_ij(i,j, lat_rank) !this should be 1
+             
+             if (ij > ij_stop_s .or. ij < ij_start_s) then
+                write(*,*) 'AB: Error ij south index for rhs', mpi_rank, ij
+             endif
+             !has to get rest of row from other tasks
+             rhs_s(ij) = sum(coef10_j1_buf(:))
           endif
-          !has to get rest of row from other tasks
-          rhs_s(ij) = sum(coef10_j1_buf(:))
-       endif
 
-       !nothing else for south pole j=1
+          !nothing else for south pole j=1
        
-       !NORTH POLE (still j=1), all i
-       do i = mlon0, mlon1
-          jN = nmlat_T1-j+1 !j=1, so jN = nmlat_T1
-          ij = calc_grid_ij(i, jN, lat_rank)
+          !NORTH POLE (still j=1), all i
+          do i = mlon0, mlon1
+             jN = nmlat_T1-j+1 !j=1, so jN = nmlat_T1
+             ij = calc_grid_ij(i, jN, lat_rank)
+             
+             if (ij > ij_stop_n .or. ij < ij_start_n) then
+                write(*,*) 'AB: Error ij north index for rhs', mpi_rank, ij
+             endif
+             rhs_n(ij) = phi_pol
+          enddo
+          !now we've done j=1, so increment
+          j_start = 2
+       else !done with j=1 for procs owning j=1 (i.e., lat_rank = 0)
+          j_start = mlat0
+       endif !treatment for j=1
 
-          if (ij > ij_stop_n .or. ij < ij_start_n) then
-             write(*,*) 'AB: Error ij north index for rhs', mpi_rank, ij
-          endif
-          rhs_n(ij) = phi_pol
+       !populate rhs_s and rhs_n
+       !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
+       !here we need to not do the equator twice :) (onlysave with the south)
+       do i = mlon0,mlon1
+          do j = j_start,mlat1
+             !SOUTH
+             ij = calc_grid_ij(i,j,lat_rank)
+             if (ij > ij_stop_s .or. ij < ij_start_s) then
+                write(*,*) 'AB: Error ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
+             endif
+             rhs_s(ij) = coef_10_s(j,i)
+             
+             !NORTH
+             ! don't do the equator in the N
+             if (j == nmlat_h) then
+                cycle
+             endif
+             
+             jN = nmlat_T1-j+1 !needed to calc ij
+             ij = calc_grid_ij(i, jN, lat_rank)
+             if (ij > ij_stop_n .or. ij < ij_start_n) then
+                write(*,*) 'AB: Error ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
+             endif
+             rhs_n(ij) = coef_10_n(j,i)
+          enddo
        enddo
-       !now we've done j=1, so increment
-       j_start = 2
-    else !done with j=1 for procs owning j=1 (i.e., lat_rank = 0)
-       j_start = mlat0
-    endif !treatment for j=1
+    endif !dynamo procs only
+    
+    !redistribution with partner (i.e., send north hemisphere to extra procs)    
+    if (un_mpi_size > 1) then
+       !now do partner hemisphere exchange for continguous rows on incr. procs
 
-    !populate rhs_s and rhs_n
-    !everyone loop through remaining grid points (lat_rank = 0 procs did j=1 already)
-    !here we need to not do the equator twice :) (onlysave with the south)
-    do i = mlon0,mlon1
-       do j = j_start,mlat1
-          !SOUTH
-          ij = calc_grid_ij(i,j,lat_rank)
-          if (ij > ij_stop_s .or. ij < ij_start_s) then
-             write(*,*) 'AB: Error ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
-          endif
-          rhs_s(ij) = coef_10_s(j,i)
-          
-          !NORTH
-          ! don't do the equator in the N
-          if (j == nmlat_h) then
-             cycle
-          endif
-          
-          jN = nmlat_T1-j+1 !needed to calc ij
-          ij = calc_grid_ij(i, jN, lat_rank)
-          if (ij > ij_stop_n .or. ij < ij_start_n) then
-             write(*,*) 'AB: Error ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
-          endif
-          rhs_n(ij) = coef_10_n(j,i)
-       enddo
-    enddo
+       !now extra procs will have their rhs
+       call mpi_partner_vec(rhs_n, rhs)
 
-
-    !redistribution with partners
-    if (mpi_size > 1) then
-       !now do partner hemisphere exchange for continguous rows
-       
-       !for N and S hemi, the even proc rows go first to maintain grid order
-       !(so the south owning process)
-       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+       if (mpi_rank >= 0) then !dynamo procs
           !copy rhs_s into rhs
           cnt = 0
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              rhs(cnt) = rhs_s(ij)
              if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
-
           enddo
-          !send rhs_n and get the rest from my partner
-          istart = my_hgridsize + 1
-          call partner_exchange_hemisphere_vec(rhs_n, rhs(istart:istart+partner_hgridsize))
-          
-       else !odd, own north, **send south**
-          cnt = partner_hgridsize
-          !copy rhs_n into rhs
-          do ij = ij_start_n, ij_stop_n
-             cnt = cnt + 1
-             rhs(cnt) = rhs_n(ij)
-             if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
-          enddo
-          istart = partner_hgridsize + 1
-          !get the rest of the rhs info from partner
-          call partner_exchange_hemisphere_vec(rhs_s, rhs(1:partner_hgridsize))
-          
        endif
-     else !mpi_size = 1
+
+    else !un_mpi_size = 1
         cnt = 0
         do ij = ij_start_s, ij_stop_s
            cnt = cnt + 1
@@ -1586,14 +1569,15 @@ module dist_solver_module
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
 ! northern/southern hemispheres are either separate or averaged
 ! based on their latitude ranges (high-lat, transition, low-lat, equator)
-
+    ! give north hemispher to extra processes
+    
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size, &
-         calc_grid_ij, my_hgridsize, partner_exchange_hemisphere_vec, &
+         calc_grid_ij, my_recvgrid_size, mpi_partner_vec, &
          my_sendgrid_size
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
@@ -1606,83 +1590,85 @@ module dist_solver_module
     real(kind=rp) :: avg
 
     real(kind=rp),dimension(my_sendgrid_size) :: sendbuf
-
-    ! Initialize arrays to avoid uninitialized values
-    fout_s = 0.0
-    fout_n = 0.0
-    sendbuf = 0.0
     fout = 0.0
+
+    if (mpi_rank >=0) then !dynamo_procs
+       ! Initialize arrays to avoid uninitialized values
+       fout_s = 0.0
+       fout_n = 0.0
+       sendbuf = 0.0
     
-    if (mlat0<jlatm_JT) then !includes jlatm_JT
-       ! from pole to jlatm_JT, two hemispheres are uncoupled
-       ! my longitudes
-       loop_start_j = mlat0
-       loop_stop_j = min(mlat1, jlatm_JT)
+       if (mlat0<jlatm_JT) then !includes jlatm_JT
+          ! from pole to jlatm_JT, two hemispheres are uncoupled
+          ! my longitudes
+          loop_start_j = mlat0
+          loop_stop_j = min(mlat1, jlatm_JT)
 
-       do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_stop_j)
-          !south
-          jS=j
-          ij = calc_grid_ij(i,jS,lat_rank)
-          !checkbounds
-          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-             fout_s(ij) = fin(1,j,i)
-             if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
-           else
-             write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
-          endif
-          
-          !north
-          jN = nmlat_T1-j+1
-          ij = calc_grid_ij(i,jN,lat_rank)
-          !checkbounds
-          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
-             fout_n(ij) = fin(2,j,i)
-             if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
-          else
-             write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
-          endif
-       enddo
-    endif
-    
-    if ((mlat0 > jlatm_JT) .or. (mlat1 > jlatm_JT)) then
-       ! from jlatm_JT+1 to equator, symmetric solution
-       loop_start_j = max(mlat0, jlatm_JT+1)
-       loop_stop_j = mlat1
-
-       do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_stop_j)
-          avg = (fin(1,j,i)+fin(2,j,i))/2
-
-          !south
-          jS=j
-          ij = calc_grid_ij(i,jS,lat_rank)
-          !checkbounds
-          if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-             fout_s(ij) = avg
-             if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
-          else
-             write(iulog,*) "Error in flatten 2 south, mpirank, ij = ", mpi_rank, ij
-          endif
+          do concurrent (i = mlon0:mlon1, j=loop_start_j:loop_stop_j)
+             !south
+             jS=j
+             ij = calc_grid_ij(i,jS,lat_rank)
+             !checkbounds
+             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+                fout_s(ij) = fin(1,j,i)
+                if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
+             else
+                write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
+             endif
              
-          !north
-          ! don't do the equator in the N 
-          if (j == nmlat_h) then
-             cycle
-          endif
-          jN = nmlat_T1-j+1
-          ij = calc_grid_ij(i,jN,lat_rank)
-          !checkbounds
-          if (ij >= ij_start_n .and. ij <= ij_stop_n) then
-             fout_n(ij) = avg
-             if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+             !north
+             jN = nmlat_T1-j+1
+             ij = calc_grid_ij(i,jN,lat_rank)
+             !checkbounds
+             if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+                fout_n(ij) = fin(2,j,i)
+                if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+             else
+                write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
+             endif
+          enddo
+       endif
+    
+       if ((mlat0 > jlatm_JT) .or. (mlat1 > jlatm_JT)) then
+          ! from jlatm_JT+1 to equator, symmetric solution
+          loop_start_j = max(mlat0, jlatm_JT+1)
+          loop_stop_j = mlat1
+          
+          do concurrent (i = mlon0:mlon1, j = loop_start_j:loop_stop_j)
+             avg = (fin(1,j,i)+fin(2,j,i))/2
+             
+             !south
+             jS=j
+             ij = calc_grid_ij(i,jS,lat_rank)
+             !checkbounds
+             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
+                fout_s(ij) = avg
+                if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
+             else
+                write(iulog,*) "Error in flatten 2 south, mpirank, ij = ", mpi_rank, ij
+             endif
+             
+             !north
+             ! don't do the equator in the N 
+             if (j == nmlat_h) then
+                cycle
+             endif
+             jN = nmlat_T1-j+1
+             ij = calc_grid_ij(i,jN,lat_rank)
+             !checkbounds
+             if (ij >= ij_start_n .and. ij <= ij_stop_n) then
+                fout_n(ij) = avg
+                if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
 
-          else
-             write(iulog,*) "Error in flatten 2 north, mpirank, ij = ", mpi_rank, ij
-          endif
+             else
+                write(iulog,*) "Error in flatten 2 north, mpirank, ij = ", mpi_rank, ij
+             endif
 
-       enddo
-    endif
-
-    if (mpi_size == 1) then
+          enddo
+       endif
+    endif !dynamo procs
+    
+    if (un_mpi_size == 1) then
        !now combine the rows so they are the same order as in matrix
        cnt = 0
        do ij = ij_start_s, ij_stop_s
@@ -1694,59 +1680,32 @@ module dist_solver_module
           fout(cnt) = fout_n(ij)
        enddo
     else !multiple procs
-
-       write(*,*) 'AB: flatten: mygrid_size,  my_sendgrid_size, my_hgridsize ', mygrid_size,  my_sendgrid_size, my_hgridsize 
-       
-       !now do partner hemisphere exchange for continguous rows
-       !for N and S hemi, the even proc rows go first to maintain grid order
-       !(so the south owning process)
-       if (mod(mpi_rank,2) == 0) then !even, own south, **send north**
+       !write(*,*) 'AB: flatten: mygrid_size,  my_sendgrid_size, my_recvgrid_size ', mygrid_size,  my_sendgrid_size, my_recvgrid_size 
+       if (mpi_rank >=0) then !dynamo procs
+          !copy north to sendbuf
+          cnt = 0
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             sendbuf(cnt) = fout_n(ij)
+          enddo
+       endif
+       call mpi_partner_vec(sendbuf, fout)
+       !extra procs (should have fout now)
+       if (mpi_rank >=0) then !dynamo procs
           !copy south into fout
           cnt = 0
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              fout(cnt) = fout_s(ij)
              if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
-
           enddo
-          !copy north to send
-          cnt = 0
-          do ij = ij_start_n, ij_stop_n
-             cnt = cnt + 1
-             sendbuf(cnt) = fout_n(ij)
+       else !(ex_mpi_rank >=0) 
+          !error checking only
+          do i = 1, mygrid_size
+             if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(i) is NaN, i = ', i
           enddo
-          
-          istart = my_hgridsize + 1
-          !DEBUG
-          do i = 1,my_sendgrid_size
-             if (isnan(sendbuf(i))) write(*,*) 'AB: SEND 1 sendbuf(i) is NaN, i = ', i
-          enddo
-          !get partner's north
-          call partner_exchange_hemisphere_vec(sendbuf, fout(istart:istart+partner_hgridsize))
-          
-       else !odd, own north, **send south**
-          !copy north to fout
-          cnt = partner_hgridsize
-          do ij = ij_start_n, ij_stop_n
-             cnt = cnt + 1
-             fout(cnt) = fout_n(ij)
-             if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(cnt) is NaN, cnt, ij = ', cnt, ij
-          enddo
-
-          !copy south to sendbuf
-          cnt = 0
-          do ij = ij_start_s, ij_stop_s
-             cnt = cnt + 1
-             sendbuf(cnt) = fout_s(ij)
-          enddo
-          istart = partner_hgridsize + 1
-          do i = 1, my_sendgrid_size
-             if (isnan(sendbuf(i))) write(*,*) 'AB: SEND 2 sendbuf(i) is NaN, i = ', i
-          enddo
-          call partner_exchange_hemisphere_vec(sendbuf, fout(1:partner_hgridsize))
        endif
     endif ! multiple procs
-       
   endfunction dist_flatten
 
 !-----------------------------------------------------------------------

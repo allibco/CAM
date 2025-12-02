@@ -3,6 +3,7 @@ module mpi_module
 
   use prec, only: rp
   use cam_logfile, only: iulog
+  use cam_abortutils, only: endrun
 #ifdef PARALLEL
   use MPI
   use iso_fortran_env, only: real32,real64
@@ -12,24 +13,26 @@ module mpi_module
 
 !nmlon is also in params module, which can cause confusion
   
-  integer :: dynamo_world=-huge(1), &
-    mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
-    lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
-    nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
-    nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
-    ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
-    mpi_partner=-1, partner_hgridsize=0, my_hgridsize=0, &
-    mygrid_size =0, mygrid_size_s=0, mygrid_size_n=0, &
-    mpi_comm_host_rank=-1, my_sendgrid_size=0
+  integer :: dynamo_world=-huge(1), extra_world=-huge(1),&
+       union_world=-huge(1),&
+       mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
+       ex_mpi_rank=-1,ex_mpi_size =0,&
+       un_mpi_rank=-1, un_mpi_size=0,&
+       lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
+       nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
+       nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
+       ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
+       mpi_partner=-1, partner_hgridsize=0, my_hgridsize=0, &
+       mygrid_size =0, mygrid_size_s=0, mygrid_size_n=0, &
+       mpi_comm_host_rank=-1, my_sendgrid_size=0
 
   integer, dimension(:), allocatable :: &
-    nmlat_task, mlat0_task, mlat1_task, &
-    nmlon_task, mlon0_task, mlon1_task, &
-    task_lat_offset, task_csr_rowstarts, &
-    task_csr_mapping
+       nmlat_task, mlat0_task, mlat1_task, &
+       nmlon_task, mlon0_task, mlon1_task, &
+       task_lat_offset, task_csr_rowstarts
 
 #ifdef PARALLEL
-   integer :: host_group, dynamo_group
+   integer :: host_group, dynamo_group, extra_group, union_group
 #endif
   
   interface gather_mag ! gather magnetic fields
@@ -44,9 +47,9 @@ module mpi_module
     integer, intent(in) :: npes_edyn3d
 
 #ifdef PARALLEL
-    integer :: ierror
+    integer :: ierror, mid
     integer :: npes_host
-    integer :: ranges(3, 1)
+    integer :: ranges(3, 2)
     
     if (rp == real32) then
       mpi_rp = MPI_REAL4
@@ -63,61 +66,121 @@ module mpi_module
     call MPI_Comm_rank(mpi_comm_host, mpi_comm_host_rank, ierror)
     if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_rank', ierror)
     
-    !create dynamo communicator (could be a subset of mpi_comm_host or the same size)                                                                       
-    if (npes_edyn3d < npes_host) then ! create a subgroup                                                                                                                                  
+    !create dynamo communicator and addition one for the solve
+    ! MUST be even (or 1) and at most half the number of procs in mpi_comm_host (unless host is size 1)
+    mid = npes_host / 2
+    if (npes_host == 1 .and. npes_edyn3d == 1) then
+       write(iulog,*) 'MPI init check: size for edyn3d and cam are both size 1'
+    else
+       if (npes_edyn3d > mid) then
+          write(iulog,*) 'MPI init ERROR: npes_edyn3d can be at most half the size of the number of procs used for cam, so must be <=', mid
+          call endrun('MPI init ERROR: npes_edyn3d can be at most half the size of the number of procs used for cam')
+       elseif ((npes_edyn3d /= 1 .and. mod(npes_edyn3d, 2) /= 0)
+          write(iulog,*) 'MPI init ERROR: npes_edyn3d must be even'
+          call endrun('MPI init ERROR: npes_edyn3d must be even')
+       endif
+    endif
+    
+    
+    if (npes_edyn3d < npes_host) then ! create two subgroups
+       !one for the majority of the dynamo work and a second for the linear solve
+       !double check
+       if (npes_edyn3d*2 > npes_host) then
+          write(iulog,*) 'MPI init ERROR: npes_edyn3d size'
+          call endrun('MPI init ERROR: npes_edyn3d size')
+       end if
+    
        !first get original group
        call MPI_Comm_group(mpi_comm_host, host_group, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_group', ierror)
 
-       ! Define the rank range for the subgroup (first, last, stride)
+       ! Define the rank range for the first subgroup (first, last, stride)
        ranges(1, 1) = 0               ! First rank
        ranges(2, 1) = npes_edyn3d - 1 ! Last rank                                                   
-       ranges(3, 1) = 1               ! Stride of 1                                                                                                         
-       ! Step 3: Create the new group using the rank range                                          
-       call MPI_Group_range_incl(host_group, 1, ranges, dynamo_group, ierror)
+       ranges(3, 1) = 1               ! Stride of 1
+
+       ! Define the rank range for the second subgroup (first, last, stride)
+       ranges(1, 2) = npes_edyn3d       ! First rank
+       ranges(2, 2) = 2*npes_edyn3d - 1 ! Last rank                                                   
+       ranges(3, 2) = 1                 ! Stride of 1
+  
+       ! Step 3: Create the new groups using the rank range                                      
+       call MPI_Group_range_incl(host_group, 1, ranges(:,1:1), dynamo_group, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Group_range_incl', ierror)
 
-       ! Step 4: Create a new communicator (dynamo_world) from the new group                        
-       call MPI_Comm_create(mpi_comm_host, dynamo_group, dynamo_world, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_create', ierror)
+       call MPI_Group_range_incl(host_group, 1, ranges(:,2:2), extra_group, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Group_range_incl group2', ierror)
        
-       ! Check if the process is part of the new communicator                                       
+       ! Step 4: Create new communicators (dynamo_world, extra_world) from the new groups
+        call MPI_Comm_create(mpi_comm_host, dynamo_group, dynamo_world, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_create dynamo_world', ierror)
+
+       call MPI_Comm_create(mpi_comm_host, extra_group, extra_world, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_create extra_world', ierror)
+
+       !Now we want the union group which compines dynamo_world and extra_world
+       call MPI_Group_union(dynamo_group, extra_group, union_group, ierror)
+       call MPI_Comm_create(mpi_comm_host, union_group, union_world, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_create union_world', ierror)
+       
+       ! Check if the process is part of the new communicators                
        if (dynamo_world /= MPI_COMM_NULL) then
           call MPI_Comm_rank(dynamo_world, mpi_rank, ierror)
           call MPI_Comm_size(dynamo_world, mpi_size, ierror)
        else
-          mpi_size = npes_edyn3d !let non-participating procs know the sizes (for                   
-                                 !other functions, all need to know lat_size and lon_size)            
+          mpi_size = npes_edyn3d !let non-participating procs know the sizes (for                                                    !other functions, all need to know lat_size and lon_size)    
           mpi_rank = -1 !not participating                                                    
        endif
-    else
-    !just duplicate                                                                           
+
+       if (extra_world /= MPI_COMM_NULL) then
+          call MPI_Comm_rank(extra_world, ex_mpi_rank, ierror)
+          call MPI_Comm_size(extra_world, ex_mpi_size, ierror)
+       else
+          ex_mpi_size = npes_edyn3d
+          ex_mpi_rank = -1
+       endif
+
+       if (union_world /= MPI_COMM_NULL) then
+          call MPI_Comm_rank(union_world, un_mpi_rank, ierror)
+          call MPI_Comm_size(union_world, un_mpi_size, ierror)
+       else
+          un_mpi_size = 2*npes_edyn3d
+          un_mpi_rank = -1
+       endif
+       
+    else   !just duplicate      (both # of cam procs and number of dyno are size 1)                                                                     
        call MPI_Comm_dup(mpi_comm_host, dynamo_world, ierror)
        if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_dup', ierror)
 
-       ! Get the rank in the new communicator                                                 
-       call MPI_Comm_rank(dynamo_world, mpi_rank, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_rank', ierror)
+       call MPI_Comm_dup(mpi_comm_host, extra_world, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_dup', ierror)
 
-       ! Get the size
+       call MPI_Comm_dup(mpi_comm_host, union_world, ierror)
+       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_dup', ierror)
+       
+       ! Get the rank in the new communicators                                                 
+       call MPI_Comm_rank(dynamo_world, mpi_rank, ierror)
        call MPI_Comm_size(dynamo_world, mpi_size, ierror)
-       if (ierror /= MPI_SUCCESS) call handle_error('MPI_Comm_size', ierror)
+
+       call MPI_Comm_rank(extra_world, ex_mpi_rank, ierror)
+       call MPI_Comm_size(extra_world, ex_mpi_size, ierror)
+
+       call MPI_Comm_rank(union_world, un_mpi_rank, ierror)
+       call MPI_Comm_size(union_world, un_mpi_size, ierror)
+       
     endif
     
 #else
     mpi_rp = rp
     mpi_size = 1
+    un_mpi_size = 1
+    ex_mpi_size = 1
+    ex_mpi_rank = 0
+    un_mpi_rank = 0
     mpi_rank = 0
 #endif
 
-    !Modified for distributed version, lon_size must be an even number
-    !BEST RESULTS when mpi_size is divisible by 4. 
-    ! Check if mpi_size is valid for even lon_size constraint
-    if (mpi_size /= 1 .and. mpi_size /= 2 .and. mod(mpi_size, 4) /= 0) then
-       write(iulog,*) 'MPI WARNING: mpi_size should be divisible by 4, or equal to 1 or 2 (OR THERE WILL BE PROBLEMS)'
-       write(iulog,*) 'Current mpi_size =', mpi_size
-    endif
-
+    !figure out the process grid for the dynamo procs
     if (mpi_size == 1) then
        lat_size = 1
        lon_size = 1
@@ -128,18 +191,26 @@ module mpi_module
        ! Original factorization loop for other cases
        do lat_size = int(sqrt(real(mpi_size, kind=rp))), 1, -1
           lon_size = mpi_size / lat_size
-          if (lon_size*lat_size == mpi_size .and. mod(lon_size,2) == 0) exit ! lon_size >= lat_size
+          if (lon_size*lat_size == mpi_size) exit ! lon_size >= lat_size
        enddo
     endif
-   
+
 ! stack along latitudes first then longitudes
 ! (lat_size=3)
 !  8  9 10 11
 !  4  5  6  7
 !  0  1  2  3 (lon_size=4)
-    lat_rank = mpi_rank / lon_size
-    lon_rank = modulo(mpi_rank, lon_size)
-
+    if (mpi_rank > = 0) then ! main group
+       lat_rank = mpi_rank / lon_size
+       lon_rank = modulo(mpi_rank, lon_size)
+    elseif (ex_mpi_rank >= 0) then !extra group (use this later to find partner)
+       lat_rank = ex_mpi_rank / lon_size
+       lon_rank = modulo(ex_mpi_rank, lon_size)
+       !swap bc north hemi is mirror
+       lat_rank = lat_size - lat_rank
+    endif
+    
+       
   endsubroutine init
 !-----------------------------------------------------------------------
   subroutine setup_topology(nmlat_in, nmlon_in)
@@ -151,7 +222,7 @@ module mpi_module
     integer, intent(in) :: nmlat_in, nmlon_in
 
     integer :: i, j, rnk, rnki, rnkj, mlat0_n, mlat1_n, &
-               mysize_n, mysize_s, cnt
+               mysize_n, mysize_s, cnt, out_int
     integer, dimension(:), allocatable :: task_mygrid_size
     
     allocate(nmlat_task(0:lat_size-1))
@@ -171,17 +242,15 @@ module mpi_module
     mlat1_task = -1
     mlon1_task = -1
  
-    !for dist
-    allocate(task_csr_rowstarts(0:mpi_size))
-    allocate(task_csr_mapping(0:mpi_size-1))
-    allocate(task_mygrid_size(0:mpi_size-1))
+    !for dist(TO DO - modify for solve later?)
+    allocate(task_csr_rowstarts(0:un_mpi_size))
+    allocate(task_mygrid_size(0:un_mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
     task_csr_rowstarts = 0
-    task_csr_mapping = 0
     task_mygrid_size = 0
     task_lat_offset = 0
 
-    !set globale vars in this module
+    !set global vars in this module
     nmlat = nmlat_in
     nmlon = nmlon_in
 
@@ -234,122 +303,113 @@ module mpi_module
     enddo
 
 
-    !Find partner for distributed grid (0,1), (2,3), (3,4) etc.
-    ! number of procs is even
+    !Find partner for north hemispher data for the LU
+    !! here is south hemisphere:
+    ! stack along latitudes first then longitudes
+    ! (lat_size=3)
+    !  8  9 10 11
+    !  4  5  6  7
+    !  0  1  2  3 (lon_size=4)
+
+    ! Then north is mirror:
+    !  0  1  2  3 (lon_size=4)
+    !  4  5  6  7
+    !  8  9 10 11
+
+    ! and we map north to
+    ! 20 21 22 23
+    ! 16 17 18 19
+    ! 12 13 14 15
+    ! Why? LU solver needs contiguous rows on increasing proc #s
+    ! recall in extra group for north, proc numbering is also
+    !  8  9 10 11  (lat rank 0)
+    !  4  5  6  7
+    !  0  1  2  3  (lat rank 2)
+
+    ! number of procs is even (partners are with the global numbering in larger group)
     if (mpi_size > 1) then
-       if (mpi_rank >=0 ) then !active
-          if (mod(mpi_rank, 2) == 0) then
-             !Number is even or zero'
-             mpi_partner = mpi_rank + 1
-          else
-             !Number is odd'
-             mpi_partner = mpi_rank - 1
-          endif
-       else !not active
+       if (mpi_rank >=0 ) then !active in main group
+          mpi_partner = 2*mpi_size - lon_size(lat_rank +1) + lon_rank 
+       elseif (ex_mpi_rank >= 0) then ! active extra group
+          mpi_partner = lon_size(lat_rank) + lon_rank 
+       else !not active in either group
           mpi_partner = -1
        endif
     else !one proc
        mpi_partner = 0
     endif
 
-    
     !initial matrix row start and stops
-    if (mpi_rank >=0 ) then !active
-       !s hemi
-       ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
-       ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
-       !n hemi
-       !corresponding j for n hemisphere
-       mlat0_n = nmlat_T1 - mlat0 + 1
-       mlat1_n =  nmlat_T1 - mlat1 + 1
-       if (mlat1_n == nmlat_h) then !equator (don't double count)
-          mlat1_n  = mlat1_n + 1
-       endif
-       !now mlat0_n will be bigger than mlat1_n in north hemisphere
-       ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
-       ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
-       
-       !sizes in each hemisphere
-       mysize_n =  (ij_stop_n -ij_start_n + 1)
-       mysize_s = (ij_stop_s -ij_start_s + 1)
-       write(*,*) 'AB: SETUP TOPO mysize_s, mysize_n', mysize_s, mysize_n
-       write(*, *) 'AB: TOPO ij_start_s, ij_stop_s, s_grid_pts = ', ij_start_s, ij_stop_s, mysize_s
-       write(*, *) 'AB: TOPO ij_start_n, ij_stop_n, n_grid_pts = ', ij_start_n, ij_stop_n, mysize_n
-       
-       !set global vars (n & s row counts will be diff for procs on equator)
-       mygrid_size_n = mysize_n
-       mygrid_size_s = mysize_s
-       
-       !get partner sizes and then my grid size for block csr matrix
-       !for each partner pair, even owns s hemi and odd owns north hemi
-       if (mpi_size > 1) then
-          if (mod(mpi_rank,2) == 0) then !EVEN, own south, send north
-             partner_hgridsize = partner_exchange_int(mysize_n)
-             my_hgridsize = mysize_s
-             mygrid_size =  mysize_s + partner_hgridsize
-             my_sendgrid_size = mysize_n !i send to my partner
-             
-          else !ODD, own north, send south
-             partner_hgridsize = partner_exchange_int(mysize_s)
-             my_hgridsize = mysize_n
-             mygrid_size =  mysize_n + partner_hgridsize
-             my_sendgrid_size = mysize_s !i send to my partner
-             
+    if (un_mpi_rank >=0) then !active for union
+       if (mpi_rank >=0 ) then !active for dyno_group
+          !s hemi
+          ij_start_s = calc_grid_ij(mlon0,mlat0,lat_rank)
+          ij_stop_s = calc_grid_ij(mlon1,mlat1,lat_rank)
+          !n hemi
+          !corresponding j for n hemisphere
+          mlat0_n = nmlat_T1 - mlat0 + 1
+          mlat1_n =  nmlat_T1 - mlat1 + 1
+          if (mlat1_n == nmlat_h) then !equator (don't double count)
+             mlat1_n  = mlat1_n + 1
           endif
-      
+          !now mlat0_n will be bigger than mlat1_n in north hemisphere
+          ij_start_n = calc_grid_ij(mlon0,mlat1_n,lat_rank)
+          ij_stop_n = calc_grid_ij(mlon1,mlat0_n,lat_rank)
+       
+          !my sizes in each hemisphere
+          mysize_n =  (ij_stop_n -ij_start_n + 1)
+          mysize_s = (ij_stop_s -ij_start_s + 1)
+          write(*,*) 'AB: SETUP TOPO mysize_s, mysize_n', mysize_s, mysize_n
+          write(*, *) 'AB: TOPO ij_start_s, ij_stop_s, s_grid_pts = ', ij_start_s, ij_stop_s, mysize_s
+          write(*, *) 'AB: TOPO ij_start_n, ij_stop_n, n_grid_pts = ', ij_start_n, ij_stop_n, mysize_n
+       
+          !set global vars (n & s row counts will be diff for procs on equator)
+          mygrid_size_n = mysize_n
+          mygrid_size_s = mysize_s
+       endif !just dyno group
+       
+       !dynamo group will send north hemi to extra group
+       !so north needs to know the size
+       if (un_mpi_size > 1) then
+           out_int = mpi_partner_size(mysize_n)
+           if (mpi_rank >= 0) then !south
+              my_sendgrid_size = mysize_n
+              my_recvgrid_size = 0
+              mygrid_size = mysize_s
+           else !north
+              my_sendgrid_size = 0
+              my_recvgrid_size = out_int
+              mygrid_size = out_int
+           endif
+           
           !now we need to calculate the rowstarts for the global block
           !csr martix - this will be 0-based indeing for superlu
           !do an allgather to get each procs grid size
-          task_mygrid_size = all_gather_int(mygrid_size)
-          
-          !now task_csr_rowstarts - set all to zero
-          !south hemisphere is even, then northern is odd, so for 6 tasks
-          ! the order of block rows:
-          !1
-          !3
-          !5
-          !4
-          !2
-          !0
-          ! the task_csr_mapping will tell each task it's position in the rowstarts
-          ! according to above, so rank 1 needs to know that its accesses rowstarts(5)
-          ! so task_csr_mapping(1)= 5
-          !south (even)
-          cnt = 0
-          do i=0, mpi_size-1, 2
-             cnt = cnt + 1
-             task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
+          task_mygrid_size = all_gather_int(mygrid_size, union_world)
+          do i=0, un_mpi_size-1
+             task_csr_rowstarts(i+1) = task_csr_rowstarts(i) &
                   + task_mygrid_size(i)
-             task_csr_mapping(i) = cnt - 1
           enddo
-          !north 
-          if (mpi_size > 1) then !mpi_size is even
-             do i= mpi_size-1, 1, -2
-                cnt = cnt + 1
-                task_csr_rowstarts(cnt) = task_csr_rowstarts(cnt-1) &
-                     + task_mygrid_size(i)
-                task_csr_mapping(i) = cnt -1 
-             enddo
-          endif
        else !one proc
           mygrid_size = mysize_n + mysize_s
-          partner_hgridsize = 0
           my_sendgrid_size = 0
-          my_hgridsize = mysize_s
+          my_recvgrid_size = 0
           task_csr_rowstarts(1) = mygrid_size
        endif
        
-       ! halos
+       ! set halo global variables
        mlatd0 = mlat0 - 1
        mlatd1 = mlat1 + 1
        mlond0 = mlon0 - 1
        mlond1 = mlon1 + 1
 
-       write(*, *) 'AB: TOPO2 mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
+       write(*, *) 'AB: TOPO un_mpi_rank, mpi_rank, ex_mpi_rank, mlat0, mlat1, mlon0,mlon1',un_mpi_rank, mpi_rank, ex_mpi_rank, mlat0, mlat1, mlon0,mlon1
+
        
-    else !non-active
+    else !completely non-active
        mygrid_size = 0
-       partner_hgridsize = 0
+       my_sendgrid_size = 0
+       my_recvgrid_size = 0
     endif
 
   endsubroutine setup_topology
@@ -375,6 +435,57 @@ module mpi_module
 
  !-----------------------------------------------------------------------
 
+!-----------------------------------------------------------------------
+
+function mpi_partner_size(intin) result(intout)
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    integer,  intent(in) :: intin
+    integer :: intout
+   
+#ifdef PARALLEL
+    integer :: ierr
+    integer :: tag = 88
+    integer :: send_request, recv_request
+
+    intout = 0
+
+    if (mpi_rank >= 0) then
+       !post send
+       call MPI_Isend(intin, 1, MPI_INTEGER, mpi_partner, tag, &
+            union_world, send_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+       ! Wait for send to complete
+       call MPI_Wait(send_request, MPI_STATUS_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+       intout = 0
+
+    else 
+       !post receive
+       call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
+            union_world, recv_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+    
+       ! Wait for receive to complete
+       call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+       !write(*,*) 'AB: intin = ', intin, '  intout = ' , intout
+#else
+
+    intout = intin
+
+#endif
+    
+endfunction mpi_partner_size
+
+!-----------------------------------------------------------------------
+ !REMOVE 
 function partner_exchange_int(intin) result(intout)
 
 #ifdef PARALLEL
@@ -506,7 +617,104 @@ subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my
     
 endsubroutine partner_exchange_hemisphere_mat
 !-----------------------------------------------------------------------
+subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
+!send my_values to partner and recv partner_values  
 
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    real(kind=rp), dimension(my_sendgrid_size), intent(in) :: my_values
+    real(kind=rp), dimension(partner_hgridsize), intent(out) :: partner_values
+
+    
+#ifdef PARALLEL
+
+    integer :: ierr
+    integer :: send_request, recv_request
+
+    !send to my partner
+   
+    call MPI_Isend(my_values, my_sendgrid_size, mpi_rp, mpi_partner, 400, dynamo_world, &
+         send_request, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+    !recv from my partner
+    call MPI_Irecv(partner_values, partner_hgridsize, mpi_rp, mpi_partner, &
+         400, dynamo_world, recv_request, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+       
+    ! Wait for my send to complete
+    call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    !Wait for my recv
+    call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+    if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+    
+#else
+    !serial
+    integer :: i
+    
+    do concurrent i =1:my_hgridsize 
+       partner_values(i) = my_values(i)
+    enddo
+    
+#endif
+    
+    
+endsubroutine partner_exchange_hemisphere_vec
+        
+!-----------------------------------------------------------------------
+subroutine mpi_partner_vec(my_values, partner_values)
+!send my_values to partner or recv from partner_values  
+
+#ifdef PARALLEL
+    use MPI
+#endif
+
+    real(kind=rp), dimension(my_sendgrid_size), intent(in) :: my_values
+    real(kind=rp), dimension(my_recvgrid_size), intent(out) :: partner_values
+#ifdef PARALLEL
+
+    integer :: ierr
+    integer :: send_request, recv_request
+
+    !send to my partner
+    if (mpi_rank >= 0) then !send
+   
+       call MPI_Isend(my_values, my_sendgrid_size, mpi_rp, mpi_partner, 400, union_world, &
+            send_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+       ! Wait for my send to complete
+       call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    else !recv
+       
+       !recv from my partner
+       call MPI_Irecv(partner_values, my_recvgrid_size, mpi_rp, mpi_partner, &
+            400, union_world, recv_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+       
+    
+       !Wait for my recv
+       call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    endif
+
+#else
+    !serial
+    !do nothing
+    
+#endif
+    
+    
+endsubroutine mpi_partner_vec
+        
+!-----------------------------------------------------------------------
 subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
 !send my_values to partner and recv partner_values  
 
@@ -853,13 +1061,13 @@ endsubroutine partner_exchange_hemisphere_vec
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 
-function all_gather_int(intin) result(intarrayout)
+function all_gather_int(intin, comm) result(intarrayout)
 
 #ifdef PARALLEL
     use MPI
 #endif
 
-    integer, intent(in) :: intin
+    integer, intent(in) :: intin, comm
 
     integer, dimension(0:mpi_size-1) :: intarrayout
 
@@ -869,7 +1077,7 @@ function all_gather_int(intin) result(intarrayout)
 
     cnt = 1
     call MPI_Allgather(intin, cnt, MPI_INTEGER, &
-        intarrayout, cnt, MPI_INTEGER, dynamo_world, ierr)
+        intarrayout, cnt, MPI_INTEGER, comm, ierr)
     if (ierr /= MPI_SUCCESS) call handle_error('MPI_Allgather', ierr)
 
 #else
@@ -943,7 +1151,7 @@ endfunction all_gather_int
           !now wait to receive all data
           call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
           if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
-
+          
           !write(*,*) 'AB: size(varout), size(recvbuf)', size(varout), size(recvbuf)
 
           

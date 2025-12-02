@@ -3,7 +3,7 @@ module edyn3d_driver_mod
   use cam_abortutils, only: endrun
   use cam_logfile, only: iulog
   use spmd_utils, only: masterproc, mpicom
-  use mpi_module, only: mpi_size, mpi_rank
+  use mpi_module, only: mpi_size, mpi_rank, un_mpi_rank, ex_mpi_rank
   use infnan, only: nan, assignment(=)
   use perf_mod, only: t_startf, t_stopf
 
@@ -96,7 +96,7 @@ contains
     ! uses mpi in the extents for grid  - maybe ok for just active procs?                
     call edyn3d_hist_mag_grids_reg()
 
-    !non active tasks have mpi_rank<  0 (see mpi_init)                                              
+    !non active tasks have mpi_rank<  0 (see mpi_init)                                             
     active_tasks: if (mpi_rank >= 0) then
 
        ! allocate memory for fieldline data
@@ -355,163 +355,168 @@ contains
     call edyn3d_hist_mag_s2_out('un_s2',un_s2)
     call edyn3d_hist_mag_s2_out('vn_s2',vn_s2)
 
-    if (mpi_rank >= 0) then
-       !only active tasks
+    if (un_mpi_rank >= 0) then
+       !only active tasks + extras for solve
+       if (mpi_rank >=0) then
+          sigP_s1 = nan
+          zigP_s1 = nan
+          sigH_s1 = nan
+          zigH_s1 = nan
+          
+          sigP_s2 = nan
+          zigP_s2 = nan
+          sigH_s2 = nan
+          zigH_s2 = nan
 
-       sigP_s1 = nan
-       zigP_s1 = nan
-       sigH_s1 = nan
-       zigH_s1 = nan
+          ntlU_s1 = nan
+          ntlV_s1 = nan
+          ntlU_s2 = nan
+          ntlV_s2 = nan
 
-       sigP_s2 = nan
-       zigP_s2 = nan
-       sigH_s2 = nan
-       zigH_s2 = nan
+          N1p_s1 = nan
+          N1h_s1 = nan
+          Je1D_s1 = nan
+          N2p_s2 = nan
+          N2h_s2 = nan
+          Je2D_s2 = nan
 
-       ntlU_s1 = nan
-       ntlV_s1 = nan
-       ntlU_s2 = nan
-       ntlV_s2 = nan
+          S_p = nan
+          coef = nan
+          coef_ns = nan
+          coef_ns2 = nan
+          bij = nan
 
-       N1p_s1 = nan
-       N1h_s1 = nan
-       Je1D_s1 = nan
-       N2p_s2 = nan
-       N2h_s2 = nan
-       Je2D_s2 = nan
-
-       S_p = nan
-       coef = nan
-       coef_ns = nan
-       coef_ns2 = nan
-       bij = nan
-
-       call t_startf(subname//'->ghost_exchange')
-       ! exchange S1 ghost points
-       tmp_ghost = nan
-       tmp_ghost(1,:,:,mlat0:mlat1,mlon0:mlon1) = sigped_s1(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(2,:,:,mlat0:mlat1,mlon0:mlon1) = sighal_s1(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(3,:,:,mlat0:mlat1,mlon0:mlon1) = un_s1(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(4,:,:,mlat0:mlat1,mlon0:mlon1) = vn_s1(:,:,mlat0:mlat1,mlon0:mlon1)
-       call sync_mlat_5d(tmp_ghost(:,:,:,:,mlon0:mlon1), 4, nhgt_fix, 2)
-       call sync_mlon_5d(tmp_ghost, 4, nhgt_fix, 2)
+          call t_startf(subname//'->ghost_exchange')
+          ! exchange S1 ghost points
+          tmp_ghost = nan
+          tmp_ghost(1,:,:,mlat0:mlat1,mlon0:mlon1) = sigped_s1(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(2,:,:,mlat0:mlat1,mlon0:mlon1) = sighal_s1(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(3,:,:,mlat0:mlat1,mlon0:mlon1) = un_s1(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(4,:,:,mlat0:mlat1,mlon0:mlon1) = vn_s1(:,:,mlat0:mlat1,mlon0:mlon1)
+          call sync_mlat_5d(tmp_ghost(:,:,:,:,mlon0:mlon1), 4, nhgt_fix, 2)
+          call sync_mlon_5d(tmp_ghost, 4, nhgt_fix, 2)
        
-       sigP_s1(:,:,:,:) = tmp_ghost(1,:,:,:,:)
-       sigH_s1(:,:,:,:) = tmp_ghost(2,:,:,:,:)
-       ntlU_s1(:,:,:,:) = tmp_ghost(3,:,:,:,:)
-       ntlV_s1(:,:,:,:) = tmp_ghost(4,:,:,:,:)
+          sigP_s1(:,:,:,:) = tmp_ghost(1,:,:,:,:)
+          sigH_s1(:,:,:,:) = tmp_ghost(2,:,:,:,:)
+          ntlU_s1(:,:,:,:) = tmp_ghost(3,:,:,:,:)
+          ntlV_s1(:,:,:,:) = tmp_ghost(4,:,:,:,:)
 
-       ! exchange S2 ghost points
-       tmp_ghost = nan
-       tmp_ghost(1,:,:,mlat0:mlat1,mlon0:mlon1) = sigped_s2(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(2,:,:,mlat0:mlat1,mlon0:mlon1) = sighal_s2(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(3,:,:,mlat0:mlat1,mlon0:mlon1) = un_s2(:,:,mlat0:mlat1,mlon0:mlon1)
-       tmp_ghost(4,:,:,mlat0:mlat1,mlon0:mlon1) = vn_s2(:,:,mlat0:mlat1,mlon0:mlon1)
-       call sync_mlat_5d(tmp_ghost(:,:,:,:,mlon0:mlon1), 4, nhgt_fix, 2)
-       call sync_mlon_5d(tmp_ghost, 4, nhgt_fix, 2)
-       sigP_s2(:,:,:,:) = tmp_ghost(1,:,:,:,:)
-       sigH_s2(:,:,:,:) = tmp_ghost(2,:,:,:,:)
-       ntlU_s2(:,:,:,:) = tmp_ghost(3,:,:,:,:)
-       ntlV_s2(:,:,:,:) = tmp_ghost(4,:,:,:,:)
-       call t_stopf(subname//'->ghost_exchange')
+          ! exchange S2 ghost points
+          tmp_ghost = nan
+          tmp_ghost(1,:,:,mlat0:mlat1,mlon0:mlon1) = sigped_s2(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(2,:,:,mlat0:mlat1,mlon0:mlon1) = sighal_s2(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(3,:,:,mlat0:mlat1,mlon0:mlon1) = un_s2(:,:,mlat0:mlat1,mlon0:mlon1)
+          tmp_ghost(4,:,:,mlat0:mlat1,mlon0:mlon1) = vn_s2(:,:,mlat0:mlat1,mlon0:mlon1)
+          call sync_mlat_5d(tmp_ghost(:,:,:,:,mlon0:mlon1), 4, nhgt_fix, 2)
+          call sync_mlon_5d(tmp_ghost, 4, nhgt_fix, 2)
+          sigP_s2(:,:,:,:) = tmp_ghost(1,:,:,:,:)
+          sigH_s2(:,:,:,:) = tmp_ghost(2,:,:,:,:)
+          ntlU_s2(:,:,:,:) = tmp_ghost(3,:,:,:,:)
+          ntlV_s2(:,:,:,:) = tmp_ghost(4,:,:,:,:)
+          call t_stopf(subname//'->ghost_exchange')
 
-       ! calculate field-line integrated conductance - S1,S2
-       call calculate_conductance( &
-            mlatd0,mlatd1,mlond0,mlond1, &
-            npts_s1,npts_s2, &
-            vmp_s1,bmag_s1,sigP_s1,sigH_s1, &
-            vmp_s2,bmag_s2,sigP_s2,sigH_s2, &
-            zigP_s1,zigH_s1,zigP_s2,zigH_s2 )
+          ! calculate field-line integrated conductance - S1,S2
+          call calculate_conductance( &
+               mlatd0,mlatd1,mlond0,mlond1, &
+               npts_s1,npts_s2, &
+               vmp_s1,bmag_s1,sigP_s1,sigH_s1, &
+               vmp_s2,bmag_s2,sigP_s2,sigH_s2, &
+               zigP_s1,zigH_s1,zigP_s2,zigH_s2 )
 
-       ! calculate N coefficients - S1,S2
-       call calculate_n( &
-            mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
-            D_s1,M1_s1,d1d1_s1,d1d2_s1,d2d2_s1,sigP_s1,sigH_s1, &
-            D_s2,M2_s2,d1d2_s2,d2d2_s2,sigP_s2,sigH_s2, &
-            N1p_s1,N1h_s1,N2p_s2,N2h_s2)
+          ! calculate N coefficients - S1,S2
+          call calculate_n( &
+               mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
+               D_s1,M1_s1,d1d1_s1,d1d2_s1,d2d2_s1,sigP_s1,sigH_s1, &
+               D_s2,M2_s2,d1d2_s2,d2d2_s2,sigP_s2,sigH_s2, &
+               N1p_s1,N1h_s1,N2p_s2,N2h_s2)
 
-       ! calculate JeD-coefficients (right hand side) - S1,S2
-       call calculate_je( &
-            mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
-            D_s1,be3_s1,d1d1_s1,d1d2_s1,d2d2_s1,sigP_s1,sigH_s1,ntlU_s1,ntlV_s1, &
-            D_s2,be3_s2,d1d2_s2,d2d2_s2,sigP_s2,sigH_s2,ntlU_s2,ntlV_s2, &
-            d1_s1,d2_s1,d1_s2,d2_s2,Je1D_s1,Je2D_s2)
+          ! calculate JeD-coefficients (right hand side) - S1,S2
+          call calculate_je( &
+               mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
+               D_s1,be3_s1,d1d1_s1,d1d2_s1,d2d2_s1,sigP_s1,sigH_s1,ntlU_s1,ntlV_s1, &
+               D_s2,be3_s2,d1d2_s2,d2d2_s2,sigP_s2,sigH_s2,ntlU_s2,ntlV_s2, &
+               d1_s1,d2_s1,d1_s2,d2_s2,Je1D_s1,Je2D_s2)
 
-       ! calculate S (right hand side)
-       S_p = calculate_s(mlatd0,mlatd1,mlond0,mlond1, &
-            npts_p,M1_s1,Je1D_s1,M2_s2,Je2D_s2,M3_r)
+          ! calculate S (right hand side)
+          S_p = calculate_s(mlatd0,mlatd1,mlond0,mlond1, &
+               npts_p,M1_s1,Je1D_s1,M2_s2,Je2D_s2,M3_r)
 
-       ! calculate height-dependent matrix coefficients
-       coef = calculate_coef(mlatd0,mlatd1,mlond0,mlond1, &
-            npts_p,S_p,N1p_s1,N1h_s1,N2p_s2,N2h_s2)
+          ! calculate height-dependent matrix coefficients
+          coef = calculate_coef(mlatd0,mlatd1,mlond0,mlond1, &
+               npts_p,S_p,N1p_s1,N1h_s1,N2p_s2,N2h_s2)
 
-       ! add the coefficients in height to get coefficients for each hemisphere
-       coef_ns2 = calculate_coef_ns2(mlatd0,mlatd1,mlond0,mlond1,coef)
+          ! add the coefficients in height to get coefficients for each hemisphere
+          coef_ns2 = calculate_coef_ns2(mlatd0,mlatd1,mlond0,mlond1,coef)
 
-       ! set the coefficient matrix in both hemispheres
-       coef_ns = calculate_coef_ns(mlatd0,mlatd1,mlond0,mlond1,coef_ns2)
+          ! set the coefficient matrix in both hemispheres
+          coef_ns = calculate_coef_ns(mlatd0,mlatd1,mlond0,mlond1,coef_ns2)
 
-       ! set field-aligned conductance (b) matrix
-       if (setbij) then
-          bij = calculate_bij(mlatd0,mlatd1,mlond0,mlond1,coef_ns2)
-       else
-          bij = 0._r8
-       endif
+          ! set field-aligned conductance (b) matrix
+          if (setbij) then
+             bij = calculate_bij(mlatd0,mlatd1,mlond0,mlond1,coef_ns2)
+          else
+             bij = 0._r8
+          endif
 
-       fac_hl_p = 0._r8
+          fac_hl_p = 0._r8
+          
+          pot_p = nan
 
-       pot_p = nan
+          call edyn3d_highlat_potential_get(pot_hl_p)
 
-       call edyn3d_highlat_potential_get(pot_hl_p)
+          call edyn3d_hist_mlonlat_out('HILAT_POT', pot_hl_p(1:2,mlat0:mlat1,mlon0:mlon1))
 
-       call edyn3d_hist_mlonlat_out('HILAT_POT', pot_hl_p(1:2,mlat0:mlat1,mlon0:mlon1))
+       endif !just dynamp procs
 
+       !now dynamo + extra needed for solve
        ! construct linear system and solve
        call t_startf(subname//'->linear_system_solve')
-       !call linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
        call dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
        call t_stopf(subname//'->linear_system_solve')
 
-       call edyn3d_hist_mlonlat_out('HILAT_FAC',fac_hl_p(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_out('ELECPOTEN', pot_p(1:2,mlat0:mlat1,mlon0:mlon1))
+       !just dynamo procs again
+       if (mpi_rank >= 0) then
+          call edyn3d_hist_mlonlat_out('HILAT_FAC',fac_hl_p(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_out('ELECPOTEN', pot_p(1:2,mlat0:mlat1,mlon0:mlon1))
 
-       ! calculate electric fields
-       call calculate_ed( &
-            mlatd0,mlatd1,mlond0,mlond1, &
-            pot_p,ed1_s1,ed2_s1,ed1_s2,ed2_s2)
+          ! calculate electric fields
+          call calculate_ed( &
+               mlatd0,mlatd1,mlond0,mlond1, &
+               pot_p,ed1_s1,ed2_s1,ed1_s2,ed2_s2)
 
-       ! calculate drift velocities
-       call calculate_ve( &
-            mlatd0,mlatd1,mlond0,mlond1, &
-            ed1_s1,ed2_s1,be3_s1(1,:,:,:), &
-            ed1_s2,ed2_s2,be3_s2(1,:,:,:), &
-            ve1_s1,ve2_s1,ve1_s2,ve2_s2)
+          ! calculate drift velocities
+          call calculate_ve( &
+               mlatd0,mlatd1,mlond0,mlond1, &
+               ed1_s1,ed2_s1,be3_s1(1,:,:,:), &
+               ed1_s2,ed2_s2,be3_s2(1,:,:,:), &
+               ve1_s1,ve2_s1,ve1_s2,ve2_s2)
 
-       ! calculate drift velocities in geographic coordinates
-       call calculate_vxyz( &
-            mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
-            ve1_s1,ve2_s1,e1_s1,e2_s1, &
-            ve1_s2,ve2_s2,e1_s2,e2_s2, &
-            vx_s1,vy_s1,vz_s1,vx_s2,vy_s2,vz_s2)
+          ! calculate drift velocities in geographic coordinates
+          call calculate_vxyz( &
+               mlatd0,mlatd1,mlond0,mlond1,npts_s1,npts_s2, &
+               ve1_s1,ve2_s1,e1_s1,e2_s1, &
+               ve1_s2,ve2_s2,e1_s2,e2_s2, &
+               vx_s1,vy_s1,vz_s1,vx_s2,vy_s2,vz_s2)
 
-       call edyn3d_hist_mlonlat_out('ED1s1', ed1_s1(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_out('ED2s1', ed2_s1(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_s_out('ED1s2', ed1_s2(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_s_out('ED2s2', ed2_s2(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_out('ED1s1', ed1_s1(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_out('ED2s1', ed2_s1(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_s_out('ED1s2', ed1_s2(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_s_out('ED2s2', ed2_s2(1:2,mlat0:mlat1,mlon0:mlon1))
+          
+          call edyn3d_hist_mlonlat_out('Ve1s1', ve1_s1(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_out('Ve2s1', ve2_s1(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_s_out('Ve1s2', ve1_s2(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mlonlat_s_out('Ve2s2', ve2_s2(1:2,mlat0:mlat1,mlon0:mlon1))
 
-       call edyn3d_hist_mlonlat_out('Ve1s1', ve1_s1(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_out('Ve2s1', ve2_s1(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_s_out('Ve1s2', ve1_s2(1:2,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mlonlat_s_out('Ve2s2', ve2_s2(1:2,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mag_s1_out('IonU_s1',vx_s1(:,:,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mag_s1_out('IonV_s1',vy_s1(:,:,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mag_s1_out('IonW_s1',vz_s1(:,:,mlat0:mlat1,mlon0:mlon1))
 
-       call edyn3d_hist_mag_s1_out('IonU_s1',vx_s1(:,:,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mag_s1_out('IonV_s1',vy_s1(:,:,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mag_s1_out('IonW_s1',vz_s1(:,:,mlat0:mlat1,mlon0:mlon1))
-
-       call edyn3d_hist_mag_s2_out('IonU_s2',vx_s2(:,:,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mag_s2_out('IonV_s2',vy_s2(:,:,mlat0:mlat1,mlon0:mlon1))
-       call edyn3d_hist_mag_s2_out('IonW_s2',vz_s2(:,:,mlat0:mlat1,mlon0:mlon1))
-    end if   !end active tasks 
+          call edyn3d_hist_mag_s2_out('IonU_s2',vx_s2(:,:,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mag_s2_out('IonV_s2',vy_s2(:,:,mlat0:mlat1,mlon0:mlon1))
+          call edyn3d_hist_mag_s2_out('IonW_s2',vz_s2(:,:,mlat0:mlat1,mlon0:mlon1))
+       endif !just dynamo tasks
+    endif   !end all active tasks 
 
     ! map to oplus geographic grid and output diagnostics
     magsrc_2d_flds_bndl(1)%fld => fac_hl_p
