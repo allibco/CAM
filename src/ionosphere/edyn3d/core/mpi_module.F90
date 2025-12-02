@@ -605,7 +605,7 @@ subroutine partner_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 
-    elseif (ex_mpi_rank >=0) tehn
+    elseif (ex_mpi_rank >=0) then
        
        partner_rowptr = 0
        partner_cols = 0
