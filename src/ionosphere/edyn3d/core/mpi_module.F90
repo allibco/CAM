@@ -666,24 +666,24 @@ subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
 endsubroutine partner_exchange_hemisphere_vec
         
 !-----------------------------------------------------------------------
-subroutine mpi_partner_vec(my_values, partner_values)
+subroutine mpi_sendnorth_vec(send_values, recv_values)
 !send my_values to partner or recv from partner_values  
 
 #ifdef PARALLEL
     use MPI
 #endif
 
-    real(kind=rp), dimension(my_sendgrid_size), intent(in) :: my_values
-    real(kind=rp), dimension(my_recvgrid_size), intent(out) :: partner_values
+    real(kind=rp), dimension(my_sendgrid_size), intent(in) :: send_values
+    real(kind=rp), dimension(my_recvgrid_size), intent(out) :: recv_values
 #ifdef PARALLEL
 
     integer :: ierr
     integer :: send_request, recv_request
 
-    !send to my partner
+    !send north to my partner
     if (mpi_rank >= 0) then !send
    
-       call MPI_Isend(my_values, my_sendgrid_size, mpi_rp, mpi_partner, 400, union_world, &
+       call MPI_Isend(send_values, my_sendgrid_size, mpi_rp, mpi_partner, 400, union_world, &
             send_request, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
@@ -691,10 +691,10 @@ subroutine mpi_partner_vec(my_values, partner_values)
        call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
-    else !recv
+    else !recv north from my partner
        
        !recv from my partner
-       call MPI_Irecv(partner_values, my_recvgrid_size, mpi_rp, mpi_partner, &
+       call MPI_Irecv(recv_values, my_recvgrid_size, mpi_rp, mpi_partner, &
             400, union_world, recv_request, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
        
@@ -711,10 +711,56 @@ subroutine mpi_partner_vec(my_values, partner_values)
     
 #endif
     
-    
-endsubroutine mpi_partner_vec
-        
+endsubroutine mpi_sendnorth_vec
+
 !-----------------------------------------------------------------------
+subroutine mpi_recvnorth_vec(send_values, recv_values)
+!send my_values to partner or recv from partner_values  
+
+#ifdef PARALLEL
+    use MPI
+#endif
+    !note these are reversed for the recvnorth
+    real(kind=rp), dimension(my_recvgrid_size), intent(in) :: send_values
+    real(kind=rp), dimension(my_sendgrid_size), intent(out) :: recv_values
+#ifdef PARALLEL
+
+    integer :: ierr
+    integer :: send_request, recv_request
+
+    !send north back to my partner
+    if (ex_mpi_rank >= 0) then !send
+   
+       call MPI_Isend(send_values, my_recvgrid_size, mpi_rp, mpi_partner, 400, union_world, &
+            send_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+       ! Wait for my send to complete
+       call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    else !recv north from partner
+       
+       !recv from my partner
+       call MPI_Irecv(recv_values, my_sendgrid_size, mpi_rp, mpi_partner, &
+            400, union_world, recv_request, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+    
+       !Wait for my recv
+       call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
+
+    endif
+
+#else
+    !serial
+    !do nothing
+    
+#endif
+    
+endsubroutine mpi_recvnorth_vec
+!-----------------------------------------------------------------------
+!REMOVE
 subroutine partner_exchange_hemisphere_vec(my_values, partner_values)
 !send my_values to partner and recv partner_values  
 

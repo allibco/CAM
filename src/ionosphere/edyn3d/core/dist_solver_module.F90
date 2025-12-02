@@ -1298,7 +1298,7 @@ module dist_solver_module
          mlon0, mlon1, mlond0, mlond1, &
          lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
-         calc_grid_ij, mpi_partner_vec, mygrid_size, &
+         calc_grid_ij, mpi_sendnorth_vec, mygrid_size, &
          gather_lon_1d, mpi_size, my_sendgrid_size, my_recvgrid_size
 
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: coef_10_s, coef_10_n
@@ -1309,6 +1309,10 @@ module dist_solver_module
     integer :: i,j,ij, jN, j_start, cnt, istart
 
     real(kind=rp),dimension(nmlon) :: coef10_j1_buf
+
+    real(kind=rp),dimension(my_sendgrid_size) :: sendbuf
+    real(kind=rp),dimension(my_recvgrid_size) :: recvbuf
+
     
     rhs = 0.0
 
@@ -1316,13 +1320,6 @@ module dist_solver_module
     
        rhs_n = 0.0
        rhs_s = 0.0
-
-       !   some debugging info
-       !write(*, *) 'AB: RHS mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-       !write(*, *) 'AB: RHS mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-       !write(*, *) 'AB: RHS mpi_rank, mlat0, mlat1, mlon0,mlon1',mpi_rank, mlat0, mlat1, mlon0,mlon1
-       !write(*, *) 'AB: RHS mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
-       !write(*, *) 'AB: RHS nmlat_h', nmlat_h
 
        !first do j=1
        if (lat_rank == 0) then ! I own the pole regions (j=1) -this is the first row of procs
@@ -1394,10 +1391,17 @@ module dist_solver_module
     if (un_mpi_size > 1) then
        !now do partner hemisphere exchange for continguous rows on incr. procs
 
-       !now extra procs will have their rhs
-       call mpi_partner_vec(rhs_n, rhs)
-
        if (mpi_rank >= 0) then !dynamo procs
+          !copy rhs_n to sendbuf
+          cnt = 0
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             sendbuf(cnt) = rhs_n(ij) 
+          enddo
+       endif !dynam procs only
+       
+       call mpi_sendnorth_vec(sendbuf, recvbuf)
+       if (mpi_rank >=0) then !dynamo procs
           !copy rhs_s into rhs
           cnt = 0
           do ij = ij_start_s, ij_stop_s
@@ -1405,8 +1409,12 @@ module dist_solver_module
              rhs(cnt) = rhs_s(ij)
              if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
           enddo
+       else !(ex_mpi_rank >=0) 
+          do i = 1, mygrid_size
+             rhs(i) = recvbuf(i)
+             if (isnan(rhs(i))) write(*,*) 'AB: #2 rhs(i) is NaN, i = ', i
+          enddo
        endif
-
     else !un_mpi_size = 1
         cnt = 0
         do ij = ij_start_s, ij_stop_s
@@ -1576,8 +1584,8 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, mlatd0, mlatd1, mlond0, mlond1, &
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
-         ij_start_s, ij_stop_s, partner_hgridsize, mygrid_size, &
-         calc_grid_ij, my_recvgrid_size, mpi_partner_vec, &
+         ij_start_s, ij_stop_s, mygrid_size, &
+         calc_grid_ij, my_recvgrid_size, mpi_sendnorth_vec, &
          my_sendgrid_size
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
@@ -1590,6 +1598,8 @@ module dist_solver_module
     real(kind=rp) :: avg
 
     real(kind=rp),dimension(my_sendgrid_size) :: sendbuf
+    real(kind=rp),dimension(my_recvgrid_size) :: recvbuf
+
     fout = 0.0
 
     if (mpi_rank >=0) then !dynamo_procs
@@ -1667,8 +1677,9 @@ module dist_solver_module
           enddo
        endif
     endif !dynamo procs
-    
-    if (un_mpi_size == 1) then
+
+    !!now give north to extra procs
+    if (un_mpi_size == 1) then !no extra procs
        !now combine the rows so they are the same order as in matrix
        cnt = 0
        do ij = ij_start_s, ij_stop_s
@@ -1688,9 +1699,11 @@ module dist_solver_module
              cnt = cnt + 1
              sendbuf(cnt) = fout_n(ij)
           enddo
-       endif
-       call mpi_partner_vec(sendbuf, fout)
-       !extra procs (should have fout now)
+       endif !dynam procs only
+       
+       call mpi_sendnorth_vec(sendbuf, recvbuf)
+
+       !extra procs 
        if (mpi_rank >=0) then !dynamo procs
           !copy south into fout
           cnt = 0
@@ -1700,9 +1713,9 @@ module dist_solver_module
              if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
           enddo
        else !(ex_mpi_rank >=0) 
-          !error checking only
           do i = 1, mygrid_size
-             if (isnan(fout(cnt))) write(*,*) 'AB: #2 fout(i) is NaN, i = ', i
+             fout(i) = recvbuf(i)
+             if (isnan(fout(i))) write(*,*) 'AB: #2 fout(i) is NaN, i = ', i
           enddo
        endif
     endif ! multiple procs
@@ -1711,7 +1724,7 @@ module dist_solver_module
 !-----------------------------------------------------------------------
   function dist_unravel(fin) result(fout)
     ! reorder 1D vector (RHS) into 2D fields (lat-lon)
-    ! 1d vector has the reordering for process rows, so we have to undo that also
+    ! 1d vector has the distributed north process rows, so we have to undo that also
     ! this is the reverse of the dist_flatten
     
     use params_module,only:nmlat_h,nmlat_T1,nmlon
@@ -1722,19 +1735,21 @@ module dist_solver_module
          mygrid_size, mpi_rank, calc_grid_ij, mpi_size, &
          partner_exchange_hemisphere_vec, my_sendgrid_size
 
-
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
     real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout
 
     integer :: i,j,ij, cnt, jS, jN
     real(kind=rp),dimension(ij_start_s:ij_stop_s) :: fin_s
     real(kind=rp),dimension(ij_start_n:ij_stop_n) :: fin_n
-    real(kind=rp),dimension(partner_hgridsize) :: buffer
 
-    !output 3D array for n=2 & s=1
+    !purposely reversed for the recv cal
+    real(kind=rp),dimension(my_recvgrid_size) :: sendbuf
+    real(kind=rp),dimension(my_sendgrid_size) :: recvbuf
+    
+    !output 3D array for north=2 & south=1
     fout = 0.0
 
-    if (mpi_size == 1) then
+    if (un_mpi_size == 1) then
        cnt = 0
        !south
        do ij = ij_start_s, ij_stop_s
@@ -1770,10 +1785,7 @@ module dist_solver_module
           endif
       enddo    
     else ! multiple procs
-       
-       !first reverse the hemisphere swap
-       if (mod(mpi_rank,2) == 0) then !EVEN, own then south, send other
-                                   !half back to partner
+       if (mpi_rank >=0 ) then !dynamo procs - own south and get north from extra
           !south
           cnt = 0
           !this is mine for the south, so copy
@@ -1794,17 +1806,22 @@ module dist_solver_module
                 write(*,*) "Error in unravel south 1, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_s, ij_stop_s
              endif
           enddo
-       
-          !send other half info to partner and receive my north data
-          do i=1, partner_hgridsize
-             if ((cnt +i) <= mygrid_size) then 
-                buffer(i) = fin(cnt + i)
-             else
-                write(*,*) "Error in unravel buffer, mpirank, cnt+i = ", mpi_rank, cnt+i
-             endif
+       else !extra procs: copy north to buffer to send
+          do i=1, my_recvgrid_size
+             sendbuf(i) = fin(i)
           enddo
+       endif !extra procs
 
-          call partner_exchange_hemisphere_vec(buffer, fin_n)
+       !get north from extra procs
+       call mpi_recvnorth_vec(sendbuf, recvbuf)
+
+       if (mpi_rank >= 0) then
+          !dynamo procs copy recvbuf into fin_n
+          cnt = 0
+          do ij = ij_start_n, ij_stop_n
+             cnt = cnt + 1
+             fin_n(ij) = recvbuf(cnt)
+          enddo
 
           !now fin_n contains my north data, so put back into 3D array   
           do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
@@ -1820,55 +1837,12 @@ module dist_solver_module
                 write(*,*) "Error in unravel north 1, mpirank, ij = ", mpi_rank, ij, ij_start_n, ij_stop_n
              endif
           enddo
-          
-       else !ODD, so own north, get south back from  partner
-          !first bit to send buffer
-          do i=1, partner_hgridsize
-             buffer(i) = fin(i)
-          enddo
-          
-          call partner_exchange_hemisphere_vec(buffer, fin_s)
-          
-          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-             jS = j
-             ij =  calc_grid_ij(i,jS,lat_rank)
-             if (ij >= ij_start_s .and. ij <= ij_stop_s) then
-                fout(1,j,i) = fin_s(ij)
-                if (j == nmlat_h) then !equator, set in north also
-                   fout(2,j,i) = fin_s(ij)
-                endif
-             else
-                write(iulog,*) "Error in unravel south 2, mpirank, ij = ", mpi_rank, ij, ij_start_s, ij_stop_s
-             endif
-          enddo
-          
-          !north (I own, so copy)
-          cnt = partner_hgridsize
-          do ij = ij_start_n, ij_stop_n
-             cnt = cnt + 1
-             fin_n(ij) = fin(cnt)
-          enddo
-          !put in 3D array
-          do concurrent (i = mlon0:mlon1, j = mlat0:mlat1)
-             jN = nmlat_T1-j+1 !north index
-             if (j == nmlat_h) then !no equator data from north in fin_n
-                !(already populated)
-                cycle
-             endif
-             ij =  calc_grid_ij(i,jN,lat_rank)
-             if (ij >= ij_start_n .and. ij <= ij_stop_n) then
-                fout(2,j,i) = fin_n(ij)
-             else
-                write(iulog,*) "Error in unravel north 2, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_n, ij_stop_n
-             endif
-          
-          enddo
-       endif !end north
+       endif
     endif !multiprocs
+
+
   endfunction dist_unravel
-  
    
- 
   !-----------------------------------------------------------------------
 
   subroutine insert_sort(array_i, array_r, len)
