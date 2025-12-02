@@ -26,13 +26,14 @@ module dist_solver_module
     
     use params_module, only:nmlat_h,nmlat_T1,nmlon
     use cons_module, only:read_fac
-    use mpi_module, only: mpi_rank,dynamo_world,lat_rank,lon_rank,&
+    use mpi_module, only: mpi_rank,dynamo_world,union_world, lat_rank,lon_rank,&
                           nmlat_task,nmlon_task,mygrid_size,&
                           sync_mlat_5d, sync_mlon_5d,& 
                           sync_mlat_3d, sync_mlon_3d, &
                           mlat0, mlat1, mlon0, mlon1, &
                           task_csr_rowstarts, mpi_size, &
-                          task_csr_mapping
+                          un_mpi_size, un_mpi_rank
+
     
     ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
     ! nmlat_h => # mag latitudes in one hemisphere
@@ -379,7 +380,7 @@ module dist_solver_module
          ij_start_s,ij_stop_s,my_recvgrid_size, &
          calc_grid_ij, partner_sendnorth_mat, &
          gather_lon_1d, mygrid_size, mpi_partner, &
-         mygrid_size_n, mygrid_size_s
+         mygrid_size_n, mygrid_size_s, my_sendgrid_size
     
     integer,intent(in) :: nnz_est
     real(kind=rp),dimension(mlatd0:mlatd1,mlond0:mlond1),intent(in) :: bij
@@ -433,8 +434,8 @@ module dist_solver_module
     
     !get hemisphere partner info
     integer, dimension(my_recvgrid_size+1) :: partner_rowptr
-    real(kind=rp),dimension(gridsize*MAX_NNZ) :: partner_values
-    integer, dimension(partner_hgridsize*MAX_NNZ) :: partner_cols
+    real(kind=rp),dimension(my_recvgrid_size*MAX_NNZ) :: partner_values
+    integer, dimension(my_recvgrid_size*MAX_NNZ) :: partner_cols
 
     !global size 
     nlonlat = nmlat_T1*nmlon
@@ -1213,7 +1214,7 @@ module dist_solver_module
              my_rowptr(i)  = partner_rowptr(i)
           enddo
 
-          nnz_north = partner_rowptr(mygrid_size + 1) - 1)
+          nnz_north = partner_rowptr(mygrid_size + 1) - 1
              
           do concurrent (i = 1:nnz_north)
              my_colind(i) = partner_cols(i)
@@ -1253,7 +1254,7 @@ module dist_solver_module
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
          un_mpi_rank, &
          mlon0, mlon1, mlond0, mlond1, &
-         lat_rank, lon_rank, partner_hgridsize, my_hgridsize, &
+         lat_rank, lon_rank, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
          calc_grid_ij, mpi_sendnorth_vec, mygrid_size, &
          gather_lon_1d, mpi_size, my_sendgrid_size, my_recvgrid_size
@@ -1392,7 +1393,7 @@ module dist_solver_module
     #include "superlu_dist_config.fh"
     use superlu_mod    
     use mpi_module,only: lat_size,lon_size,dynamo_world,&
-         task_csr_rowstarts, mpi_rank, task_csr_mapping, &
+         task_csr_rowstarts, mpi_rank, &
          mpi_size
     
     integer,intent(in) :: n_loc,nnz_loc, n_global
@@ -1688,9 +1689,9 @@ module dist_solver_module
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, &
          ij_start_n, ij_stop_n, &
-         ij_start_s, ij_stop_s, lat_rank, partner_hgridsize, &
+         ij_start_s, ij_stop_s, lat_rank,  &
          mygrid_size, mpi_rank, calc_grid_ij, mpi_size, &
-         partner_exchange_hemisphere_vec, my_sendgrid_size
+         partner_recvnorth_vec, my_sendgrid_size
 
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
     real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout
