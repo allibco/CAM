@@ -22,7 +22,7 @@ module mpi_module
        nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
        nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
        ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
-       mpi_partner=-1, my_recvgrid_size=0  &
+       mpi_partner=-1, my_recvgrid_size=0,  &
        mygrid_size =0, mygrid_size_s=0, mygrid_size_n=0, &
        mpi_comm_host_rank=-1, my_sendgrid_size=0
 
