@@ -75,7 +75,7 @@ module mpi_module
        if (npes_edyn3d > mid) then
           write(iulog,*) 'MPI init ERROR: npes_edyn3d can be at most half the size of the number of procs used for cam, so must be <=', mid
           call endrun('MPI init ERROR: npes_edyn3d can be at most half the size of the number of procs used for cam')
-       elseif ((npes_edyn3d /= 1 .and. mod(npes_edyn3d, 2) /= 0)
+       elseif ((npes_edyn3d /= 1 .and. mod(npes_edyn3d, 2) /= 0) then
           write(iulog,*) 'MPI init ERROR: npes_edyn3d must be even'
           call endrun('MPI init ERROR: npes_edyn3d must be even')
        endif
@@ -200,7 +200,7 @@ module mpi_module
 !  8  9 10 11
 !  4  5  6  7
 !  0  1  2  3 (lon_size=4)
-    if (mpi_rank > = 0) then ! main group
+    if (mpi_rank >= 0) then ! main group
        lat_rank = mpi_rank / lon_size
        lon_rank = modulo(mpi_rank, lon_size)
     elseif (ex_mpi_rank >= 0) then !extra group (use this later to find partner)
