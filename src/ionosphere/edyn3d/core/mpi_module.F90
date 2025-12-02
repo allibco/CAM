@@ -16,13 +16,13 @@ module mpi_module
   integer :: dynamo_world=-huge(1), extra_world=-huge(1),&
        union_world=-huge(1),&
        mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
-       ex_mpi_rank=-1,ex_mpi_size =0,&
+       ex_mpi_rank=-1,ex_mpi_size =0,& 
        un_mpi_rank=-1, un_mpi_size=0,&
        lat_size=0, lon_size=0, lat_rank=-1, lon_rank=-1, &
        nmlat=0, maxmlat=-1, mlat0=1, mlat1=0, mlatd0=1, mlatd1=0, &
        nmlon=0, maxmlon=-1, mlon0=1, mlon1=0, mlond0=1, mlond1=0, &
        ij_start_s=1, ij_stop_s=0, ij_start_n=1, ij_stop_n=0, &
-       mpi_partner=-1, partner_hgridsize=0, my_hgridsize=0, &
+       mpi_partner=-1, my_recvgrid_size=0  &
        mygrid_size =0, mygrid_size_s=0, mygrid_size_n=0, &
        mpi_comm_host_rank=-1, my_sendgrid_size=0
 
@@ -231,7 +231,6 @@ module mpi_module
     nmlat_task = 0
     nmlon_task = 0
 
-    ! AB: TO DO: the first 2 aren't needed for the dist version?
     ! TO DO: deallocate
     allocate(mlat0_task(0:mpi_size-1))
     allocate(mlat1_task(0:mpi_size-1))
@@ -242,7 +241,7 @@ module mpi_module
     mlat1_task = -1
     mlon1_task = -1
  
-    !for dist(TO DO - modify for solve later?)
+    !for dist
     allocate(task_csr_rowstarts(0:un_mpi_size))
     allocate(task_mygrid_size(0:un_mpi_size-1))
     allocate(task_lat_offset(0:lat_size-1))
@@ -533,6 +532,97 @@ endfunction partner_exchange_int
 
 !-----------------------------------------------------------------------
 
+subroutine partner_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
+     partner_rowptr, partner_values, partner_cols)
+
+  !send my csr matrix info  or recv my partner's matrix info
+  
+  !note: the south pole's denser row does not get sent (only north data)  
+
+#ifdef PARALLEL
+    use MPI
+#endif
+    integer, intent(in) :: nnz_per_row
+    
+    integer, dimension(my_sendgrid_size+1), intent(in) :: my_rowptr
+    integer, dimension(my_sendgrid_size*nnz_per_row), intent(in) :: my_cols
+    real(kind=rp), dimension(my_sendgrid_size*nnz_per_row), intent(in) :: my_values
+
+    integer, dimension(my_recvgrid_size+1), intent(out) :: partner_rowptr
+    integer, dimension(my_recvgrid_size*nnz_per_row), intent(out) :: partner_cols
+    real(kind=rp), dimension(my_recvgrid_size*nnz_per_row), intent(out) :: partner_values
+
+    integer :: i, nnz_count
+    
+#ifdef PARALLEL
+
+    integer ierr
+    integer, dimension(3) :: send_request, recv_request
+
+   
+    !send north to my partner
+    if (mpi_rank >= 0) then 
+       call MPI_Isend(my_rowptr, my_sendgrid_size + 1, MPI_INTEGER, mpi_partner, 200, &
+            union_world, send_request(1), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+       call MPI_Isend(my_cols, my_sendgrid_size*nnz_per_row, MPI_INTEGER, mpi_partner, 201, union_world, &
+            send_request(2), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+       call MPI_Isend(my_values, my_sendgrid_size*nnz_per_row, mpi_rp, mpi_partner, 202, union_world, &
+            send_request(3), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
+
+         ! Wait for all sends to complete
+       call MPI_Waitall(3, send_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
+
+
+    else
+       
+       partner_rowptr = 0
+       partner_cols = 0
+       partner_values = 0.0
+       
+       !recv from my partner
+       call MPI_Irecv(partner_rowptr, my_recvgrid_size + 1, MPI_INTEGER, mpi_partner, &
+            200, union_world, recv_request(1), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+       
+       call MPI_Irecv(partner_cols, my_recvgrid_size*nnz_per_row, MPI_INTEGER, mpi_partner, &
+            201, union_world, recv_request(2), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+       
+       call MPI_Irecv(partner_values, my_recvgrid_size*nnz_per_row, mpi_rp, mpi_partner, &
+            202, union_world, recv_request(3), ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
+      
+       !Wait for all recvs
+       call MPI_Waitall(3, recv_request, MPI_STATUSES_IGNORE, ierr)
+       if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
+
+    endif
+    
+#else
+!serial
+    do concurrent (i = 1: mygrid_size + 1)
+       partner_rowptr(i) = my_rowptr(i)
+    enddo
+    !note for nnz calc that we are 1-based?
+    nnz_count = my_rowptr(mygrid_size + 1) -1
+    do concurrent (i = 1: nnz_count
+       partner_cols(i) = my_cols(i)
+       partner_values(i) = my_values(i)
+    enddo
+    
+#endif
+    
+    
+  endsubroutine partner_exchange_hemisphere_mat
+  
+!-----------------------------------------------------------------------
+!REMOVE
 subroutine partner_exchange_hemisphere_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
      partner_rowptr, partner_values, partner_cols)
 

@@ -376,8 +376,8 @@ module dist_solver_module
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
-         ij_start_s,ij_stop_s,partner_hgridsize,my_hgridsize, &
-         calc_grid_ij, partner_exchange_hemisphere_mat, &
+         ij_start_s,ij_stop_s,my_recvgrid_size, &
+         calc_grid_ij, partner_sendnorth_mat, &
          gather_lon_1d, mygrid_size, mpi_partner, &
          mygrid_size_n, mygrid_size_s
     
@@ -432,8 +432,8 @@ module dist_solver_module
     real(kind=rp), dimension((mygrid_size_n)*MAX_NNZ) :: values_n
     
     !get hemisphere partner info
-    integer, dimension(partner_hgridsize+1) :: partner_rowptr
-    real(kind=rp),dimension(partner_hgridsize*MAX_NNZ) :: partner_values
+    integer, dimension(my_recvgrid_size+1) :: partner_rowptr
+    real(kind=rp),dimension(gridsize*MAX_NNZ) :: partner_values
     integer, dimension(partner_hgridsize*MAX_NNZ) :: partner_cols
 
     !global size 
@@ -1081,7 +1081,6 @@ module dist_solver_module
     ! which is in jcol1 and nzval1
     !my range of rows (grid points) is ij_start_s: ij_stop_s and ij_start_n: ij_stop_n
     
-    !might need to change to 0-based indexing (yes, but happens later for superlu)
     !first SOUTH hemisphere rows
     if (mpi_rank > 0) then !don't own row 1
        rowptr_s(1) = 1
@@ -1167,102 +1166,60 @@ module dist_solver_module
     !write(*,*) 'AB: mpi_rank, num_row_n, nnz_north =  ', mpi_rank, num_row_n, nnz_north
 
 
-    !SET UP BLOCK CSR (exchange with partner)
-    if (mpi_size > 1) then
-       if (mpi_rank >= 0) then !active proc
+    !SET UP BLOCK CSR (and send north hemisphere topartner)
+    if (un_mpi_size > 1) then
+       call partner_sendnorth_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
+            partner_rowptr, partner_values, partner_cols)
+
+       !still using 1-based indices
+       my_rowptr(1) = 1
+
+       
+       if (mpi_rank >= 0) then !dynamo proc
           !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
+          !from the south data
+
           !still using 1-based indices
-          my_rowptr(1) = 1
-
-          ! now swap hemisphere data with partner
-          !for N and S hemi, the even proc rows go first to maintain grid order
-          !(so the south owning process)
-          if (mod(mpi_rank,2) == 0) then !EVEN, own south, **send north**
-             call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
-                  partner_rowptr, partner_values, partner_cols)
-             
-             !my south (goes first into csr block)
-             if (num_row_s + 1 > size(my_rowptr)) then
-                write(*,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
-             endif
-             do concurrent (i = 2:num_row_s + 1)
-                my_rowptr(i) = rowptr_s(i)
-             enddo
-             !nnz_south set above - but double check
-             if (nnz_south /= my_rowptr(num_row_s + 1) - 1) then
-                write(*,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
-             endif
           
-             !write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
-
-             if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
-                write(*,*) 'AB: Error: my_colind or my_values array too small for south data'
-             endif
-          
-             do concurrent (i = 1:nnz_south)
-                my_colind(i) = colind_s(i)
-                my_values(i) = values_s(i)
-             enddo
-          
-             !partner has north
-             do i = 1,  partner_hgridsize
-                cnt = partner_rowptr(i+1) - partner_rowptr(i)
-                !write(iulog,*) 'AB: extra: mpi_rank, i, cnt= ', mpi_rank, i, cnt 
-                my_rowptr(num_row_s + 1 + i) = my_rowptr(num_row_s + i) + cnt
-             enddo
-             
-             !north proc's data goes second
-             !CHECK mygrid_size = num_row_s + partner_hgridsize
-             if (mygrid_size /= num_row_s + partner_hgridsize) then
-                write(*, *) 'AB: Error: mygrid_size & partner_hgridsize check', mygrid_size, partner_hgridsize
-             endif
-          
-             !nnz_north needs to be set from partner's info
-             nnz_north = my_rowptr(mygrid_size + 1) -1  - nnz_south
-
-             !write(iulog,*) 'AB: again: mpi_rank, nnz_north = ', mpi_rank, nnz_north
-
-             
-             if (nnz_south + nnz_north > size(my_colind)) then
-                write(*,*) 'AB: Error: my_colind array too small for combined data: mpi_rank, nnz_south, nnz_north, size', mpi_rank, nnz_south, nnz_north, size(my_colind)
-             endif
-          
-             do concurrent (i = 1:nnz_north)
-                my_colind(nnz_south + i) = partner_cols(i)
-                my_values(nnz_south + i) = partner_values(i)
-             enddo
-          
-          else !ODD, own north, **send south**
-             call partner_exchange_hemisphere_mat(MAX_NNZ, rowptr_s, values_s, colind_s, &
-                  partner_rowptr, partner_values, partner_cols)
-          
-             !partner has south - partner's data goes first into csr block
-             do concurrent (i = 2:partner_hgridsize + 1)
-                my_rowptr(i) = partner_rowptr(i)
-             enddo
-
-             !calc based on partner info
-             nnz_south = my_rowptr(partner_hgridsize + 1) -1
-
-             do concurrent (i = 1:nnz_south)
-                my_colind(i) = partner_cols(i)
-                my_values(i) = partner_values(i)
-             enddo
-          
-             !my north - goes second
-             do i = 1, num_row_n
-                cnt = rowptr_n(i+1) - rowptr_n(i)
-                my_rowptr( partner_hgridsize + i + 1) = my_rowptr(partner_hgridsize + i) + cnt
-             enddo
-          
-             !nnz_north already calculated for me above
-
-             do concurrent (i = 1:nnz_north)
-                my_colind(nnz_south + i) = colind_n(i)
-                my_values(nnz_south + i) = values_n(i)
-             enddo
+          if (num_row_s /= mygrid_size) then
+             write(*,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
           endif
-       endif! active tasks
+          do concurrent (i = 1:mygrid_size + 1)
+             my_rowptr(i) = rowptr_s(i)
+          enddo
+          !nnz_south set above - but double check
+          if (nnz_south /= my_rowptr(mygrid_size + 1) - 1) then
+             write(*,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
+          endif
+          
+          !write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
+
+          if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
+             write(*,*) 'AB: Error: my_colind or my_values array too small for south data'
+          endif
+          
+          do concurrent (i = 1:nnz_south)
+             my_colind(i) = colind_s(i)
+             my_values(i) = values_s(i)
+          enddo
+          
+       elseif (ex_mpi_rank >=0) then !extra procs
+          !receved data from partner
+          if (my_recvgrid_size /= mygrid_size) then
+             write(*,*) 'AB: Error un_mpi_rank, my_recvgrid_size, mygrid_size = ', un_mpi_rank, my_recvgrid_size, mygrid_size
+          endif
+             
+          do concurrent (i = 1: mygrid_size + 1)
+             my_rowptr(i)  = partner_rowptr(i)
+          enddo
+
+          nnz_north = partner_rowptr(mygrid_size + 1) - 1)
+             
+          do concurrent (i = 1:nnz_north)
+             my_colind(i) = partner_cols(i)
+             my_values(i) = partner_values(i)
+          enddo
+       endif !end extra procs
     else !one task
        !south 
        do concurrent (i = 1:num_row_s + 1)
@@ -1285,7 +1242,7 @@ module dist_solver_module
        enddo
        
     endif
-    
+             
   endsubroutine dist_construct_lhs
 !-----------------------------------------------------------------------
   function dist_construct_rhs(coef_10_s, coef_10_n) result(rhs)
