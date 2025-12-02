@@ -378,7 +378,7 @@ module dist_solver_module
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
          ij_start_s,ij_stop_s,my_recvgrid_size, &
-         calc_grid_ij, partner_sendnorth_mat, &
+         calc_grid_ij, mpi_sendnorth_mat, &
          gather_lon_1d, mygrid_size, mpi_partner, &
          mygrid_size_n, mygrid_size_s, my_sendgrid_size
     
@@ -1169,7 +1169,7 @@ module dist_solver_module
 
     !SET UP BLOCK CSR (and send north hemisphere topartner)
     if (un_mpi_size > 1) then
-       call partner_sendnorth_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
+       call mpi_sendnorth_mat(MAX_NNZ, rowptr_n, values_n, colind_n, &
             partner_rowptr, partner_values, partner_cols)
 
        !still using 1-based indices
@@ -1691,7 +1691,7 @@ module dist_solver_module
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, lat_rank,  &
          mygrid_size, mpi_rank, calc_grid_ij, mpi_size, &
-         partner_recvnorth_vec, my_sendgrid_size
+         mpi_recvnorth_vec, my_sendgrid_size, my_recvgrid_size
 
     real(kind=rp),dimension(mygrid_size),intent(in) :: fin
     real(kind=rp),dimension(2,mlat0:mlat1,mlon0:mlon1) :: fout

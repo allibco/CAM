@@ -558,7 +558,7 @@ endfunction mpi_partner_size
 
 !-----------------------------------------------------------------------
 
-subroutine partner_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
+subroutine mpi_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
      partner_rowptr, partner_values, partner_cols)
 
   !send my csr matrix info  or recv my partner's matrix info
@@ -645,7 +645,7 @@ subroutine partner_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
 #endif
     
     
-  endsubroutine partner_sendnorth_mat
+  endsubroutine mpi_sendnorth_mat
   
 !-----------------------------------------------------------------------
 !REMOVE
