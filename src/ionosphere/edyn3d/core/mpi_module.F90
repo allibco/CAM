@@ -410,6 +410,9 @@ module mpi_module
        my_recvgrid_size = 0
     endif
 
+    deallocate(task_mygrid_size)
+
+    
   endsubroutine setup_topology
 !-----------------------------------------------------------------------
               
@@ -447,7 +450,6 @@ module mpi_module
     deallocate(nmlon_task)
 
     deallocate(task_csr_rowstarts)
-    deallocate(task_mygrid_size)
     deallocate(task_lat_offset)
     
 
@@ -486,7 +488,7 @@ function mpi_partner_size(intin) result(intout)
 
        intout = 0
 
-    else 
+    elseif (ex_mpi_rank >=0) then 
        !post receive
        call MPI_Irecv(intout, 1, MPI_INTEGER, mpi_partner, tag, &
             union_world, recv_request, ierr)
@@ -497,6 +499,8 @@ function mpi_partner_size(intin) result(intout)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
        !write(*,*) 'AB: intin = ', intin, '  intout = ' , intout
+
+    endif
 #else
 
     intout = intin
@@ -601,7 +605,7 @@ subroutine partner_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
 
 
-    else
+    elseif (ex_mpi_rank >=0) tehn
        
        partner_rowptr = 0
        partner_cols = 0
@@ -803,7 +807,7 @@ subroutine mpi_sendnorth_vec(send_values, recv_values)
        call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
-    else !recv north from my partner
+    elseif (ex_mpi_rank >= 0) then !recv north from my partner
        
        !recv from my partner
        call MPI_Irecv(recv_values, my_recvgrid_size, mpi_rp, mpi_partner, &
