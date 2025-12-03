@@ -387,7 +387,7 @@ module mpi_module
           !now we need to calculate the rowstarts for the global block
           !csr martix - this will be 0-based indeing for superlu
           !do an allgather to get each procs grid size
-          task_mygrid_size = all_gather_int(mygrid_size, union_world)
+          task_mygrid_size = all_gather_int(mygrid_size, union_world, un_mpi_size)
           do i=0, un_mpi_size-1
              task_csr_rowstarts(i+1) = task_csr_rowstarts(i) &
                   + task_mygrid_size(i)
@@ -1227,7 +1227,7 @@ endsubroutine mpi_recvnorth_vec
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 
-function all_gather_int(intin, comm) result(intarrayout)
+function all_gather_int(intin, comm, commsize) result(intarrayout)
 
 #ifdef PARALLEL
     use MPI
@@ -1235,7 +1235,7 @@ function all_gather_int(intin, comm) result(intarrayout)
 
     integer, intent(in) :: intin, comm
 
-    integer, dimension(0:mpi_size-1) :: intarrayout
+    integer, dimension(0:commsize-1) :: intarrayout
 
 
 #ifdef PARALLEL
