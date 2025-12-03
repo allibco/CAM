@@ -859,7 +859,7 @@ subroutine mpi_recvnorth_vec(send_values, recv_values)
        call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
-    else !recv north from partner
+    elseif (mpi_rank >= 0) then !recv north from partner
        
        !recv from my partner
        call MPI_Irecv(recv_values, my_sendgrid_size, mpi_rp, mpi_partner, &

@@ -1657,6 +1657,7 @@ module dist_solver_module
     ! reorder 1D vector (RHS) into 2D fields (lat-lon)
     ! 1d vector has the distributed north process rows, so we have to undo that also
     ! this is the reverse of the dist_flatten
+    ! this needs all union procs
     
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use mpi_module, only:lat_rank, mlat0, mlat1, &
@@ -1738,13 +1739,13 @@ module dist_solver_module
                 write(*,*) "Error in unravel south 1, mpirank, ij, ij_start, ij_stop = ", mpi_rank, ij, ij_start_s, ij_stop_s
              endif
           enddo
-       else !extra procs: copy north to buffer to send
+       else !now extra procs: copy north to buffer to send
           do i=1, my_recvgrid_size
              sendbuf(i) = fin(i)
           enddo
        endif !extra procs
 
-       !get north from extra procs
+       !get north from extra procs (all call)
        call mpi_recvnorth_vec(sendbuf, recvbuf)
 
        if (mpi_rank >= 0) then
