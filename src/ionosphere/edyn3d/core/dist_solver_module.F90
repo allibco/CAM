@@ -374,6 +374,7 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,mpi_size,dynamo_world,lat_rank,lon_rank, &
+         un_mpi_size, un_mpi_rank, union_comm, &
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
