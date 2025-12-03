@@ -1233,7 +1233,7 @@ function all_gather_int(intin, comm, commsize) result(intarrayout)
     use MPI
 #endif
 
-    integer, intent(in) :: intin, comm
+    integer, intent(in) :: intin, comm, commsize
 
     integer, dimension(0:commsize-1) :: intarrayout
 
