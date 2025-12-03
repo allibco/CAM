@@ -217,14 +217,14 @@ contains
        endif
     enddo
 
-    print*,'DID SEND & RECV: iam = ', myrank
+    print*,'SPMV: DID SEND & RECV: iam = ', myrank
     
     call MPI_Waitall(recv_from_size+send_to_size, requests, stats, ierr)
 
     !print *, 'D5: iam = ', myrank,'send_cols =', halo%send_cols
 
     
-    print*,'DID WAITALL: iam = ', myrank
+    print*,'SPMV: DID WAITALL: iam = ', myrank
 
     !allocate the sendbuf and recvbuf here so they can be reusued
     ! Build send buffer:for the data we will send to other procs

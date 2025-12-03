@@ -164,14 +164,19 @@ module dist_solver_module
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
 
        !DEBUG
-       !call write_halo_to_file(halo, dynamo_world)
+       !call write_halo_to_file(halo, union_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
        call dist_spmv_free(halo)
+
+       write(*,*) 'AB: Finished spmv'
+
        
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
+       write(*,*) 'AB" Finished unravel'
+       
        !get ghost/halo points 
        if (mpi_size > 0) then  
           call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
@@ -187,7 +192,7 @@ module dist_solver_module
      endif !FAC
 
      ! add FAC forcing to RHS
-     !(these are both hemisphere swapped for contiguous rows already)
+     !(these are both set for contiguous rows already)
      do i = 1,mygrid_size
         if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
         if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
