@@ -210,7 +210,7 @@ module mpi_module
        lat_rank = lat_size - lat_rank - 1
     endif
 
-    write(*,*) 'lat_rank, lon_rank = ', lat_rank, lon_rankThrough the cork
+    write(*,*) 'lat_rank, lon_rank = ', lat_rank, lon_rank
        
   endsubroutine init
 !-----------------------------------------------------------------------
