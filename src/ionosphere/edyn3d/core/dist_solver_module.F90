@@ -18,7 +18,7 @@ module dist_solver_module
     bij,pot_hl,fac_hl,coef_ns,pot)
     ! construct linear system based on bij and coef and solve in pot
 
-    ! note: this is only called by the active processes
+    ! note: this is only called by the active processes (in union_world)
     
     ! if FAC is read in, pot_hl is not used, only fac_hl is used
     ! if potential is read in, pot_hl is used, fac_hl is output
@@ -166,7 +166,7 @@ module dist_solver_module
        !DEBUG
        !call write_halo_to_file(halo, union_world)
 
-       call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, dynamo_world, ierr)
+       call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
        write(*,*) 'AB: Finished spmv'
