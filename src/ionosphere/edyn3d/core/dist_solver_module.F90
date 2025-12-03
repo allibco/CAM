@@ -1512,7 +1512,7 @@ module dist_solver_module
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, mygrid_size, &
          calc_grid_ij, my_recvgrid_size, mpi_sendnorth_vec, &
-         my_sendgrid_size, ex_mpi_rank
+         my_sendgrid_size, ex_mpi_rank, un_mpi_rank, un_mpi_size
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size) :: fout
