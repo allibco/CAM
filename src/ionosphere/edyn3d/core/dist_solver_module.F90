@@ -316,18 +316,21 @@ module dist_solver_module
 
      ! reconstruct 2D distribution of potential based on the solution
      pot(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
-     !get ghost/halo points
-     if (mpi_size > 0) then
-        call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
-        call sync_mlon_3d(pot, 2)
-     else
-        !periodic points
-        do j = 1,nmlat_h
-           do isn = 1,2
-              pot(isn,j,0) = pot(isn,j,nmlon)
-              pot(isn,j,nmlon+1) = pot(isn,j,1)
+
+     !get ghost/halo points (only dynamo procs)
+     if (mpi_rank >=0 ) then
+        if (mpi_size > 0) then
+           call sync_mlat_3d(pot(:,:,mlon0:mlon1), 2)
+           call sync_mlon_3d(pot, 2)
+        else
+           !periodic points
+           do j = 1,nmlat_h
+              do isn = 1,2
+                 pot(isn,j,0) = pot(isn,j,nmlon)
+                 pot(isn,j,nmlon+1) = pot(isn,j,1)
+              enddo
            enddo
-        enddo
+        endif
      endif
      
      print *, 'AB: done with unravel'
