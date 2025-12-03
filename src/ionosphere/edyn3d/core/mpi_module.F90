@@ -337,7 +337,7 @@ module mpi_module
        mpi_partner = 0
     endif
 
-    write(*,*) "AB: my partner = ", mpi_partner
+    !write(*,*) "AB: my partner = ", mpi_partner
     
     !initial matrix row start and stops
     if (un_mpi_rank >=0) then !active for union
@@ -1278,7 +1278,7 @@ endfunction all_gather_int
 
 
     ! Add this debug output at the start
-!    write(*,*) 'AB: DEBUG - nmlon =', nmlon
+!    write(*,*) 'AB0: DEBUG - nmlon =', nmlon
 !    write(*,*) 'AB: DEBUG - mlon0, mlon1 =', mlon0, mlon1
 !    write(*,*) 'AB: DEBUG - size(varin) =', size(varin)
 !#ifdef PARALLEL
@@ -1326,7 +1326,6 @@ endfunction all_gather_int
              rs = mlon0_task(i)
              re = mlon1_task(i)
              do concurrent (j = rs:re)
-            !    write(iulog,*) 'AB: j=', j
                 varout(j) = recvbuf(j)
              end do
           end do

@@ -1220,7 +1220,7 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:phi_pol
     use mpi_module, only:mlatd0, mlatd1, mlat0, mlat1, mpi_rank, &
-         un_mpi_rank, &
+         un_mpi_rank, un_mpi_size, &
          mlon0, mlon1, mlond0, mlond1, &
          lat_rank, lon_rank, &
          ij_start_s, ij_stop_s, ij_start_n, ij_stop_n, &
@@ -1656,6 +1656,7 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use mpi_module, only:lat_rank, mlat0, mlat1, &
          mlon0, mlon1, &
+         un_mpi_rank, un_mpi_size, &
          ij_start_n, ij_stop_n, &
          ij_start_s, ij_stop_s, lat_rank,  &
          mygrid_size, mpi_rank, calc_grid_ij, mpi_size, &
