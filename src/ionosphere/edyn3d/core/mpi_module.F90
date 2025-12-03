@@ -207,10 +207,10 @@ module mpi_module
        lat_rank = ex_mpi_rank / lon_size
        lon_rank = modulo(ex_mpi_rank, lon_size)
        !swap bc north hemi is mirror
-       lat_rank = lat_size - lat_rank
+       lat_rank = lat_size - lat_rank - 1
     endif
 
-    write(*,*) 'lat_rank, lon_rank = ', lat_rank, lon_rank
+    write(*,*) 'lat_rank, lon_rank = ', lat_rank, lon_rankThrough the cork
        
   endsubroutine init
 !-----------------------------------------------------------------------
