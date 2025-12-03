@@ -276,7 +276,6 @@ module mpi_module
     endif
 
     ! each process keeps a record of the lat-lon decomposition
-    ! AB: i don't think we need these 4 arrays for the dist version 
     do concurrent (rnk = 0:mpi_size-1)
       !position on proc grid 
       rnkj = rnk / lon_size
@@ -325,7 +324,7 @@ module mpi_module
     !  0  1  2  3  (lat rank 2)
 
     ! number of procs is even (partners are with the global numbering in larger group)
-    if (mpi_size > 1) then
+    if (un_mpi_size > 1) then
        if (mpi_rank >=0 ) then !active in main group
           mpi_partner = 2*mpi_size - lon_size*(lat_rank +1) + lon_rank 
        elseif (ex_mpi_rank >= 0) then ! active extra group
@@ -337,6 +336,8 @@ module mpi_module
        mpi_partner = 0
     endif
 
+    write(*,*) "AB: my partner = ", mpi_partner
+    
     !initial matrix row start and stops
     if (un_mpi_rank >=0) then !active for union
        if (mpi_rank >=0 ) then !active for dyno_group
@@ -364,7 +365,9 @@ module mpi_module
           !set global vars (n & s row counts will be diff for procs on equator)
           mygrid_size_n = mysize_n
           mygrid_size_s = mysize_s
-       endif !just dyno group
+       elseif (ex_mpi_rank >= 0) then
+          write(*,*) 'AB: SETUP TOPO ex_pi_rank', ex_mpi_rank
+       endif 
        
        !dynamo group will send north hemi to extra group
        !so north needs to know the size
@@ -374,7 +377,7 @@ module mpi_module
               my_sendgrid_size = mysize_n
               my_recvgrid_size = 0
               mygrid_size = mysize_s
-           else !north
+           elseif (ex_mpi_rank >= 0) then !north
               my_sendgrid_size = 0
               my_recvgrid_size = out_int
               mygrid_size = out_int
