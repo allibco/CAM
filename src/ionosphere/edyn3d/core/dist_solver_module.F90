@@ -175,22 +175,27 @@ module dist_solver_module
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       write(*,*) 'AB" Finished unravel'
+       write(*,*) 'AB: Finished unravel'
        
-       !get ghost/halo points 
-       if (mpi_size > 0) then  
-          call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
-          call sync_mlon_3d(fac_hl, 2)
-       else ! add periodic points                                                     
-        do j = 1,nmlat_h
-          do isn = 1,2
-            fac_hl(isn,j,0) = fac_hl(isn,j,nmlon)
-            fac_hl(isn,j,nmlon+1) = fac_hl(isn,j,1)
-          enddo
-        enddo   
-       endif
+       !get ghost/halo points (only dynamo procs)
+       if (mpi_rank >=0 ) then
+          if (mpi_size > 0) then  
+             call sync_mlat_3d(fac_hl(:,:,mlon0:mlon1), 2)
+             call sync_mlon_3d(fac_hl, 2)
+          else ! add periodic points                                                     
+             do j = 1,nmlat_h
+                do isn = 1,2
+                   fac_hl(isn,j,0) = fac_hl(isn,j,nmlon)
+                   fac_hl(isn,j,nmlon+1) = fac_hl(isn,j,1)
+                enddo
+             enddo
+          endif
+       endif !dynamo procs
      endif !FAC
 
+     write(*,*) 'AB: Finished fac section'
+
+     
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already)
      do i = 1,mygrid_size
