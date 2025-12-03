@@ -374,7 +374,7 @@ module dist_solver_module
     use params_module,only:nmlat_h,nmlat_T1,nmlon
     use cons_module,only:jlatm_JT
     use mpi_module,only:mpi_rank,mpi_size,dynamo_world,lat_rank,lon_rank, &
-         un_mpi_size, un_mpi_rank, union_world, &
+         un_mpi_size, un_mpi_rank, union_world, ex_mpi_rank, &
          nmlat_task,nmlon_task,mlatd0,mlatd1,mlat0,mlat1, &
          mlond0,mlond1,mlon0,mlon1, &
          lat_size,lon_size,task_lat_offset,ij_start_n,ij_stop_n, &
@@ -1335,7 +1335,7 @@ module dist_solver_module
              rhs(cnt) = rhs_s(ij)
              if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
           enddo
-       else !(ex_mpi_rank >=0) 
+       elseif (ex_mpi_rank >=0) then
           do i = 1, mygrid_size
              rhs(i) = recvbuf(i)
              if (isnan(rhs(i))) write(*,*) 'AB: #2 rhs(i) is NaN, i = ', i
@@ -1512,7 +1512,7 @@ module dist_solver_module
          ij_start_n, ij_stop_n, mpi_size, mpi_rank, &
          ij_start_s, ij_stop_s, mygrid_size, &
          calc_grid_ij, my_recvgrid_size, mpi_sendnorth_vec, &
-         my_sendgrid_size
+         my_sendgrid_size, ex_mpi_rank
 
     real(kind=rp),dimension(2,mlatd0:mlatd1,mlond0:mlond1),intent(in) :: fin
     real(kind=rp),dimension(mygrid_size) :: fout
@@ -1638,7 +1638,7 @@ module dist_solver_module
              fout(cnt) = fout_s(ij)
              if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
           enddo
-       else !(ex_mpi_rank >=0) 
+       elseif (ex_mpi_rank >=0) then
           do i = 1, mygrid_size
              fout(i) = recvbuf(i)
              if (isnan(fout(i))) write(*,*) 'AB: #2 fout(i) is NaN, i = ', i
