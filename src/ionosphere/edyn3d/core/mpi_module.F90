@@ -209,7 +209,8 @@ module mpi_module
        !swap bc north hemi is mirror
        lat_rank = lat_size - lat_rank
     endif
-    
+
+    write(*,*) 'lat_rank, lon_rank = ', lat_rank, lon_rank
        
   endsubroutine init
 !-----------------------------------------------------------------------
@@ -366,7 +367,7 @@ module mpi_module
           mygrid_size_n = mysize_n
           mygrid_size_s = mysize_s
        elseif (ex_mpi_rank >= 0) then
-          write(*,*) 'AB: SETUP TOPO ex_pi_rank', ex_mpi_rank
+          write(*,*) 'AB: SETUP TOPO ex_mpi_rank', ex_mpi_rank
        endif 
        
        !dynamo group will send north hemi to extra group
