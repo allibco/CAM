@@ -202,13 +202,13 @@ module dist_solver_module
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
         write(*,*) 'AB: writing netcdf file ...'
-         write(fbuf,'(A,".",I4.4,".nc")') &
+        write(fbuf,'(A,".",I4.4,".nc")') &
              '/glade/derecho/scratch/abaker/dynamo_test', un_mpi_rank
-         !trim it
-         newfile = trim(fbuf)//c_null_char
+        !trim it
+        newfile = trim(fbuf)//c_null_char
 
-         !CALL NEW FCN - phase 0
-         write_dist_to_file(newfile, 0, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
+        !CALL NEW FCN - phase 0
+        call write_dist_to_file(newfile, 0, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
 
       endif
      
@@ -241,7 +241,7 @@ module dist_solver_module
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
-        write_dist_to_file(newfile, 1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
         print *, 'AB: done with netcdf file'
      endif
 
@@ -1720,7 +1720,7 @@ module dist_solver_module
 !-----------------------------------------------------------------------------
 
 
-subroutine write_dist_to_file( filename, phase, mynnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, task_rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
+subroutine write_dist_to_file( filename, phase, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, task_rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
 
 ! phase 0 is initialization, and before solver
 ! phase 1 is after solve - must call both in order!  
@@ -1734,9 +1734,9 @@ subroutine write_dist_to_file( filename, phase, mynnz, colind, rowptr, values_cs
     
     implicit none
     character(len=*), intent(in) :: filename
-    integer, intent(in) :: phase, mynnz
-    real(kind=rp), intent(in) :: z(:), rhs(:), rowstarts(:) pot_hl_f(:), &
-         fac_hl(:,:,:), pot(:,:,:), values_csr(:), soln(:), pot(:,:,:)
+    integer, intent(in) :: phase, nnz
+    real(kind=rp), intent(in) :: z(:), rhs(:), task_rowstarts(:), pot_hl_f(:), &
+         fac_hl(:,:,:), pot(:,:,:), values_csr(:), sol(:)
     integer, intent(in) :: colind(:), rowptr(:)
     integer, intent (inout) :: fileid, Xid, potid
     
@@ -1744,8 +1744,8 @@ subroutine write_dist_to_file( filename, phase, mynnz, colind, rowptr, values_cs
     integer :: nlonlat
     integer :: dd(4)
     integer :: mygridsize_id, mygridsizep1_id, nmlaatt1_idd, nmlon_id, nmlath_id, &
-         nprocsp1_id, size_id, sizep1_id, &
-         nnz_id, nprocs_id, nprocsp1_id, hemsize_id, &
+         size_id, sizep1_id, &
+         nnz_id, nprocsp1_id, hemsize_id, &
          mylatsize_id, mylonsize_id
 
     integer :: fachlid, potflatid, zid, rhsBid, valuesid, colsid, rowptrid, &
@@ -1866,13 +1866,9 @@ subroutine write_dist_to_file( filename, phase, mynnz, colind, rowptr, values_cs
         !close file
         ierr=NF_CLOSE(fileid)
          
-
-
     endif
     
-
-
-  end subroutine write_halo_to_file
+  end subroutine write_dist_to_file
 
 
   
