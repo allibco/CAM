@@ -65,15 +65,8 @@ module dist_solver_module
     
     !for optional output
     logical :: output_matrix = .false.
-    integer :: fileid, dd(4), &
-         mygridsize_id, nmlaatt1_idd, nmlon_id, nmlath_id, size_id, sizep1_id, &
-         mylatsize_id, mylonsize_id, &
-         nnz_id, mygridsizep1_id, nprocs_id, nprocsp1_id, hemsize_id, fachlid, &
-         potid, pot2id, zid, rhsBid, Xid, valuesid, colsid, rowptrid, procrowstartsid, &
-         procmappingid, countB(3), startB(3) 
+    integer :: fileid, Xid, potid
     character(len=200) :: fbuf
-    character(kind=c_char,len=:), allocatable :: newfile
-
 
     if (output_matrix_count == 0) then
        output_matrix = .true.
@@ -206,107 +199,16 @@ module dist_solver_module
 
      !did 0-based indexing already
 
-     !TO DO - put in a subroutine
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
         write(*,*) 'AB: writing netcdf file ...'
-
-        !newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
          write(fbuf,'(A,".",I4.4,".nc")') &
              '/glade/derecho/scratch/abaker/dynamo_test', un_mpi_rank
          !trim it
          newfile = trim(fbuf)//c_null_char
 
-         write(*,*) 'creating nc-file:', newfile
-         ierr = nf_create(newfile, NF_CLOBBER, fileid)
-
-         !Define the dimensions
-         ierr = nf_def_dim(fileid,'mygrid_size', mygrid_size, mygridsize_id)
-         ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
-         ierr = nf_def_dim(fileid, 'mynnz', nnz, nnz_id)
-         ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
-         ierr = nf_def_dim(fileid,'nmlat_h', nmlat_h, nmlath_id)
-         ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
-         ierr = nf_def_dim(fileid,'nprocs', mpi_size, nprocs_id)
-         ierr = nf_def_dim(fileid,'nprocsp1', mpi_size+1, nprocsp1_id)
-         ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
-         ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
-         ierr = nf_def_dim(fileid,'hem', 2, hemsize_id)
-         ierr = nf_def_dim(fileid,'mylat_size', mlatd1-mlatd0+1, mylatsize_id)
-         ierr = nf_def_dim(fileid,'mylon_size',mlond1-mlond0+1, mylonsize_id)
-
-         ! define vars and their associated dimensions         
-         dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
-         dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, potid)
-         dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
-         dd(1) = mygridsize_id
-         ierr = nf_def_var(fileid, 'X', NF_DOUBLE, 1, dd, Xid)
-         dd(1) = nnz_id
-         ierr = nf_def_var(fileid, 'valuesA', NF_DOUBLE, 1, dd, valuesid)
-         dd(1) = nnz_id
-         ierr = nf_def_var(fileid, 'colindxA',NF_INT, 1, dd, colsid)
-         dd(1) = mygridsizep1_id
-         ierr = nf_def_var(fileid, 'rowptrA',NF_INT, 1, dd, rowptrid)
-         dd(1) = nprocsp1_id
-         ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
-         dd(1) = nprocs_id
-         ierr = nf_def_var(fileid, 'procMapping',NF_INT, 1, dd, procmappingid)
-         dd(1) = hemsize_id
-         dd(2) = mylatsize_id
-         dd(3) = mylonsize_id
-         ierr = nf_def_var(fileid, 'fac_hl',NF_DOUBLE, 3, dd, fachlid)
-         dd(1) = hemsize_id
-         dd(2) = mylatsize_id
-         dd(3) = mylonsize_id
-         ierr = nf_def_var(fileid, 'pot_2',NF_DOUBLE, 3, dd, pot2id)
-
-         !now fill fields 
-         !change mode
-         ierr=nf_enddef(fileid)
-         !Output the  flat potential
-         startB(1)=1
-         countB(1)=mygrid_size
-         ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot_hl_f)
-         !Output the  z
-         startB(1)=1
-         countB(1)=mygrid_size
-         ierr=NF_PUT_VARA_DOUBLE(fileid,zid,startB,countB,z)
-         !Output the  b
-         startB(1)=1
-         countB(1)=mygrid_size
-         ierr=NF_PUT_VARA_DOUBLE(fileid,rhsBid,startB,countB,rhs)
-         !Output A in CSR format
-         startB(1)=1
-         countB(1)=mygrid_size +1
-         ierr=NF_PUT_VARA_INT(fileid,rowptrid,startB,countB,rowptr)
-         startB(1)=1
-         countB(1)=nnz
-         ierr=NF_PUT_VARA_INT(fileid,colsid,startB,countB,colind)
-         startB(1)=1
-         countB(1)=nnz
-         ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
-
-         startB(1)=1
-         countB(1)=mpi_size+1
-         ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
-         startB(1)=1
-         countB(1)=mpi_size
-         ierr=NF_PUT_VARA_INT(fileid,procmappingid,startB,countB,task_csr_mapping)
-
-         startB(1)=1
-         countB(1)=2
-         startB(2)=1
-         countB(2)=mlatd1-mlatd0+1
-         startB(3)=1
-         countB(3)=mlond1-mlond0+1
-         ierr=NF_PUT_VARA_DOUBLE(fileid,fachlid,startB,countB,fac_hl)
-
-         
-         !Close the file up (later after solve)
-         !ierr=NF_CLOSE(fileid)
+         !CALL NEW FCN - phase 0
+         write_dist_to_file(newfile, 0, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
 
       endif
      
@@ -339,25 +241,10 @@ module dist_solver_module
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
-        startB(1)=1
-        countB(1)=mygrid_size
-        ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,sol)
-
-        startB(1)=1
-        countB(1)=2
-        startB(2)=1
-        countB(2)=mlatd1-mlatd0+1
-        startB(3)=1
-        countB(3)=mlond1-mlond0+1
-        ierr=NF_PUT_VARA_DOUBLE(fileid,pot2id,startB,countB,pot)
-
-        !close file
-        ierr=NF_CLOSE(fileid)
+        write_dist_to_file(newfile, 1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
+        print *, 'AB: done with netcdf file'
      endif
 
-     print *, 'AB: done with netcdf file'
-     
-    
      !pot and fac_hl are ready to return (updated grid + halo)
 
      ! Deallocate arrays to free memory
@@ -370,7 +257,6 @@ module dist_solver_module
      if (allocated(sol)) deallocate(sol)
 
      print *, 'AB: done with deallocating'
-
 
      
      call t_stopf('dist_linear_system')
@@ -1832,5 +1718,162 @@ module dist_solver_module
   endsubroutine insert_sort
 
 !-----------------------------------------------------------------------------
+
+
+subroutine write_dist_to_file( filename, phase, mynnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, task_rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
+
+! phase 0 is initialization, and before solver
+! phase 1 is after solve - must call both in order!  
+    use iso_c_binding
+    use mpi
+    use mpi_module, only: mpi_rank,dynamo_world,union_world, lat_rank,lon_rank,&
+         nmlat_task,nmlon_task,mygrid_size,&
+         mlat0, mlat1, mlon0, mlon1, &
+         task_csr_rowstarts, mpi_size, &
+         un_mpi_size, un_mpi_rank
+    
+    implicit none
+    character(len=*), intent(in) :: filename
+    integer, intent(in) :: phase, mynnz
+    real(kind=rp), intent(in) :: z(:), rhs(:), rowstarts(:) pot_hl_f(:), &
+         fac_hl(:,:,:), pot(:,:,:), values_csr(:), soln(:), pot(:,:,:)
+    integer, intent(in) :: colind(:), rowptr(:)
+    integer, intent (inout) :: fileid, Xid, potid
+    
+    integer :: ierr, unitno
+    integer :: nlonlat
+    integer :: dd(4)
+    integer :: mygridsize_id, mygridsizep1_id, nmlaatt1_idd, nmlon_id, nmlath_id, &
+         nprocsp1_id, size_id, sizep1_id, &
+         nnz_id, nprocs_id, nprocsp1_id, hemsize_id, &
+         mylatsize_id, mylonsize_id
+
+    integer :: fachlid, potflatid, zid, rhsBid, valuesid, colsid, rowptrid, &
+         procrowstartsid, countB(3), startB(3)
+
+    ! global matrix size
+    nlonlat = nmlat_T1*nmlon 
+
+    if (phase == 0) then
+       write(*,*) 'creating nc-file:', filename
+       
+       ierr = nf_create(filename, NF_CLOBBER, fileid)
+       
+       !Define the dimensions
+       ierr = nf_def_dim(fileid,'mygrid_size', mygrid_size, mygridsize_id)
+       ierr = nf_def_dim(fileid, 'mygrid_sizep1', mygrid_size+1, mygridsizep1_id)
+       ierr = nf_def_dim(fileid, 'mynnz', nnz, nnz_id)
+       ierr = nf_def_dim(fileid,'nmlat_T1', nmlat_T1, nmlatt1_id)
+       ierr = nf_def_dim(fileid,'nmlat_h', nmlat_h, nmlath_id)
+       ierr = nf_def_dim(fileid,'nmlon', nmlon, nmlon_id)
+       ierr = nf_def_dim(fileid,'allprocsp1', un_mpi_size+1, nprocsp1_id)
+       ierr = nf_def_dim(fileid,'global_size', nlonlat, size_id)
+       ierr = nf_def_dim(fileid,'global_sizep1', nlonlat + 1, sizep1_id)
+       ierr = nf_def_dim(fileid,'hem', 2, hemsize_id)
+       ierr = nf_def_dim(fileid,'mylat_size', mlatd1-mlatd0+1, mylatsize_id)
+       ierr = nf_def_dim(fileid,'mylon_size',mlond1-mlond0+1, mylonsize_id)
+
+       ! define vars and their associated dimensions         
+       dd(1) = mygridsize_id
+       ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
+       
+       dd(1) = mygridsize_id
+       ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, potid)
+       
+       dd(1) = mygridsize_id
+       ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
+
+       dd(1) = nnz_id
+       ierr = nf_def_var(fileid, 'valuesA', NF_DOUBLE, 1, dd, valuesid)
+
+       dd(1) = nnz_id
+       ierr = nf_def_var(fileid, 'colindxA',NF_INT, 1, dd, colsid)
+
+       dd(1) = mygridsizep1_id
+       ierr = nf_def_var(fileid, 'rowptrA',NF_INT, 1, dd, rowptrid)
+
+       dd(1) = nprocsp1_id
+       ierr = nf_def_var(fileid, 'procRowStarts',NF_INT, 1, dd, procrowstartsid)
+
+       dd(1) = hemsize_id
+       dd(2) = mylatsize_id
+       dd(3) = mylonsize_id
+       ierr = nf_def_var(fileid, 'fac_hl',NF_DOUBLE, 3, dd, fachlid)
+       
+       dd(1) = mygridsize_id
+       ierr = nf_def_var(fileid, 'X', NF_DOUBLE, 1, dd, Xid)
+         
+       dd(1) = hemsize_id
+       dd(2) = mylatsize_id
+       dd(3) = mylonsize_id
+       ierr = nf_def_var(fileid, 'pot',NF_DOUBLE, 3, dd, potid)
+
+       !now fill pre-solve fields (everything but sol and pot)
+       !change mode
+       ierr=nf_enddef(fileid)
+
+       !Output the flat potential
+       startB(1)=1
+       countB(1)=mygrid_size
+       ierr=NF_PUT_VARA_DOUBLE(fileid,potflatid,startB,countB,pot_hl_f)
+       !Output the  z
+       startB(1)=1
+       countB(1)=mygrid_size
+       ierr=NF_PUT_VARA_DOUBLE(fileid,zid,startB,countB,z)
+       !Output the  b
+       startB(1)=1
+       countB(1)=mygrid_size
+       ierr=NF_PUT_VARA_DOUBLE(fileid,rhsBid,startB,countB,rhs)
+       !Output A in CSR format
+       startB(1)=1
+       countB(1)=mygrid_size +1
+       ierr=NF_PUT_VARA_INT(fileid,rowptrid,startB,countB,rowptr)
+       startB(1)=1
+       countB(1)=nnz
+       ierr=NF_PUT_VARA_INT(fileid,colsid,startB,countB,colind)
+       startB(1)=1
+       countB(1)=nnz
+       ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
+       !row starts
+       startB(1)=1
+       countB(1)=mpi_size+1
+       ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_rowstarts)
+       !fac_hl
+       startB(1)=1
+       countB(1)=2
+       startB(2)=1
+       countB(2)=mlatd1-mlatd0+1
+       startB(3)=1
+       countB(3)=mlond1-mlond0+1
+       ierr=NF_PUT_VARA_DOUBLE(fileid,fachlid,startB,countB,fac_hl)
+       
+       !don't close
+         
+    elseif (phase ==1) then
+
+       startB(1)=1
+       countB(1)=mygrid_size
+        ierr=NF_PUT_VARA_DOUBLE(fileid,Xid,startB,countB,sol)
+
+        startB(1)=1
+        countB(1)=2
+        startB(2)=1
+        countB(2)=mlatd1-mlatd0+1
+        startB(3)=1
+        countB(3)=mlond1-mlond0+1
+        ierr=NF_PUT_VARA_DOUBLE(fileid,potid,startB,countB,pot)
+
+        !close file
+        ierr=NF_CLOSE(fileid)
+         
+
+
+    endif
+    
+
+
+  end subroutine write_halo_to_file
+
+
   
 endmodule dist_solver_module
