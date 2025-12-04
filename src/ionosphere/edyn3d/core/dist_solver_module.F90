@@ -197,7 +197,7 @@ module dist_solver_module
 
      
      ! add FAC forcing to RHS
-     !(these are both set for contiguous rows already)
+     !(these are both set for contiguous rows already - all union procs own)
      do i = 1,mygrid_size
         if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
         if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
@@ -213,7 +213,7 @@ module dist_solver_module
 
         !newfile = '/glade/derecho/scratch/abaker/dynamo_test.nc'
          write(fbuf,'(A,".",I4.4,".nc")') &
-             '/glade/derecho/scratch/abaker/dynamo_test', mpi_rank
+             '/glade/derecho/scratch/abaker/dynamo_test', un_mpi_rank
          !trim it
          newfile = trim(fbuf)//c_null_char
 
