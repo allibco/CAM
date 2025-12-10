@@ -144,9 +144,9 @@ module dist_solver_module
        pot_hl_f = dist_flatten(pot_hl)
 
        !DEBUG
-       do i = 1,mygrid_size
-          if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
-       enddo
+       !do i = 1,mygrid_size
+       !   if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
+       !enddo
        
        !Parallel matmult (uses union group)
        ! z = matmul(lhs, pot_hl_f)
@@ -158,7 +158,6 @@ module dist_solver_module
 
        !DEBUG
        !call write_halo_to_file(halo, union_world)
-
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
