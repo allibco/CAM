@@ -209,7 +209,7 @@ module dist_solver_module
         newfile = trim(fbuf)//c_null_char
 
         !CALL NEW FCN - phase 0
-        call write_dist_to_file(newfile, 0, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 0, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs,fac_hl, pot, sol, fileid, Xid, potid)
 
       endif
      
@@ -242,7 +242,7 @@ module dist_solver_module
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
-        call write_dist_to_file(newfile, 1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
         print *, 'AB: done with netcdf file'
      endif
 
@@ -1721,12 +1721,13 @@ module dist_solver_module
 !-----------------------------------------------------------------------------
 
 
-subroutine write_dist_to_file( filename, phase, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, task_rowstarts, fac_hl, pot, sol, fileid, Xid, potid)
+subroutine write_dist_to_file( filename, phase, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, fac_hl, pot, sol, fileid, Xid, potid)
 
 ! phase 0 is initialization, and before solver
 ! phase 1 is after solve - must call both in order!  
     use iso_c_binding
     use mpi
+    use params_module, only:nmlat_h,nmlat_T1,nmlon
     use mpi_module, only: mpi_rank,dynamo_world,union_world, lat_rank,lon_rank,&
          nmlat_task,nmlon_task,mygrid_size,&
          mlat0, mlat1, mlon0, mlon1, &
@@ -1736,7 +1737,9 @@ subroutine write_dist_to_file( filename, phase, nnz, colind, rowptr, values_csr,
     implicit none
     character(len=*), intent(in) :: filename
     integer, intent(in) :: phase, nnz
-    real(kind=rp), intent(in) :: z(:), rhs(:), task_rowstarts(:), pot_hl_f(:), &
+    integer,intent(in) :: mlatd0,mlatd1,mlond0,mlond1
+
+    real(kind=rp), intent(in) :: z(:), rhs(:), pot_hl_f(:), &
          fac_hl(:,:,:), pot(:,:,:), values_csr(:), sol(:)
     integer, intent(in) :: colind(:), rowptr(:)
     integer, intent (inout) :: fileid, Xid, potid
@@ -1744,7 +1747,7 @@ subroutine write_dist_to_file( filename, phase, nnz, colind, rowptr, values_csr,
     integer :: ierr, unitno
     integer :: nlonlat
     integer :: dd(4)
-    integer :: mygridsize_id, mygridsizep1_id, nmlaatt1_idd, nmlon_id, nmlath_id, &
+    integer :: mygridsize_id, mygridsizep1_id, nmlaatt1_id, nmlon_id, nmlath_id, &
          size_id, sizep1_id, &
          nnz_id, nprocsp1_id, hemsize_id, &
          mylatsize_id, mylonsize_id
@@ -1838,7 +1841,7 @@ subroutine write_dist_to_file( filename, phase, nnz, colind, rowptr, values_csr,
        !row starts
        startB(1)=1
        countB(1)=mpi_size+1
-       ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_rowstarts)
+       ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
        !fac_hl
        startB(1)=1
        countB(1)=2
