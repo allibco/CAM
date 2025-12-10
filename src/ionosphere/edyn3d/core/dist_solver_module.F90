@@ -242,7 +242,7 @@ module dist_solver_module
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
-        call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, rowstarts, fac_hl, pot,sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, fac_hl, pot,sol, fileid, Xid, potid)
         print *, 'AB: done with netcdf file'
      endif
 
@@ -1747,7 +1747,7 @@ subroutine write_dist_to_file( filename, phase, mlatd0,mlatd1,mlond0,mlond1, nnz
     integer :: ierr, unitno
     integer :: nlonlat
     integer :: dd(4)
-    integer :: mygridsize_id, mygridsizep1_id, nmlaatt1_id, nmlon_id, nmlath_id, &
+    integer :: mygridsize_id, mygridsizep1_id, nmlatt1_id, nmlon_id, nmlath_id, &
          size_id, sizep1_id, &
          nnz_id, nprocsp1_id, hemsize_id, &
          mylatsize_id, mylonsize_id
