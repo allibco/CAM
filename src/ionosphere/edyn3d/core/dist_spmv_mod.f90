@@ -370,7 +370,7 @@ contains
 
     !print*,'IN spmv: iam = ', myrank, 'y_local = ', y_local
 
-    ! cleanup temporaries !FINISH
+    ! cleanup !FINISH
     deallocate(reqs, stats)
 
    end subroutine dist_spmv

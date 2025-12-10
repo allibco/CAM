@@ -108,7 +108,7 @@ module dist_solver_module
     pot_hl_f = 0.0
     colind = 0
     row_ptr = 0
-    valuses_csr = 0.0
+    values_csr = 0.0
     z = 0.0
     
     ! for now, split two hemispheres (keep halo pts)
@@ -159,7 +159,8 @@ module dist_solver_module
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
 
        !DEBUG
-       !call write_halo_to_file(halo, union_world)
+       call write_halo_to_file(halo, union_world)
+
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
@@ -1782,7 +1783,7 @@ subroutine write_dist_to_file( filename, phase, mlatd0,mlatd1,mlond0,mlond1, nnz
        ierr = nf_def_var(fileid, 'z', NF_DOUBLE, 1, dd, zid)
        
        dd(1) = mygridsize_id
-       ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, potid)
+       ierr = nf_def_var(fileid, 'pot_in_flat', NF_DOUBLE, 1, dd, potflatid)
        
        dd(1) = mygridsize_id
        ierr = nf_def_var(fileid, 'rhsB', NF_DOUBLE, 1, dd, rhsBid)
@@ -1840,7 +1841,7 @@ subroutine write_dist_to_file( filename, phase, mlatd0,mlatd1,mlond0,mlond1, nnz
        ierr=NF_PUT_VARA_DOUBLE(fileid,valuesid,startB,countB,values_csr)
        !row starts
        startB(1)=1
-       countB(1)=mpi_size+1
+       countB(1)=un_mpi_size+1
        ierr=NF_PUT_VARA_INT(fileid,procrowstartsid,startB,countB,task_csr_rowstarts)
        !fac_hl
        startB(1)=1

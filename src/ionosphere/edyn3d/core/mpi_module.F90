@@ -388,6 +388,7 @@ module mpi_module
           !csr martix - this will be 0-based indeing for superlu
           !do an allgather to get each procs grid size
           task_mygrid_size = all_gather_int(mygrid_size, union_world, un_mpi_size)
+          write(*,*) 'TASK grid size = ', task_mygrid_size
           do i=0, un_mpi_size-1
              task_csr_rowstarts(i+1) = task_csr_rowstarts(i) &
                   + task_mygrid_size(i)
@@ -398,6 +399,8 @@ module mpi_module
           my_recvgrid_size = 0
           task_csr_rowstarts(1) = mygrid_size
        endif
+
+       write(*,*), 'ROWSTARTS = ', task_csr_rowstarts
        
        ! set halo global variables
        mlatd0 = mlat0 - 1
