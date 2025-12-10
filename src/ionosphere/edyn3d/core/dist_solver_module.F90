@@ -67,6 +67,8 @@ module dist_solver_module
     logical :: output_matrix = .false.
     integer :: fileid, Xid, potid
     character(len=200) :: fbuf
+    character(kind=c_char,len=:), allocatable :: newfile
+
 
     if (output_matrix_count == 0) then
        output_matrix = .true.
