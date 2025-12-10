@@ -196,10 +196,10 @@ module dist_solver_module
      do i = 1,mygrid_size
         if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
         if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
+        write(*,*) "i = , rhs =, z =  ", i, rhs(i), z(i)
         rhs(i) = rhs(i)+z(i)
      enddo
 
-     !did 0-based indexing already
 
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
@@ -1225,9 +1225,10 @@ module dist_solver_module
              cnt = cnt + 1
              sendbuf(cnt) = rhs_n(ij) 
           enddo
-       endif !dynam procs only
+       endif !dynamo procs only
        
        call mpi_sendnorth_vec(sendbuf, recvbuf)
+
        if (mpi_rank >=0) then !dynamo procs
           !copy rhs_s into rhs
           cnt = 0

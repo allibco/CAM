@@ -1263,6 +1263,7 @@ endfunction all_gather_int
   function gather_lon_1d(varin) result(varout)
     ! collect a 1d array from other procs w/lat_rank 0 to root proc 0
     ! this could be genearlized to have any root proc and any proc row (Or column)
+    !DYNAMO WORLD
 #ifdef PARALLEL
 
     use MPI
@@ -1337,9 +1338,6 @@ endfunction all_gather_int
     elseif (mpi_rank > 0 .and. lat_rank == 0) then ! send info to root (0)
 
        cnt = mlon1-mlon0+1
-       !do concurrent (i = 1:cnt)
-       !   sendbuf(i) = varin(i+mlon0-1)
-       !enddo
        sendbuf(1:cnt) = varin(mlon0:mlon1)
        
        call MPI_Isend(sendbuf, cnt, mpi_rp, &
