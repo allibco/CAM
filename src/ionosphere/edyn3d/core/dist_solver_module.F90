@@ -164,10 +164,10 @@ module dist_solver_module
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
-       write(*,*) 'AB: Finished spmv'
-       if (mpi_rank ==0) then
-          write(*,*) 'AB 1: z(1:10) = ', z(1:10)
-       endif
+       !write(*,*) 'AB: Finished spmv'
+       !if (mpi_rank ==0) then
+       !   write(*,*) 'AB 1: z(1:10) = ', z(1:10)
+       !endif
           
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
@@ -191,11 +191,10 @@ module dist_solver_module
      endif !FAC
 
      write(*,*) 'AB: Finished fac section'
-     if (mpi_rank ==0) then
-        write(*,*) 'AB 2: z(1:10) = ', z(1:10)
-        write(*,*) 'AB 2: rhs(1:10) = ', rhs(1:10)
-
-     endif
+     !if (mpi_rank ==0) then
+     !   write(*,*) 'AB 2: z(1:10) = ', z(1:10)
+     !   write(*,*) 'AB 2: rhs(1:10) = ', rhs(1:10)
+     !endif
      
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already - all union procs own)
@@ -468,7 +467,7 @@ module dist_solver_module
 
              rowcnt_s(1) = counter !should be = nmlon+2
              !jcol1 will be sorted already
-             !TO DO: maybe not ....
+             !TO DO: maybe not for multiple processes
              !sort by col indices
              call insert_sort(jcol1, nzval1, counter)
              
