@@ -144,7 +144,7 @@ module dist_solver_module
        ! A. Maute 2023/11/21: put the high latitude potential in X
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(pot_hl)
-
+       
        !DEBUG
        !do i = 1,mygrid_size
        !   if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
@@ -165,8 +165,10 @@ module dist_solver_module
        call dist_spmv_free(halo)
 
        write(*,*) 'AB: Finished spmv'
-
-       
+       if (mpi_rank ==0) then
+          write(*,*) 'AB 1: z(1:10) = ', z(1:10)
+       endif
+          
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
@@ -189,7 +191,11 @@ module dist_solver_module
      endif !FAC
 
      write(*,*) 'AB: Finished fac section'
+     if (mpi_rank ==0) then
+        write(*,*) 'AB 2: z(1:10) = ', z(1:10)
+        write(*,*) 'AB 2: rhs(1:10) = ', rhs(1:10)
 
+     endif
      
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already - all union procs own)
@@ -462,7 +468,10 @@ module dist_solver_module
 
              rowcnt_s(1) = counter !should be = nmlon+2
              !jcol1 will be sorted already
-          
+             !TO DO: maybe not ....
+             !sort by col indices
+             call insert_sort(jcol1, nzval1, counter)
+             
              !get ready for next loop
              loop_start_i = 2
           else !I don't own i=1

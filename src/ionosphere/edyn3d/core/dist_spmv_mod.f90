@@ -60,6 +60,9 @@ contains
     halo%fst_row = fst_row
     halo%m_loc = m_loc
     last_row = fst_row + m_loc - 1
+
+    write(*,*) 'HALO INIT: fst_row, last_row', fst_row, last_row
+    
     halo%last_row = last_row
     ! 1) Collect remote column indices (may have duplicates)
     allocate(tmp(0)) !empty array
@@ -90,6 +93,9 @@ contains
     allocate(halo%halo_cols(nn))
     halo%halo_cols = tmp(1:nn)
 
+    write(*,*) 'HALO INIT: task_row_starts = ',task_row_starts 
+
+    
     ! 3) Determine owner of each halo column i need (use task_row_starts)
     !   halo%halo_cols and task_row_starts are sorted, so we can go in order
     allocate(halo%col_owners(halo%nhalo))
