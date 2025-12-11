@@ -1690,14 +1690,22 @@ module dist_solver_module
    !LIMITED to MAX_NNZ in length
    ! sorting by the int array but moving the reals 
    ! then removes zeros
-     integer, dimension(MAX_NNZ*20), intent(inout) :: array_i
-     real(kind=rp), dimension(MAX_NNZ*20), intent(inout) :: array_r
-     integer, intent(inout) :: len
+   !  integer, dimension(MAX_NNZ), intent(inout) :: array_i
+   !  real(kind=rp), dimension(MAX_NNZ), intent(inout) :: array_r
+   !  integer, intent(inout) :: len
 
+   !  integer :: i, j, temp_i, z
+   !  real(kind=rp) :: temp_r
+   !  integer :: keep(MAX_NNZ)
+
+
+     integer, dimension(:), intent(inout) :: array_i     ! Assumed-shape
+     real(kind=rp), dimension(:), intent(inout) :: array_r  ! Assumed-shape
+     integer, intent(inout) :: len
      integer :: i, j, temp_i, z
      real(kind=rp) :: temp_r
-     integer :: keep(MAX_NNZ)
-
+     integer :: keep(size(array_i))  ! Allocate based on actual size
+     
      do i=2,len
        temp_i = array_i(i)
        temp_r = array_r(i)
