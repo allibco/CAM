@@ -73,7 +73,7 @@ module dist_solver_module
     if (output_matrix_count == 0) then
        output_matrix = .true.
        output_matrix_count = output_matrix_count + 1
-       write(*,*) 'AB: Output matrix this time through ...'
+       write(*,*) 'Dist_ls: Output matrix this time through ...'
     else
        output_matrix = .false.
     endif
@@ -88,7 +88,7 @@ module dist_solver_module
     !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
     !allocate space for rowptr,colind,values_csr
-    ! AB why does MAX_NNZ=12? seems like 10 is max?
+    ! why does MAX_NNZ=12? seems like 10 is max?
     allocate(rowptr(mygrid_size+1))
     if (mpi_rank == 0) then ! make room for dense row
        nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
@@ -123,7 +123,6 @@ module dist_solver_module
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     !need nnz for solver
     nnz = rowptr(mygrid_size+1)-1
-    !write(*,*) "AB: (after lhs) nnz = ", nnz
     
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
@@ -159,12 +158,12 @@ module dist_solver_module
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
-       !write(*,*) 'AB: Finished spmv'
+       !write(*,*) 'Dist_ls: Finished spmv'
           
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       !write(*,*) 'AB: Finished unravel'
+       !write(*,*) 'Dist_ls: Finished unravel'
        
        !get ghost/halo points (only dynamo procs)
        if (mpi_rank >=0 ) then
@@ -182,19 +181,19 @@ module dist_solver_module
        endif !dynamo procs
      endif !FAC
 
-     !write(*,*) 'AB: Finished fac section'
+     !write(*,*) 'Dist_ls: Finished fac section'
      
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already - all union procs own)
      do i = 1,mygrid_size
-        if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
-        if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
+        !if (isnan(rhs(i))) write(*,*) 'Dist_ls warning: rhs(i) is NaN, i = ', i
+        !if (isnan(z(i))) write(*,*) 'Dist_ls warning: z(i) is NaN, i = ', i 
         rhs(i) = rhs(i)+z(i)
      enddo
 
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
-        write(*,*) 'AB: writing netcdf file ...'
+        write(*,*) 'Dist_ls: writing netcdf file ...'
         write(fbuf,'(A,".",I4.4,".nc")') &
              '/glade/derecho/scratch/abaker/dynamo_test', un_mpi_rank
         !trim it
@@ -228,14 +227,14 @@ module dist_solver_module
         endif
      endif
      
-     print *, 'AB: done with unravel'
+     print *, 'Dist_ls: done with unravel'
 
      !pot is: dimension(2,mlatd0:mlatd1,mlond0:mlond1)
      
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, fac_hl, pot,sol, fileid, Xid, potid)
-        print *, 'AB: done with netcdf file'
+        !print *, 'Dist_ls: done with netcdf file'
      endif
 
      !pot and fac_hl are ready to return (updated grid + halo)
@@ -248,8 +247,6 @@ module dist_solver_module
      if (allocated(z)) deallocate(z)
      if (allocated(pot_hl_f)) deallocate(pot_hl_f)
      if (allocated(sol)) deallocate(sol)
-
-     print *, 'AB: done with deallocating'
 
      
      call t_stopf('dist_linear_system')
@@ -283,11 +280,7 @@ module dist_solver_module
     integer,dimension(nnz_est),intent(out) :: my_colind
     real(kind=rp),dimension(nnz_est),intent(out) :: my_values
 
-!mlatd0 and mlond0 can be 0    
-!mlatd1 and mlond1 can be nmlat+1 and nmlon+1
-
-    
-! if two hemispheres are uncoupled at high latitudes, set bijSum to zero
+    ! if two hemispheres are uncoupled at high latitudes, set bijSum to zero
     real(kind=rp),parameter :: bijSum = 0
     integer :: nlonlat,i,j,jS,jN,ij,isub,im,ip, k, cnt
     integer :: loop_start_i, loop_stop_i, loop_start_j, loop_stop_j
@@ -518,7 +511,7 @@ module dist_solver_module
                 ij = calc_grid_ij(i,jS,lat_rank)
 
                 if (ij > ij_stop_s .or. ij < ij_start_s) then
-                   write(*,*) 'AB: Error ij south index 1 for lhs', mpi_rank, ij
+                   write(*,*) 'Dist_ls: Error ij south index 1 for lhs', mpi_rank, ij
                 endif
                 !note: the edges of the proc domain are handled in calc_grid_ij
              
@@ -573,7 +566,7 @@ module dist_solver_module
                 ! note that coef has the direction switched in the NH
                 ij = calc_grid_ij(i,jN,lat_rank)
                 if (ij > ij_stop_n .or. ij < ij_start_n) then
-                   write(iulog,*) 'AB: Error ij north index 1 for lhs', mpi_rank, ij
+                   write(iulog,*) 'Dist_ls: Error ij north index 1 for lhs', mpi_rank, ij
                 endif
              
                 !coef 4 (i-1, j-1)
@@ -642,7 +635,7 @@ module dist_solver_module
              !Southern hemisphere
              ij = calc_grid_ij(i,jS,lat_rank)
              if (ij > ij_stop_s .or. ij < ij_start_s) then
-                write(*,*) 'AB: Error ij south index 2 for lhs', mpi_rank, ij
+                write(*,*) 'Dist_ls: Error ij south index 2 for lhs', mpi_rank, ij
              endif
           
              !coef 6 (i-1, j-1)
@@ -705,7 +698,7 @@ module dist_solver_module
              !calc_ij for North hemisphere
              ij = calc_grid_ij(i,jN,lat_rank)
              if (ij > ij_stop_n .or. ij < ij_start_n) then
-                write(*,*) 'AB: Error ij north index 2 for lhs', mpi_rank, ij
+                write(*,*) 'Dist_ls: Error ij north index 2 for lhs', mpi_rank, ij
              endif
              
              !extra connection to South at 6
@@ -785,7 +778,7 @@ module dist_solver_module
                 ij = calc_grid_ij(i,jS,lat_rank)
 
                 if (ij > ij_stop_s .or. ij < ij_start_s) then
-                   write(*,*) 'AB: Error ij south index 3 for lhs', mpi_rank, ij
+                   write(*,*) 'Dist_construct_lhs: Error ij south index 3 for lhs', mpi_rank, ij
                 endif
              
                 !coef 6 (i-1, j-1)
@@ -832,7 +825,7 @@ module dist_solver_module
                 ij = calc_grid_ij(i,jN,lat_rank)
 
                 if (ij > ij_stop_n .or. ij < ij_start_n) then
-                   write(iulog,*) 'AB: Error ij north index 3 for lhs', mpi_rank, ij
+                   write(iulog,*) 'Dist_construct_lhs: Error ij north index 3 for lhs', mpi_rank, ij
                 endif
              
                 !coef 4 (i-1, j-1)
@@ -891,7 +884,7 @@ module dist_solver_module
              ij = calc_grid_ij(i,j,lat_rank)
           
              if (ij > ij_stop_s .or. ij < ij_start_s) then
-                write(*,*) 'AB: Error ij south index 4 for lhs', mpi_rank, ij
+                write(*,*) 'LHS: Error ij south index 4 for lhs', mpi_rank, ij
              endif
           
              !coef 6 (i-1, j-1)
@@ -955,7 +948,7 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = rowcnt_s(ij) !entries in row
              if (nnz_s + cnt > size(colind_s)) then
-                write(*,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
+                write(*,*) 'Dist_construct_lhs: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
              endif
              do k = 1, cnt
                 nnz_s = nnz_s + 1
@@ -973,7 +966,7 @@ module dist_solver_module
           ! do first row seperately
           cnt = rowcnt_s(1)
           if (cnt + nnz_s > size(colind_s)) then
-             write(*,*) 'AB: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
+             write(*,*) 'Dist_construct_lhs: Error: 1st row, sparse matrix arrays too small, cnt = ', cnt
           endif
           do k = 1, cnt
              nnz_s = nnz_s + 1
@@ -987,7 +980,7 @@ module dist_solver_module
           do ij = ij_start_s+1, ij_stop_s
              cnt = rowcnt_s(ij)
              if (nnz_s + cnt > size(colind_s)) then
-                write(*,*) 'AB: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
+                write(*,*) 'Dist_construct_lhs: Error: sparse matrix arrays too small nnz_s, cnt = ', nnz_s, cnt
              endif
              do k = 1, cnt
                 nnz_s = nnz_s + 1
@@ -1002,7 +995,6 @@ module dist_solver_module
        !now row_counter_s needs to be decremented by 1 so it = #rows of s
        num_row_s = row_counter_s -1
        nnz_south = nnz_s
-       !write(*,*) 'AB: mpi_rank, num_rows_s, nnz_south =  ', mpi_rank, num_row_s, nnz_south
     
        !loop through NORTH hemisphere
        rowptr_n(1) = 1
@@ -1013,7 +1005,7 @@ module dist_solver_module
        do ij = ij_start_n, ij_stop_n
           cnt = rowcnt_n(ij)
           if (nnz_n + cnt > size(colind_n)) then
-             write(*,*) 'AB: Error: north sparse matrix arrays too small nnz_n, cnt = ', nnz_n, cnt
+             write(*,*) 'Dist_construct_lhs: Error: north sparse matrix arrays too small nnz_n, cnt = ', nnz_n, cnt
           endif
           do k = 1, cnt
              nnz_n = nnz_n + 1
@@ -1028,7 +1020,7 @@ module dist_solver_module
 
     endif !this is the end of just the dynamo procs
 
-    ! SET UP BLOCK CSR (and send north hemisphere topartner)
+    ! SET UP BLOCK CSR (and send north hemisphere to partner)
     ! We need all the procs
     if (un_mpi_size > 1) then
        
@@ -1042,18 +1034,18 @@ module dist_solver_module
           !now set up my block of the csr matrix (my_rowptr, my_values, my_colind)
           !from the south data
           if (num_row_s /= mygrid_size) then
-             write(*,*) 'AB: Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
+             write(*,*) 'Dist_construct_lhs Error: my_rowptr array too small for south data, num_row_s +1, size = ', num_row_s+1, size(my_rowptr)
           endif
           do concurrent (i = 1:mygrid_size + 1)
              my_rowptr(i) = rowptr_s(i)
           enddo
           !nnz_south set above - but double check
           if (nnz_south /= my_rowptr(mygrid_size + 1) - 1) then
-             write(*,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
+             write(*,*) 'Dist_construct_lhs Error: mpi_rank, nnz_south = ', mpi_rank, nnz_south
           endif          
 
           if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
-             write(*,*) 'AB: Error: my_colind or my_values array too small for south data'
+             write(*,*) 'Dist_construct_lhs Error: my_colind or my_values array too small for south data'
           endif
           
           do concurrent (i = 1:nnz_south)
@@ -1064,7 +1056,7 @@ module dist_solver_module
        elseif (ex_mpi_rank >=0) then !extra procs
           ! we received data from partner
           if (my_recvgrid_size /= mygrid_size) then
-             write(*,*) 'AB: Error un_mpi_rank, my_recvgrid_size, mygrid_size = ', un_mpi_rank, my_recvgrid_size, mygrid_size
+             write(*,*) 'Dist_cons=truct_lhs error: un_mpi_rank, my_recvgrid_size, mygrid_size = ', un_mpi_rank, my_recvgrid_size, mygrid_size
           endif
              
           do concurrent (i = 1: mygrid_size + 1)
@@ -1150,7 +1142,7 @@ module dist_solver_module
              ij = calc_grid_ij(i,j, lat_rank) !this should be 1
              
              if (ij > ij_stop_s .or. ij < ij_start_s) then
-                write(*,*) 'AB: Error ij south index for rhs', mpi_rank, ij
+                write(*,*) 'Dist_construct_rhs Error: ij south index for rhs', mpi_rank, ij
              endif
              !has to get rest of row from other tasks
              rhs_s(ij) = sum(coef10_j1_buf(:))
@@ -1164,7 +1156,7 @@ module dist_solver_module
              ij = calc_grid_ij(i, jN, lat_rank)
              
              if (ij > ij_stop_n .or. ij < ij_start_n) then
-                write(*,*) 'AB: Error ij north index for rhs', mpi_rank, ij
+                write(*,*) 'Dist_construct_rhs Error: ij north index for rhs', mpi_rank, ij
              endif
              rhs_n(ij) = phi_pol
           enddo
@@ -1182,7 +1174,7 @@ module dist_solver_module
              !SOUTH
              ij = calc_grid_ij(i,j,lat_rank)
              if (ij > ij_stop_s .or. ij < ij_start_s) then
-                write(*,*) 'AB: Error ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
+                write(*,*) ' Dist_construct_rhs Error: ij south index 2 for rhs: rank, ij = ', mpi_rank, ij
              endif
              rhs_s(ij) = coef_10_s(j,i)
              
@@ -1195,7 +1187,7 @@ module dist_solver_module
              jN = nmlat_T1-j+1 !needed to calc ij
              ij = calc_grid_ij(i, jN, lat_rank)
              if (ij > ij_stop_n .or. ij < ij_start_n) then
-                write(*,*) 'AB: Error ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
+                write(*,*) 'Dist_construct_rhs Error: ij north index 2 for rhs: rank, i,j,jN, ij =', mpi_rank, i,j,jN,ij
              endif
              rhs_n(ij) = coef_10_n(j,i)
           enddo
@@ -1223,12 +1215,12 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              rhs(cnt) = rhs_s(ij)
-             if (isnan(rhs(cnt))) write(*,*) 'AB: ERROR rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
+             if (isnan(rhs(cnt))) write(*,*) 'Dist_construct_rhs ERROR: rhs(cnt) is NaN, cnt = ', cnt, ' rank = ', mpi_rank
           enddo
        elseif (ex_mpi_rank >=0) then
           do i = 1, mygrid_size
              rhs(i) = recvbuf(i)
-             if (isnan(rhs(i))) write(*,*) 'AB: #2 rhs(i) is NaN, i = ', i
+             if (isnan(rhs(i))) write(*,*) 'Dist_construct_rhs error: #2 rhs(i) is NaN, i = ', i
           enddo
        endif
     else !un_mpi_size = 1
@@ -1665,18 +1657,11 @@ module dist_solver_module
   subroutine insert_sort(array_i, array_r, len)
    ! this is only an ok sorting approach for small arrays
    ! since its O(n^2)
-   !LIMITED to MAX_NNZ in length
+    ! (only row one of matrix sort will be a little longer than MAX_NNZ
+    !, but is already mostly sorted, so it's fine)
    ! sorting by the int array but moving the reals 
    ! then removes zeros
-   !  integer, dimension(MAX_NNZ), intent(inout) :: array_i
-   !  real(kind=rp), dimension(MAX_NNZ), intent(inout) :: array_r
-   !  integer, intent(inout) :: len
-
-   !  integer :: i, j, temp_i, z
-   !  real(kind=rp) :: temp_r
-   !  integer :: keep(MAX_NNZ)
-
-
+   
      integer, dimension(:), intent(inout) :: array_i     ! Assumed-shape
      real(kind=rp), dimension(:), intent(inout) :: array_r  ! Assumed-shape
      integer, intent(inout) :: len
