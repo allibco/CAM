@@ -123,7 +123,7 @@ module dist_solver_module
     call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
     !need nnz for solver
     nnz = rowptr(mygrid_size+1)-1
-    write(*,*) "AB: (after lhs) nnz = ", nnz
+    !write(*,*) "AB: (after lhs) nnz = ", nnz
     
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
@@ -145,11 +145,6 @@ module dist_solver_module
        ! and then use LHS to calculate the RHS FAC
        pot_hl_f = dist_flatten(pot_hl)
        
-       !DEBUG
-       !do i = 1,mygrid_size
-       !   if (isnan(pot_hl_f(i))) write(*,*) 'AB: pot_hl_f(i) is NaN, i = ', i
-       !enddo
-       
        !Parallel matmult (uses union group)
        ! z = matmul(lhs, pot_hl_f)
        fst_row = task_csr_rowstarts(un_mpi_rank) ! 0-index
@@ -159,20 +154,17 @@ module dist_solver_module
        call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
 
        !DEBUG
-       call write_halo_to_file(halo, union_world)
+       !call write_halo_to_file(halo, union_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
        call dist_spmv_free(halo)
 
        !write(*,*) 'AB: Finished spmv'
-       !if (mpi_rank ==0) then
-       !   write(*,*) 'AB 1: z(1:10) = ', z(1:10)
-       !endif
           
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       write(*,*) 'AB: Finished unravel'
+       !write(*,*) 'AB: Finished unravel'
        
        !get ghost/halo points (only dynamo procs)
        if (mpi_rank >=0 ) then
@@ -190,21 +182,15 @@ module dist_solver_module
        endif !dynamo procs
      endif !FAC
 
-     write(*,*) 'AB: Finished fac section'
-     !if (mpi_rank ==0) then
-     !   write(*,*) 'AB 2: z(1:10) = ', z(1:10)
-     !   write(*,*) 'AB 2: rhs(1:10) = ', rhs(1:10)
-     !endif
+     !write(*,*) 'AB: Finished fac section'
      
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already - all union procs own)
      do i = 1,mygrid_size
         if (isnan(rhs(i))) write(*,*) 'AB: rhs(i) is NaN, i = ', i
         if (isnan(z(i))) write(*,*) 'AB: z(i) is NaN, i = ', i 
-        write(*,*) "i = , rhs =, z =  ", i, rhs(i), z(i)
         rhs(i) = rhs(i)+z(i)
      enddo
-
 
      !do we want to output matrix and rhs for debugging
      if (output_matrix == .true. ) then
@@ -350,12 +336,6 @@ module dist_solver_module
     !---------------------------------
     if (mpi_rank >= 0) then !just dynamo procs for getting the coefficients
 
-       !   some debugging info
-       !write(*, *) 'AB: LHS: mpi_rank, ij_start_s, ij_stop_s, s_grid_pts = ', mpi_rank, ij_start_s, ij_stop_s, ij_stop_s - ij_start_s + 1
-       !write(*, *) 'AB: LHS: mpi_rank, ij_start_n, ij_stop_n, n_grid_pts = ',mpi_rank, ij_start_n, ij_stop_n,  ij_stop_n - ij_start_n + 1
-       !write(*, *) 'AB: LHS: mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size = ',mpi_rank, my_hgridsize, mpi_partner, partner_hgridsize, mygrid_size
-       !write(*, *) 'AB: LHS: mpi_rank, lon_rank, lat_rank',mpi_rank, lon_rank, lat_rank
-
        !-------------------------------------
 
        ! i, j, ij are all global indices - each task has a subset of the grid
@@ -467,7 +447,7 @@ module dist_solver_module
 
              rowcnt_s(1) = counter !should be = nmlon+2
              !jcol1 will be sorted already
-             !TO DO: maybe not for multiple processes
+             !but *not* for > 1 process
              !sort by col indices
              call insert_sort(jcol1, nzval1, counter)
              
@@ -1071,7 +1051,7 @@ module dist_solver_module
           if (nnz_south /= my_rowptr(mygrid_size + 1) - 1) then
              write(*,*) 'AB: Error mpi_rank, nnz_south = ', mpi_rank, nnz_south
           endif          
-          !write(iulog,*) 'AB: again: mpi_rank, num_row_s, nnz_south = ', mpi_rank, num_row_s, nnz_south
+
           if (nnz_south > size(my_colind) .or. nnz_south > size(my_values)) then
              write(*,*) 'AB: Error: my_colind or my_values array too small for south data'
           endif
@@ -1311,8 +1291,6 @@ module dist_solver_module
     call f_create_SuperMatrix_handle(A)
     call f_create_SuperLUStat_handle(stat)
 
-    write(*, *) 'AB: SUPERLU un_mpi_rank = ', un_mpi_rank, 'n_global = ', n_global, 'n_loc = ', n_loc, 'nnz_loc = ', nnz_loc, 'lat_size = ', lat_size, 'lon_size = ', lon_size
-           
     ! Initialize the SuperLU_DIST process grid
     !i'll use the same layout as the dynamo, but double the lat for the extra procs
     nprow = 2*lat_size
@@ -1320,7 +1298,7 @@ module dist_solver_module
 
     call f_superlu_gridinit(union_world, nprow, npcol, grid)
     if (nprow * npcol /= un_mpi_size) then
-       write(*,*) "ERROR: nprow*npcol != nprocs"
+       write(*,*) "SUperLU ERROR: nprow*npcol != nprocs"
     endif
     
     !get my first row in distributed matrix
@@ -1329,12 +1307,13 @@ module dist_solver_module
     !create the distributed compressed row matrix A (O-index)
     !some debugging
     if (rowptr(n_loc+1) /= nnz_loc) then
-       write(*,*)  "AB: ERROR rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
+       write(*,*)  "SuperLU ERROR rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
     endif
+
     if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
-       write(*,*)  "AB: Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
+       write(*,*)  "SuperLU Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
     endif
-    write(*,*) 'AB: SUPERLU first_row (0-index) = ', first_row
+
     if (first_row < 0 .or. first_row >= n_global) then
        write(*,*)  "first_row out of range", first_row, n_global
     endif
@@ -1371,10 +1350,10 @@ module dist_solver_module
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
     
     if (info /= 0) then
-       write(*,*) 'ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
+       write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
     endif
     if (info == 0 .and. un_mpi_rank == 0) then
-       write(*,*) 'Backward error: ', berr_array(1)
+       write(*,*) 'SUperLU Backward error: ', berr_array(1)
     endif
 
     write(*,*) 'DONE WITH PDGSSSVX'
@@ -1457,7 +1436,7 @@ module dist_solver_module
              !checkbounds
              if (ij >= ij_start_s .and. ij <= ij_stop_s) then
                 fout_s(ij) = fin(1,j,i)
-                if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
+                if (isnan(fout_s(ij))) write(*,*) 'Flatten warning: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
              else
                 write(iulog,*) "Error in flatten south, mpirank, ij = ", mpi_rank, ij
              endif
@@ -1468,7 +1447,7 @@ module dist_solver_module
              !checkbounds
              if (ij >= ij_start_n .and. ij <= ij_stop_n) then
                 fout_n(ij) = fin(2,j,i)
-                if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+                if (isnan(fout_n(ij))) write(*,*) 'Flatten warning: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
              else
                 write(iulog,*) "Error in flatten north, mpirank, ij = ", mpi_rank, ij
              endif
@@ -1489,7 +1468,7 @@ module dist_solver_module
              !checkbounds
              if (ij >= ij_start_s .and. ij <= ij_stop_s) then
                 fout_s(ij) = avg
-                if (isnan(fout_s(ij))) write(*,*) 'AB: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
+                if (isnan(fout_s(ij))) write(*,*) 'Flatten warning: fout_s(ij) is NaN, ij, i, jS = ', ij, i, jS
              else
                 write(iulog,*) "Error in flatten 2 south, mpirank, ij = ", mpi_rank, ij
              endif
@@ -1504,7 +1483,7 @@ module dist_solver_module
              !checkbounds
              if (ij >= ij_start_n .and. ij <= ij_stop_n) then
                 fout_n(ij) = avg
-                if (isnan(fout_n(ij))) write(*,*) 'AB: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
+                if (isnan(fout_n(ij))) write(*,*) 'Flatten warning: fout_n(ij) is NaN, ij, i, jN = ', ij, i, jN
 
              else
                 write(iulog,*) "Error in flatten 2 north, mpirank, ij = ", mpi_rank, ij
@@ -1546,12 +1525,12 @@ module dist_solver_module
           do ij = ij_start_s, ij_stop_s
              cnt = cnt + 1
              fout(cnt) = fout_s(ij)
-             if (isnan(fout(cnt))) write(*,*) 'AB: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
+             if (isnan(fout(cnt))) write(*,*) 'Flatten warning: #1 fout(cnt) is NaN, cnt, ij = ', cnt, ij
           enddo
        elseif (ex_mpi_rank >=0) then
           do i = 1, mygrid_size
              fout(i) = recvbuf(i)
-             if (isnan(fout(i))) write(*,*) 'AB: #2 fout(i) is NaN, i = ', i
+             if (isnan(fout(i))) write(*,*) 'Flatten warning: #2 fout(i) is NaN, i = ', i
           enddo
        endif
     endif ! multiple procs
