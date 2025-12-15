@@ -226,7 +226,7 @@ module dist_solver_module
         endif
      endif
      
-     print *, 'Dist_ls: done with unravel'
+     !print *, 'Dist_ls: done with unravel'
 
      !if output turned on for debugging 
      if (output_matrix == .true.) then
@@ -1340,8 +1340,6 @@ module dist_solver_module
        write(*,*) 'SUperLU Backward error: ', berr_array(1)
     endif
 
-    write(*,*) 'DONE WITH PDGSSSVX'
-    
     ! result is sol (already assigned by reference in pdgssvx)
 
     !TO DO Can I save some of the LU structures after the first time since
