@@ -36,7 +36,7 @@ module dist_solver_module
                           un_mpi_size, un_mpi_rank
 
     
-    ! the processor grid only covers one hemisphere ((nmlat_h, nmlon)
+    ! the processor grid only covers one hemisphere (nmlat_h, nmlon)
     ! nmlat_h => # mag latitudes in one hemisphere
     ! nmlon => num of mag longitudes
     ! nmlat_T1 = 2*nmlat_h-1 # num mag latitudes globally
@@ -127,11 +127,10 @@ module dist_solver_module
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
 
-    !0-based indexing 
+    !change matrix to 0-based indexing 
     !need matrix to be 0-based index for superlu and the matvec
     colind=colind-1
     rowptr=rowptr-1
-
 
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
@@ -199,7 +198,7 @@ module dist_solver_module
         !trim it
         newfile = trim(fbuf)//c_null_char
 
-        !CALL NEW FCN - phase 0
+        !call write fcun (1 or 2) - phase 0
         call write_dist_to_file(newfile, 0, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs,fac_hl, pot, sol, fileid, Xid, potid)
 
       endif
@@ -229,8 +228,6 @@ module dist_solver_module
      
      print *, 'Dist_ls: done with unravel'
 
-     !pot is: dimension(2,mlatd0:mlatd1,mlond0:mlond1)
-     
      !if output turned on for debugging 
      if (output_matrix == .true.) then
         call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, fac_hl, pot,sol, fileid, Xid, potid)
@@ -415,7 +412,6 @@ module dist_solver_module
              counter = counter + 1
              jcol1(counter) = calc_grid_ij(i,j,0) !this will be 1
              !this requires the whole row (needs to get the rest)
-             !nzval1(counter) = sum(coef_s(9,j,:))-bijSum
              nzval1(counter) = sum(coef9_j1_buf(:))-bijSum
           
              counter = counter + 1
@@ -429,10 +425,6 @@ module dist_solver_module
              ! this processor only owns the coef(3,1,i) for i <= mlond1!
              ! (needs to get the rest from procs in this row! done above)
              do isub = 2,nmlon
-                ! Sum_i=1^nmlon C3(i,1) Phi(i,2)
-                ! lhs(ij,(isub-1)*nmlat_T1+j+1) = coef(3,j,isub)
-                !jcol1(isub+2) = (isub-1)*nmlat_T1+j+1
-                !nzval1(isub+2) = coef(3,j,isub)
                 counter = counter +1
                 jcol1(counter) =  calc_grid_ij(isub,j+1,0)
                 nzval1(counter) = coef3_j1_buf(isub)
@@ -884,7 +876,7 @@ module dist_solver_module
              ij = calc_grid_ij(i,j,lat_rank)
           
              if (ij > ij_stop_s .or. ij < ij_start_s) then
-                write(*,*) 'LHS: Error ij south index 4 for lhs', mpi_rank, ij
+                write(*,*) 'DISH_LHS: Error ij south index 4 for lhs', mpi_rank, ij
              endif
           
              !coef 6 (i-1, j-1)

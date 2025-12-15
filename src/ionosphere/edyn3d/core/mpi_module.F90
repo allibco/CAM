@@ -1039,15 +1039,6 @@ endfunction all_gather_int
     real(kind=rp), dimension(nmlon) :: recvbuf
 
 
-    ! Add this debug output at the start
-!    write(*,*) 'AB0: DEBUG - nmlon =', nmlon
-!    write(*,*) 'AB: DEBUG - mlon0, mlon1 =', mlon0, mlon1
-!    write(*,*) 'AB: DEBUG - size(varin) =', size(varin)
-!#ifdef PARALLEL
-!    write(*,*) 'AB: DEBUG - lon_size =', lon_size
-!    write(*,*) 'AB: DEBUG - mpi_rank =', mpi_rank
-!#endif
-    
     tag = 34
     
     ! load to work array
@@ -1067,9 +1058,7 @@ endfunction all_gather_int
              rs = mlon0_task(i)
              re = mlon1_task(i)
              cnt = re-rs+1
-             
-             !write(*,*) 'AB: Gather, mpi_rank, i, rs, re', mpi_rank, i, rs, re
-             
+                         
              call MPI_Irecv(recvbuf(rs:re), cnt, mpi_rp, &
                   i, tag, dynamo_world, &
                   requests(i), ierr)
@@ -1079,9 +1068,6 @@ endfunction all_gather_int
           !now wait to receive all data
           call MPI_Waitall(lon_size-1, requests, MPI_STATUSES_IGNORE, ierr)
           if (ierr /= MPI_SUCCESS) call handle_error('MPI_Waitall', ierr)
-          
-          !write(*,*) 'AB: size(varout), size(recvbuf)', size(varout), size(recvbuf)
-
           
           !copy from all other procs
           do i = 1, lon_size - 1
