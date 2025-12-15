@@ -13,6 +13,10 @@ module dist_solver_module
   !if you want output the first interation, set to 0, otherwise set to 1
   integer :: output_matrix_count=1
 
+  type(halo_t) :: halo
+
+
+  
   contains
 !-----------------------------------------------------------------------
   subroutine dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, &
@@ -62,7 +66,7 @@ module dist_solver_module
 
     integer :: ierr, fst_row
 
-    type(halo_t) :: halo
+    !type(halo_t) :: halo
     
     !for optional output
     logical :: output_matrix = .false.
@@ -147,14 +151,18 @@ module dist_solver_module
        ! z = matmul(lhs, pot_hl_f)
        fst_row = task_csr_rowstarts(un_mpi_rank) ! 0-index
 
-       !TO DO - this init should be called just the first timestep because the nonzero
+       !This init should be called just the first timestep because the nonzero
        !matrix pattern does not change
-       call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
-
-       !DEBUG
+       if (halo%nprocs_local == 0) then
+          call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
+       endif
+          
+       !optional DEBUG
        !call write_halo_to_file(halo, union_world)
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
+
+       !free later (only after done as just initializing once)
        call dist_spmv_free(halo)
 
        !write(*,*) 'Dist_ls: Finished spmv'

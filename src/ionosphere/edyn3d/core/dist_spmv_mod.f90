@@ -5,7 +5,7 @@ module dist_spmv_mod
   implicit none
 
   type halo_t
-     integer :: nprocs_local      ! communicator size
+     integer :: nprocs_local=0      ! communicator size
      integer :: rank
      integer :: n_global !global size
      integer :: m_loc !local size

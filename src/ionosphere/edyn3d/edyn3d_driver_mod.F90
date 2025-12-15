@@ -573,6 +573,7 @@ contains
     use edyn3d_esmf_mag_ref_p_grid_mod, only: edyn3d_esmf_mag_ref_p_grid_destroy
     use edyn3d_hist_mag_grids_mod, only: edyn3d_hist_mag_grids_final
     use mpi_module, only: dynamo_mpi_finalize
+    use dist_solver_module, only: dist_solver_final
 
     call edyn3d_esmf_fields_rhandles_destroy()
     call edyn3d_esmf_oplus_grid_destroy()
@@ -582,6 +583,7 @@ contains
     call edyn3d_esmf_mag_ref_p_grid_destroy()
 
     call edyn3d_hist_mag_grids_final()
+    call dist_solver_final()
     call dynamo_mpi_finalize()
     
   end subroutine edyn3d_driver_final
