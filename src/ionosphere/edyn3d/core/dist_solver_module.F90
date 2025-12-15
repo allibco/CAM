@@ -162,8 +162,8 @@ module dist_solver_module
 
        call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
 
-       !free later (only after done as just initializing once)
-       call dist_spmv_free(halo)
+       !free later (only after done because we are just initializing once)
+       !call dist_spmv_free(halo)
 
        !write(*,*) 'Dist_ls: Finished spmv'
           
@@ -1649,7 +1649,20 @@ module dist_solver_module
 
 
   endfunction dist_unravel
-   
+
+  !-----------------------------------------------------------------------
+
+  subroutine dist_solver_final()
+
+    !clean up
+    call dist_spmv_free(halo)
+
+    
+
+  endsubroutine dist_solver_final
+
+  
+  
   !-----------------------------------------------------------------------
 
   subroutine insert_sort(array_i, array_r, len)
