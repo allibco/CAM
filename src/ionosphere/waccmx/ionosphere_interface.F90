@@ -202,7 +202,9 @@ module ionosphere_interface
          call endrun('ionosphere_readnl: ionos_npes > total_pes')
       end if
       if (ionos_edyn3d_npes<1) then
-         ionos_edyn3d_npes = ionos_npes
+         !AB 12/25: want default to be at most half the number of procs (and even)
+         !ionos_edyn3d_npes = ionos_npes
+         ionos_edyn3d_npes = 2 * (ionos_npes/4)
       else if (ionos_edyn3d_npes>total_pes) then
          call endrun('ionosphere_readnl: ionos_edyn3d_npes > total_pes')
       end if

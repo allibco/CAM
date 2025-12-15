@@ -192,40 +192,32 @@ contains
        endif
        cnt = halo%recvcounts(rank+1)
        indx = halo%rdispls(rank+1) + 1
-       !print*,'D4 SEND: iam = ', myrank,'rank =', rank, 'cnt =', cnt, 'indx = ',indx
 
        call MPI_Isend(halo%halo_cols(indx), cnt, MPI_INTEGER, &
             rank, tag, comm, &
             requests(k), ierr)
        if (ierr /= 0) then
-          print*, 'Isend returned nonzero ierr=',ierr, 'myrank=', myrank
+          print*, 'dist_spmv_init ERROR: Isend returned nonzero ierr=',ierr, 'myrank=', myrank
        endif
     enddo
 
     do k = 1, send_to_size
        rank = halo%send_to(k)
        if (rank < 0 .or. rank >= ntasks) then
-          print*, 'BAD RANK in recv_from(',k,') = ', rank
+          print*, 'dist_spmv_init ERROR: BAD RANK in recv_from(',k,') = ', rank
        endif
        cnt = halo%sendcounts(rank+1)
        indx = halo%sdispls(rank+1) + 1
-       !print*,'D4 RECV: iam = ', myrank,'rank =', rank, 'cnt =', cnt, 'indx = ',indx
+
        call MPI_Irecv(halo%send_cols(indx), cnt, MPI_INTEGER, &
             rank, tag, comm, &
             requests(recv_from_size + k), ierr)
        if (ierr /= 0) then
-          print*, 'Irecv returned nonzero ierr=',ierr, 'myrank=', myrank
+          print*, 'dist_spmv_init ERROR: Irecv returned nonzero ierr=',ierr, 'myrank=', myrank
        endif
     enddo
 
-    print*,'SPMV: DID SEND & RECV: iam = ', myrank
-    
     call MPI_Waitall(recv_from_size+send_to_size, requests, stats, ierr)
-
-    !print *, 'D5: iam = ', myrank,'send_cols =', halo%send_cols
-
-    
-    print*,'SPMV: DID WAITALL: iam = ', myrank
 
     !allocate the sendbuf and recvbuf here so they can be reusued
     ! Build send buffer:for the data we will send to other procs
@@ -321,22 +313,17 @@ contains
     end do
 
 
-    !we should do our diag block (local) multiply part here
-   
+    !we could do our diag block (local) multiply part here and be more efficient
 
     ! Waitall
     if (reqs_count > 0) then
        call MPI_Waitall(reqs_count, reqs, stats, ierr)
     end if
 
-    !print *, 'MATVEC: iam = ', myrank,'SENDbuf =', halo%sendbuf
-    !print *, 'MATVEC: iam = ', myrank,'RECVbuf =', halo%recvbuf
-
-   ! for each owner O, the entries I receive from O correspond to
-   ! those halo_cols i have whose owner == O, and in the same order as they appear in halo%send_cols for owner O.
-   ! which matches my halo_cols by construction
-
-    !print*,'IN spmv: iam = ', myrank, 'm_loc = ', m_loc
+    ! for each owner O, the entries I receive from O correspond to
+    ! those halo_cols i have whose owner == O, and in the same order
+    ! as they appear in halo%send_cols for owner O.
+    ! which matches my halo_cols by construction
 
     ! Finally do local SpMV using halo_values when needed
     do i = 1, m_loc ! for each row
@@ -347,10 +334,10 @@ contains
              loc =  colind(jp) - halo%fst_row + 1 !colind is 0-based
              !debugging
              if (loc < 1 .or. loc > size(x_local)) then
-                print *, 'Rank', myrank, ': loc out of range =', loc, ' colind=', colind(jp), ' fst_row=', halo%fst_row
+                print *, 'dist_spmv ERROR: Rank', myrank, ': loc out of range =', loc, ' colind=', colind(jp), ' fst_row=', halo%fst_row
              end if
-             if (x_local(loc) /= x_local(loc)) print *, 'NaN in x_local at loc=', loc, ' rank=', myrank
-             if (nzval(jp) /= nzval(jp)) print *, 'NaN in nzval at jp=', jp
+             if (x_local(loc) /= x_local(loc)) print *, 'dist_spmv ERROR: NaN in x_local at loc=', loc, ' rank=', myrank
+             if (nzval(jp) /= nzval(jp)) print *, 'dist_smpv ERROR: NaN in nzval at jp=', jp
              
              y_local(i) = y_local(i) + nzval(jp) * x_local(loc)
           else
@@ -369,7 +356,6 @@ contains
        end do
     end do
 
-    !print*,'IN spmv: iam = ', myrank, 'y_local = ', y_local
 
     ! cleanup !FINISH
     deallocate(reqs, stats)

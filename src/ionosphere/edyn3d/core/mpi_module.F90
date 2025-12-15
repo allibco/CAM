@@ -355,10 +355,7 @@ module mpi_module
           !my sizes in each hemisphere
           mysize_n =  (ij_stop_n -ij_start_n + 1)
           mysize_s = (ij_stop_s -ij_start_s + 1)
-          !write(*,*) 'AB: SETUP TOPO mysize_s, mysize_n', mysize_s, mysize_n
-          !write(*, *) 'AB: TOPO ij_start_s, ij_stop_s, s_grid_pts = ', ij_start_s, ij_stop_s, mysize_s
-          !write(*, *) 'AB: TOPO ij_start_n, ij_stop_n, n_grid_pts = ', ij_start_n, ij_stop_n, mysize_n
-       
+
           !set global vars (n & s row counts will be diff for procs on equator)
           mygrid_size_n = mysize_n
           mygrid_size_s = mysize_s
@@ -384,7 +381,7 @@ module mpi_module
           !csr martix - this will be 0-based indeing for superlu
           !do an allgather to get each procs grid size
           task_mygrid_size = all_gather_int(mygrid_size, union_world, un_mpi_size)
-          !write(*,*) 'TASK grid size = ', task_mygrid_size
+          
           do i=0, un_mpi_size-1
              task_csr_rowstarts(i+1) = task_csr_rowstarts(i) &
                   + task_mygrid_size(i)

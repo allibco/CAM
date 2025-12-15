@@ -10,7 +10,8 @@ module dist_solver_module
 
   !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
-  integer :: output_matrix_count=0
+  !if you want output the first interation, set to 0, otherwise set to 1
+  integer :: output_matrix_count=1
 
   contains
 !-----------------------------------------------------------------------
@@ -69,11 +70,10 @@ module dist_solver_module
     character(len=200) :: fbuf
     character(kind=c_char,len=:), allocatable :: newfile
 
-
     if (output_matrix_count == 0) then
        output_matrix = .true.
        output_matrix_count = output_matrix_count + 1
-       write(*,*) 'Dist_ls: Output matrix this time through ...'
+       !write(*,*) 'Dist_ls: Output matrix this time through ...'
     else
        output_matrix = .false.
     endif
