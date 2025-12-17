@@ -1,5 +1,6 @@
 module dist_solver_module
   use perf_mod, only: t_startf, t_stopf
+  use superlu_mod    
 
   use prec,only:rp
   use iso_c_binding
@@ -7,14 +8,27 @@ module dist_solver_module
   use dist_spmv_mod
 
   include 'netcdf.inc'
+  #include "superlu_dist_config.fh"
+
 
   !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
   !if you want output the first interation, set to 0, otherwise set to 1
   integer :: output_matrix_count=1
 
+  !only want to setup the halo once for the spmv
   type(halo_t) :: halo
 
+  !superlu (here to faciltate reuse across iterations)
+  logical, save :: superlu_initialized = .false.
+
+  integer(superlu_ptr), save :: grid
+  integer(superlu_ptr), save :: options
+  integer(superlu_ptr), save :: ScalePermstruct
+  integer(superlu_ptr), save :: LUstruct
+  integer(superlu_ptr), save :: SOLVEstruct
+  integer(superlu_ptr), save :: A
+  integer(superlu_ptr), save :: stat
 
   
   contains
@@ -1240,8 +1254,6 @@ module dist_solver_module
 
   function dist_solve_superlu(n_global, n_loc, nnz_loc, rowptr, colind, values, rhs) result(sol)
 
-    #include "superlu_dist_config.fh"
-    use superlu_mod    
     use mpi_module,only: lat_size,lon_size,union_world,&
          task_csr_rowstarts, un_mpi_rank, &
          un_mpi_size
@@ -1262,120 +1274,130 @@ module dist_solver_module
     integer :: i, iopt, first_row, nprow, npcol
 
     !superlu structures
-    integer(superlu_ptr) :: grid
-    integer(superlu_ptr) :: options
-    integer(superlu_ptr) :: ScalePermstruct
-    integer(superlu_ptr) :: LUstruct
-    integer(superlu_ptr) :: SOLVEstruct
-    integer(superlu_ptr) :: A
-    integer(superlu_ptr) :: stat
+    !integer(superlu_ptr) :: grid
+    !integer(superlu_ptr) :: options
+    !integer(superlu_ptr) :: ScalePermstruct
+    !integer(superlu_ptr) :: LUstruct
+    !integer(superlu_ptr) :: SOLVEstruct
+    !integer(superlu_ptr) :: A
+    !integer(superlu_ptr) :: stat
       
     ! Other variables
     integer(kind=c_int) :: info, ierr
     real(kind=c_double), target :: berr_array(nrhs)
- 
-    ! Create Fortran handles for the C structures used in SuperLU_DIST
-    call f_create_gridinfo_handle(grid)
-    call f_create_options_handle(options)
-    call f_dcreate_ScalePerm_handle(ScalePermstruct)
-    call f_dcreate_LUstruct_handle(LUstruct)
-    call f_dcreate_SOLVEstruct_handle(SOLVEstruct)
-    call f_create_SuperMatrix_handle(A)
-    call f_create_SuperLUStat_handle(stat)
 
-    ! Initialize the SuperLU_DIST process grid
-    !i'll use the same layout as the dynamo, but double the lat for the extra procs
-    nprow = 2*lat_size
-    npcol = lon_size
-
-    call f_superlu_gridinit(union_world, nprow, npcol, grid)
-    if (nprow * npcol /= un_mpi_size) then
-       write(*,*) "SUperLU ERROR: nprow*npcol != nprocs"
-    endif
-    
     !get my first row in distributed matrix
     first_row = task_csr_rowstarts(un_mpi_rank)     !these are 0-based already 
-    
-    !create the distributed compressed row matrix A (O-index)
-    !some debugging
-    if (rowptr(n_loc+1) /= nnz_loc) then
-       write(*,*)  "SuperLU ERROR rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
-    endif
-
-    if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
-       write(*,*)  "SuperLU Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
-    endif
-
     if (first_row < 0 .or. first_row >= n_global) then
-       write(*,*)  "first_row out of range", first_row, n_global
+       write(*,*)  "Superlu Error: first_row out of range", first_row, n_global
     endif
 
+    if (.not. superlu_initialized) then
+    
+       ! Create Fortran handles for the C structures used in SuperLU_DIST
+       call f_create_gridinfo_handle(grid)
+       call f_create_options_handle(options)
+       call f_dcreate_ScalePerm_handle(ScalePermstruct)
+       call f_dcreate_LUstruct_handle(LUstruct)
+       call f_dcreate_SOLVEstruct_handle(SOLVEstruct)
+       call f_create_SuperMatrix_handle(A)
+       call f_create_SuperLUStat_handle(stat)
+
+       ! Initialize the SuperLU_DIST process grid
+       !i'll use the same layout as the dynamo, but double the lat for the extra procs
+       nprow = 2*lat_size
+       npcol = lon_size
+
+       call f_superlu_gridinit(union_world, nprow, npcol, grid)
+       if (nprow * npcol /= un_mpi_size) then
+          write(*,*) "SuperLU ERROR: nprow*npcol != nprocs"
+       endif
+    
+       !some debugging
+       if (rowptr(n_loc+1) /= nnz_loc) then
+          write(*,*)  "SuperLU ERROR rowptr(n_loc+1) /= nnz_loc ", rowptr(n_loc+1), nnz_loc
+       endif
+
+       if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
+          write(*,*)  "SuperLU Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
+       endif
+
+      
+       
+       ! Set the default input options
+       call f_set_default_options(options)
+       call set_superlu_options(options, Fact = DOFACT)
+
+       ! Change one or more options
+       !these below are the defaults
+       !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
+       !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+       !refinement: (or none = 0 or  single = 1, double = 2)
+       !call set_superlu_options(options, IterRefine = 2)
+       ! Optionally, enable equilibration/scaling for stability:1 - on, 0 = off
+       !call set_superlu_options(options, Equil=1)
+       
+       ! Initialize ScalePermstruct and LUstruct
+       call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
+       call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+       call f_dLUstructInit(n_global, n_global, LUstruct)
+       
+       ! Initialize the statistics variables
+       call f_PStatInit(stat)
+       
+       superlu_initialized = .true.
+    else
+       ! reuse symbolic structure
+       call set_superlu_options(options, Fact = SamePattern)
+    endif
+
+    !create the distributed compressed row matrix A (O-index)
+    !only values should have changed since previous iteration (otherwise need DOFACT)
     call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
          values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
+    
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
-
-    ! Set the default input options
-    call f_set_default_options(options)
-
-    ! Change one or more options
-    !these below are the defaults
-    !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-    !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-    !refinement: (or none = 0 or  single = 1, double = 2)
-    !call set_superlu_options(options, IterRefine = 2)
-    ! Optionally, enable equilibration/scaling for stability
-    ! 1 - on, 0 = off
-    !call set_superlu_options(options, Equil=1)
-
-    ! Initialize ScalePermstruct and LUstruct
-    call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
-    call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
-    call f_dLUstructInit(n_global, n_global, LUstruct)
- 
-    ! Initialize the statistics variables
-    call f_PStatInit(stat)
- 
+    
     ! Call the linear equation solver (writes over rhs (sol))
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
-    
+
     if (info /= 0) then
        write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
     endif
     if (info == 0 .and. un_mpi_rank == 0) then
-       write(*,*) 'SUperLU Backward error: ', berr_array(1)
+       write(*,*) 'Success: SuperLU Backward error: ', berr_array(1)
     endif
 
     ! result is sol (already assigned by reference in pdgssvx)
 
-    !TO DO Can I save some of the LU structures after the first time since
-    !the sparsity pattern of A will not change
-
-    !  deallocate the storage allocated by SuperLU_DIST
-    call f_PStatFree(stat)
-    !do not call f_Destroy_CompRowLoc_Mat_dist(A)
-    ! - tries to free the fortran-allocated rowptr,colind and nzval array
-
-    !TEMP: temp because of tree issues
-    !call f_dDestroy_LU_SOLVE_struct(options, n, grid, LUstruct, SOLVEstruct)
-
-    call f_dScalePermstructFree(ScalePermstruct)
-    ! Release the SuperLU process grid
-    call f_superlu_gridexit(grid)
-
-    ! Deallocate the C structures pointed to by the Fortran handles
-    call f_destroy_SuperLUStat_handle(stat)    
-    call f_destroy_SOLVEstruct_handle(SOLVEstruct)
-    call f_destroy_LUstruct_handle(LUstruct)
-    call f_destroy_ScalePerm_handle(ScalePermstruct)
-    call f_destroy_options_handle(options)
-    call f_destroy_SuperMatrix_handle(A)
-    call f_destroy_gridinfo_handle(grid)
-
-    
+      
   endfunction dist_solve_superlu
+  !-----------------------------------------------------------------------
+
+  subroutine finalize_superlu()
+
+    if (superlu_initialized) then
+
+       call f_PStatFree(stat)
+
+       call f_dScalePermstructFree(ScalePermstruct)
+       call f_superlu_gridexit(grid)
+       
+       call f_destroy_SuperLUStat_handle(stat)
+       call f_destroy_SOLVEstruct_handle(SOLVEstruct)
+       call f_destroy_LUstruct_handle(LUstruct)
+       call f_destroy_ScalePerm_handle(ScalePermstruct)
+       call f_destroy_options_handle(options)
+       call f_destroy_SuperMatrix_handle(A)
+       call f_destroy_gridinfo_handle(grid)
+       
+       superlu_initialized = .false.
+    endif
+
+  end subroutine finalize_superlu
 
 !-----------------------------------------------------------------------
   function dist_flatten(fin) result(fout)
@@ -1657,7 +1679,7 @@ module dist_solver_module
     !clean up
     call dist_spmv_free(halo)
 
-    
+    call finalize_superlu()
 
   endsubroutine dist_solver_final
 
