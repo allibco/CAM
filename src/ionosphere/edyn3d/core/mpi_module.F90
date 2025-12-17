@@ -13,8 +13,8 @@ module mpi_module
 
 !nmlon is also in params module, which can cause confusion
   
-  integer :: dynamo_world=-huge(1), extra_world=-huge(1),&
-       union_world=-huge(1),&
+  integer :: dynamo_world=MPI_COMM_NULL, extra_world=MPI_COMM_NULL,&
+       union_world=MPI_COMM_NULL,&
        mpi_rp=-huge(1), mpi_size=0, mpi_rank=-1, &
        ex_mpi_rank=-1,ex_mpi_size =0,& 
        un_mpi_rank=-1, un_mpi_size=0,&
@@ -32,7 +32,10 @@ module mpi_module
        task_lat_offset, task_csr_rowstarts
 
 #ifdef PARALLEL
-   integer :: host_group, dynamo_group, extra_group, union_group
+  integer :: host_group = MPI_GROUP_NULL
+  integer :: dynamo_group = MPI_GROUP_NULL
+  integer :: extra_group = MPI_GROUP_NULL
+  integer :: union_group = MPI_GROUP_NULL
 #endif
   
   interface gather_mag ! gather magnetic fields
