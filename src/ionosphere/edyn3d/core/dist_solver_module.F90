@@ -111,9 +111,10 @@ module dist_solver_module
 
     !number of grid points I will own (after hemisphere exchange) is mygrid_size (global var)
 
-    !allocate space for rowptr,colind,values_csr
+    !allocate space for g_rowptr,g_colind,g_values_csr
+    ! (only first time through)
     ! why does MAX_NNZ=12? seems like 10 is max?
-    allocate(rowptr(mygrid_size+1))
+    
     if (mpi_rank == 0) then ! make room for dense row
        nnz_est = (mygrid_size-1)*MAX_NNZ + (nmlon + 2)
     else
@@ -1691,7 +1692,7 @@ module dist_solver_module
     !clean up
     call dist_spmv_free(halo)
 
-    if (allocated(g_rowptr)) deallocate(gg_rowptr)
+    if (allocated(g_rowptr)) deallocate(g_rowptr)
     if (allocated(g_colind)) deallocate(g_colind) 
     if (allocated(g_values_csr)) deallocate(g_values_csr)
      
