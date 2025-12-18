@@ -1691,9 +1691,9 @@ module dist_solver_module
     !clean up
     call dist_spmv_free(halo)
 
-    if (allocated(rowptr)) deallocate(rowptr)
-    if (allocated(colind)) deallocate(colind) 
-    if (allocated(values_csr)) deallocate(values_csr)
+    if (allocated(g_rowptr)) deallocate(gg_rowptr)
+    if (allocated(g_colind)) deallocate(g_colind) 
+    if (allocated(g_values_csr)) deallocate(g_values_csr)
      
     call finalize_superlu()
 
