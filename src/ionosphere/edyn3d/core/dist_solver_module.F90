@@ -30,6 +30,12 @@ module dist_solver_module
   integer(superlu_ptr), save :: A
   integer(superlu_ptr), save :: stat
 
+  ! to reuse matrix structure for superlu, we need to only allocate block csr_matix
+  ! arrays once
+  integer,dimension(:), allocatable, save :: g_rowptr
+  integer,dimension(:), allocatable, save :: g_colind
+  real(kind=rp),dimension(:), allocatable, save :: g_values_csr
+
   
   contains
 !-----------------------------------------------------------------------
@@ -70,9 +76,9 @@ module dist_solver_module
     integer,parameter :: root = 0
     integer :: nlonlat,i,j,ic,nnz, nnz_est
 
-    integer,dimension(:), allocatable :: rowptr
-    integer,dimension(:), allocatable :: colind
-    real(kind=rp),dimension(:), allocatable :: values_csr
+    !integer,dimension(:), allocatable :: rowptr
+    !integer,dimension(:), allocatable :: colind
+    !real(kind=rp),dimension(:), allocatable :: values_csr
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_s
     real(kind=rp),dimension(10,mlatd0:mlatd1,mlond0:mlond1) :: coef_n
 
@@ -113,9 +119,14 @@ module dist_solver_module
     else
        nnz_est = mygrid_size*MAX_NNZ
     endif
-    allocate(colind(nnz_est))
-    allocate(values_csr(nnz_est))
 
+    !allocate only the first time through
+    if (.not. superlu_initialized) then
+       allocate(g_rowptr(mygrid_size+1))
+       allocate(g_colind(nnz_est))
+       allocate(g_values_csr(nnz_est))
+    endif
+       
     allocate(rhs(mygrid_size))
     allocate(z(mygrid_size))
     allocate(pot_hl_f(mygrid_size))
@@ -138,17 +149,17 @@ module dist_solver_module
     ! construct LHS matrix in Block CSR format
     ! Note: rows are contiguous on each proc (for LHS matrix
     ! and RHS) 
-    call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),rowptr,colind,values_csr)
+    call dist_construct_lhs(nnz_est,bij,coef_s(1:9,:,:),coef_n(1:9,:,:),g_rowptr,g_colind,g_values_csr)
     !need nnz for solver
-    nnz = rowptr(mygrid_size+1)-1
+    nnz = g_rowptr(mygrid_size+1)-1
     
     ! RHS in Block format to match LHS
     rhs = dist_construct_rhs(coef_s(10,:,:), coef_n(10,:,:))
 
     !change matrix to 0-based indexing 
     !need matrix to be 0-based index for superlu and the matvec
-    colind=colind-1
-    rowptr=rowptr-1
+    g_colind=g_colind-1
+    g_rowptr=g_rowptr-1
 
     ! determine FAC forcing (dense)
     if (read_fac) then ! input is corrected fac_hl, pot_hl is not used
@@ -168,13 +179,13 @@ module dist_solver_module
        !This init should be called just the first timestep because the nonzero
        !matrix pattern does not change
        if (halo%nprocs_local == 0) then
-          call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, rowptr, colind, task_csr_rowstarts, union_world, halo, ierr)
+          call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, g_rowptr, g_colind, task_csr_rowstarts, union_world, halo, ierr)
        endif
           
        !optional DEBUG
        !call write_halo_to_file(halo, union_world)
 
-       call dist_spmv(rowptr, colind, values_csr, pot_hl_f, z, halo, union_world, ierr)
+       call dist_spmv(g_rowptr, g_colind, g_values_csr, pot_hl_f, z, halo, union_world, ierr)
 
        !free later (only after done because we are just initializing once)
        !call dist_spmv_free(halo)
@@ -221,12 +232,12 @@ module dist_solver_module
         newfile = trim(fbuf)//c_null_char
 
         !call write fcun (1 or 2) - phase 0
-        call write_dist_to_file(newfile, 0, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs,fac_hl, pot, sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 0, mlatd0,mlatd1,mlond0,mlond1, nnz, g_colind, g_rowptr, g_values_csr, pot_hl_f, z, rhs,fac_hl, pot, sol, fileid, Xid, potid)
 
       endif
      
      call t_startf('linear_system->solve_superlu')
-     sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, rowptr, colind(1:nnz), values_csr(1:nnz), rhs)
+     sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, g_rowptr, g_colind(1:nnz), g_values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
      ! reconstruct 2D distribution of potential based on the solution
@@ -252,16 +263,16 @@ module dist_solver_module
 
      !if output turned on for debugging 
      if (output_matrix == .true.) then
-        call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, colind, rowptr, values_csr, pot_hl_f, z, rhs, fac_hl, pot,sol, fileid, Xid, potid)
+        call write_dist_to_file(newfile, 1, mlatd0,mlatd1,mlond0,mlond1, nnz, g_colind, g_rowptr, g_values_csr, pot_hl_f, z, rhs, fac_hl, pot,sol, fileid, Xid, potid)
         !print *, 'Dist_ls: done with netcdf file'
      endif
 
      !pot and fac_hl are ready to return (updated grid + halo)
 
      ! Deallocate arrays to free memory
-     if (allocated(rowptr)) deallocate(rowptr)
-     if (allocated(colind)) deallocate(colind) 
-     if (allocated(values_csr)) deallocate(values_csr)
+     !if (allocated(rowptr)) deallocate(rowptr)
+     !if (allocated(colind)) deallocate(colind) 
+     !if (allocated(values_csr)) deallocate(values_csr)
      if (allocated(rhs)) deallocate(rhs)
      if (allocated(z)) deallocate(z)
      if (allocated(pot_hl_f)) deallocate(pot_hl_f)
@@ -1346,16 +1357,17 @@ module dist_solver_module
        call f_PStatInit(stat)
        
        superlu_initialized = .true.
+
+       !create the distributed compressed row matrix A (O-index)
+       call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+            values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
+
     else
        ! reuse symbolic structure
+       ! only values should have changed since previous iteration (otherwise need DOFACT)
+       ! pointer should be the same
        call set_superlu_options(options, Fact = SamePattern)
     endif
-
-    !create the distributed compressed row matrix A (O-index)
-    !only values should have changed since previous iteration (otherwise need DOFACT)
-    call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
-         values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
-
     
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
@@ -1679,11 +1691,13 @@ module dist_solver_module
     !clean up
     call dist_spmv_free(halo)
 
+    if (allocated(rowptr)) deallocate(rowptr)
+    if (allocated(colind)) deallocate(colind) 
+    if (allocated(values_csr)) deallocate(values_csr)
+     
     call finalize_superlu()
 
   endsubroutine dist_solver_final
-
-  
   
   !-----------------------------------------------------------------------
 
