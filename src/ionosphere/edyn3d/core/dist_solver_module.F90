@@ -1353,19 +1353,18 @@ module dist_solver_module
        !call set_superlu_options(options, Equil=1)
        
        ! Initialize ScalePermstruct and LUstruct
-       call get_SuperMatrix(A, nrow=n_global, ncol=n_global)
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
        call f_dLUstructInit(n_global, n_global, LUstruct)
        
        ! Initialize the statistics variables
        call f_PStatInit(stat)
        
-       superlu_initialized = .true.
-
        !create the distributed compressed row matrix A (O-index)
        call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
             values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
+       superlu_initialized = .true.
+       
     else
        ! reuse symbolic structure
        ! only values should have changed since previous iteration (otherwise need DOFACT)
@@ -1381,7 +1380,7 @@ module dist_solver_module
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
 
     if (info /= 0) then
-       write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', mpi_rank, info
+       write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', un_mpi_rank, info
     endif
     if (info == 0 .and. un_mpi_rank == 0) then
        write(*,*) 'Success: SuperLU Backward error: ', berr_array(1)
