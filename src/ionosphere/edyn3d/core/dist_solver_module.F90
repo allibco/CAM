@@ -35,7 +35,10 @@ module dist_solver_module
   integer,dimension(:), allocatable, save :: g_rowptr
   integer,dimension(:), allocatable, save :: g_colind
   real(kind=rp),dimension(:), allocatable, save :: g_values_csr
+  integer, save :: g_n_global, g_n_loc, g_nnz_loc, g_first_row
 
+  integer(kind=c_int64_t), save :: g_pattern_hash = 0_c_int64_t
+  logical, save :: pattern_initialized = .false.
   
   contains
 !-----------------------------------------------------------------------
@@ -1287,16 +1290,9 @@ module dist_solver_module
     ! for SuperLU sparse matrix solver
     integer,parameter :: nrhs = 1
     integer :: i, iopt, first_row, nprow, npcol
-
-    !superlu structures
-    !integer(superlu_ptr) :: grid
-    !integer(superlu_ptr) :: options
-    !integer(superlu_ptr) :: ScalePermstruct
-    !integer(superlu_ptr) :: LUstruct
-    !integer(superlu_ptr) :: SOLVEstruct
-    !integer(superlu_ptr) :: A
-    !integer(superlu_ptr) :: stat
-      
+    logical :: A_changed
+    !most superlu structures are modulue-level variable
+         
     ! Other variables
     integer(kind=c_int) :: info, ierr
     real(kind=c_double), target :: berr_array(nrhs)
@@ -1307,10 +1303,22 @@ module dist_solver_module
        write(*,*)  "Superlu Error: first_row out of range", first_row, n_global
     endif
 
+    !This is to detect if rowptr if colind changed
+    if (.not. pattern_initialized) then
+       g_pattern_hash = compute_pattern_hash(rowptr, colind)
+       pattern_initialized = .true.
+    endif
+    
     if (.not. superlu_initialized) then
 
        !print *, 'initializing superlu ...'
 
+       !save for error checking on further iteratons
+       g_n_loc = n_loc
+       g_nnz_loc = nnz_loc
+       g_n_global = n_global
+       g_first_row = first_row
+       
        ! Create Fortran handles for the C structures used in SuperLU_DIST
        call f_create_gridinfo_handle(grid)
        call f_create_options_handle(options)
@@ -1368,8 +1376,43 @@ module dist_solver_module
     else
        ! reuse symbolic structure
        ! only values should have changed since previous iteration (otherwise need DOFACT)
-       ! pointer should be the same
-       call set_superlu_options(options, Fact = SamePattern)
+       ! pointer should be the same (so let's do a check here)
+
+       !error check 
+       A_changed = .false.
+       
+       if (g_n_loc \= n_loc .or. g_nnz_loc \= nnz_loc .or. &
+            g_n_global \= n_global .or. g_first_row \= first_row) then
+          write (*, *) 'SUPERLU ERROR: matrix structure has changed: forcing DOFACT!'
+          A_changed = .true.
+       elseif (compute_pattern_hash(rowptr, colind) /= g_pattern_hash) then
+          write(*,*) 'SUPERLU: sparsity pattern changed, forcing DOFACT'
+          A_changed = .true.
+       endif
+
+       if (A_changed ) then
+          ! don't beleive this will ever be triggered in the current code,
+          ! but just to be safe :)
+          g_pattern_hash = compute_pattern_hash(rowptr, colind)
+
+          ! Destroy old symbolic data
+          call f_dScalePermstructFree(ScalePermstruct)
+          call f_dLUstructFree(LUstruct)
+          call f_Destroy_CompRowLoc_Mat_dist(A)
+
+          ! Reinitialize symbolic containers
+          call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+          call f_dLUstructInit(n_global, n_global, LUstruct)
+
+          ! Recreate A with new sparsity pattern
+          call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
+               values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
+
+          call set_superlu_options(options, Fact = DOFACT)
+
+       else
+          call set_superlu_options(options, Fact = SamePattern)
+       endif
     endif
     
     ! Setup the right hand side (rhs contains local data)
@@ -1414,6 +1457,39 @@ module dist_solver_module
 
   end subroutine finalize_superlu
 
+!-----------------------------------------------------------------------
+
+function compute_pattern_hash(rowptr, colind) result(h)
+  use iso_c_binding, only: c_int, c_int64_t
+  implicit none
+
+  integer(kind=c_int), intent(in) :: rowptr(:)
+  integer(kind=c_int), intent(in) :: colind(:)
+  integer(kind=c_int64_t) :: h
+
+  integer :: i
+  integer(kind=c_int64_t), parameter :: FNV_OFFSET = &
+       1469598103934665603_c_int64_t
+  integer(kind=c_int64_t), parameter :: FNV_PRIME  = &
+       1099511628211_c_int64_t
+
+  ! Initialize hash
+  h = FNV_OFFSET
+
+  ! Hash rowptr (row structure)
+  do i = 1, size(rowptr)
+     h = ieor(h, int(rowptr(i), c_int64_t))
+     h = h * FNV_PRIME
+  end do
+
+  ! Hash colind (column pattern + ordering)
+  do i = 1, size(colind)
+     h = ieor(h, int(colind(i), c_int64_t))
+     h = h * FNV_PRIME
+  end do
+
+end function compute_pattern_hash
+  
 !-----------------------------------------------------------------------
   function dist_flatten(fin) result(fout)
 ! reorder 2D fields (lat-lon) into 1D vector (RHS)
