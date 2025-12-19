@@ -1364,9 +1364,6 @@ module dist_solver_module
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
        call f_dLUstructInit(n_global, n_global, LUstruct)
        
-       ! Initialize the statistics variables
-       call f_PStatInit(stat)
-       
        !create the distributed compressed row matrix A (O-index)
        call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
             values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
@@ -1421,6 +1418,9 @@ module dist_solver_module
     
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
+
+    ! Initialize the statistics variables
+    call f_PStatInit(stat)
     
     ! Call the linear equation solver (writes over rhs (sol))
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
@@ -1435,15 +1435,15 @@ module dist_solver_module
 
     ! result is sol (already assigned by reference in pdgssvx)
 
-      
+    call f_PStatFree(stat)
+
+    
   endfunction dist_solve_superlu
   !-----------------------------------------------------------------------
 
   subroutine finalize_superlu()
 
     if (superlu_initialized) then
-
-       call f_PStatFree(stat)
 
        call f_dScalePermstructFree(ScalePermstruct)
        call f_superlu_gridexit(grid)
