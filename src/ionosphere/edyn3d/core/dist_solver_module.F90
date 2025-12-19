@@ -1381,8 +1381,8 @@ module dist_solver_module
        !error check 
        A_changed = .false.
        
-       if (g_n_loc \= n_loc .or. g_nnz_loc \= nnz_loc .or. &
-            g_n_global \= n_global .or. g_first_row \= first_row) then
+       if (g_n_loc /= n_loc .or. g_nnz_loc /= nnz_loc .or. &
+            g_n_global /= n_global .or. g_first_row /= first_row) then
           write (*, *) 'SUPERLU ERROR: matrix structure has changed: forcing DOFACT!'
           A_changed = .true.
        elseif (compute_pattern_hash(rowptr, colind) /= g_pattern_hash) then
@@ -1394,7 +1394,11 @@ module dist_solver_module
           ! don't beleive this will ever be triggered in the current code,
           ! but just to be safe :)
           g_pattern_hash = compute_pattern_hash(rowptr, colind)
-
+          g_n_loc = n_loc
+          g_nnz_loc = nnz_loc
+          g_n_global = n_global
+          g_first_row = first_row
+          
           ! Destroy old symbolic data
           call f_dScalePermstructFree(ScalePermstruct)
           call f_dLUstructFree(LUstruct)
