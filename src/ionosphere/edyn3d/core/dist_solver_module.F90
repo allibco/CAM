@@ -9,7 +9,7 @@ module dist_solver_module
 
   include 'netcdf.inc'
   #include "superlu_dist_config.fh"
-
+ 
 
   !max nonzeros per row (this does not incl the dense row at the pole)
   integer, parameter :: MAX_NNZ=12
@@ -191,12 +191,12 @@ module dist_solver_module
        !free later (only after done because we are just initializing once)
        !call dist_spmv_free(halo)
 
-       !write(*,*) 'Dist_ls: Finished spmv'
+       write(*,*) 'Dist_ls: Finished spmv'
           
        ! reconstruct 2D distribution of FAC based on z
        fac_hl(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(z)
 
-       !write(*,*) 'Dist_ls: Finished unravel'
+       write(*,*) 'Dist_ls: Finished unravel'
        
        !get ghost/halo points (only dynamo procs)
        if (mpi_rank >=0 ) then
@@ -214,7 +214,7 @@ module dist_solver_module
        endif !dynamo procs
      endif !FAC
 
-     !write(*,*) 'Dist_ls: Finished fac section'
+     write(*,*) 'Dist_ls: Finished fac section'
      
      ! add FAC forcing to RHS
      !(these are both set for contiguous rows already - all union procs own)
@@ -241,6 +241,9 @@ module dist_solver_module
      sol = dist_solve_superlu(nlonlat, mygrid_size, nnz, g_rowptr, g_colind(1:nnz), g_values_csr(1:nnz), rhs)
      call t_stopf('linear_system->solve_superlu')
 
+     print *, 'Dist_ls: done with solve'
+
+     
      ! reconstruct 2D distribution of potential based on the solution
      pot(:,mlat0:mlat1,mlon0:mlon1) = dist_unravel(sol)
 
@@ -260,7 +263,7 @@ module dist_solver_module
         endif
      endif
      
-     !print *, 'Dist_ls: done with unravel'
+     print *, 'Dist_ls: done with unravel'
 
      !if output turned on for debugging 
      if (output_matrix == .true.) then
@@ -1305,7 +1308,9 @@ module dist_solver_module
     endif
 
     if (.not. superlu_initialized) then
-    
+
+       print *, 'initializing superlu ...'
+
        ! Create Fortran handles for the C structures used in SuperLU_DIST
        call f_create_gridinfo_handle(grid)
        call f_create_options_handle(options)
@@ -1333,8 +1338,6 @@ module dist_solver_module
        if (minval(colind) < 0 .or. maxval(colind) >= n_global) then
           write(*,*)  "SuperLU Error colind out of bounds: min(col) max(col), n_global" , minval(colind), maxval(colind), n_global
        endif
-
-      
        
        ! Set the default input options
        call f_set_default_options(options)
