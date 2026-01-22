@@ -1349,16 +1349,19 @@ module dist_solver_module
        
        ! Set the default input options
        call f_set_default_options(options)
+       !do the factorization from scratch (do not assume values are similar to previous)
        call set_superlu_options(options, Fact = DOFACT)
 
        ! Change one or more options
        !these below are the defaults
-       !call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-       !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-       !refinement: (or none = 0 or  single = 1, double = 2)
-       !call set_superlu_options(options, IterRefine = 2)
+       call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
+       call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+       call set_superlu_options(options, IterRefine = 2)
        ! Optionally, enable equilibration/scaling for stability:1 - on, 0 = off
-       !call set_superlu_options(options, Equil=1)
+       call set_superlu_options(options, Equil=1)
+       call set_superlu_options(options, ReplaceTinyPivot=0)
+       call set_superlu_options(options, PrintStat=1)
+       call set_superlu_options(options, IterRefine=1)
        
        ! Initialize ScalePermstruct and LUstruct
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
@@ -1388,7 +1391,7 @@ module dist_solver_module
        endif
 
        if (A_changed ) then
-          ! don't beleive this will ever be triggered in the current code,
+          ! don't believe this will ever be triggered in the current code,
           ! but just to be safe :)
           g_pattern_hash = compute_pattern_hash(rowptr, colind)
           g_n_loc = n_loc
@@ -1412,6 +1415,7 @@ module dist_solver_module
           call set_superlu_options(options, Fact = DOFACT)
 
        else
+          !we do not need to refactor (COlPerm stays the same)
           call set_superlu_options(options, Fact = SamePattern)
        endif
     endif
