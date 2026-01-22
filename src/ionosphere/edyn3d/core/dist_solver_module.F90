@@ -1355,9 +1355,10 @@ module dist_solver_module
        ! Change one or more options
        !these below are the defaults
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-       call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+       !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+       call set_superlu_options(options,RowPerm=LargeDiag_HPWM)
+
        call set_superlu_options(options, IterRefine = 2)
-       ! Optionally, enable equilibration/scaling for stability:1 - on, 0 = off
        call set_superlu_options(options, Equil=1)
        call set_superlu_options(options, ReplaceTinyPivot=0)
        call set_superlu_options(options, PrintStat=1)
