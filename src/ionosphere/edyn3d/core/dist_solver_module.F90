@@ -1357,7 +1357,7 @@ module dist_solver_module
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
 
        !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-       call set_superlu_options(options,RowPerm=LargeDiag_HPWM)
+       call set_superlu_options(options,RowPerm=LargeDiag_HWPM)
 
        !for IterRefine SLU_DOUBLE=2
        call set_superlu_options(options, IterRefine = 2)
