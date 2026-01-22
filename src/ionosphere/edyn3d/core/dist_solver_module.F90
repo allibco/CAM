@@ -1355,14 +1355,17 @@ module dist_solver_module
        ! Change one or more options
        !these below are the defaults
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-       !call set_superlu_options(options,RowPerm=LargeDiag_MC64)
-       call set_superlu_options(options,RowPerm=LargeDiag_HPWM)
 
+       call set_superlu_options(options,RowPerm=LargeDiag_MC64)
+       !call set_superlu_options(options,RowPerm=LargeDiag_HPWM)
+
+       !for IterRefine SLU_DOUBLE=2
        call set_superlu_options(options, IterRefine = 2)
        call set_superlu_options(options, Equil=1)
        call set_superlu_options(options, ReplaceTinyPivot=0)
+       !turn off print stat for less solver output
        call set_superlu_options(options, PrintStat=1)
-       call set_superlu_options(options, IterRefine=1)
+       !
        
        ! Initialize ScalePermstruct and LUstruct
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
