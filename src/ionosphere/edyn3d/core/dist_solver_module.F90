@@ -139,9 +139,9 @@ module dist_solver_module
     rhs = 0.0
     sol = 0.0
     pot_hl_f = 0.0
-    colind = 0
-    row_ptr = 0
-    values_csr = 0.0
+    g_colind = 0
+    g_row_ptr = 0
+    g_values_csr = 0.0
     z = 0.0
     
     ! for now, split two hemispheres (keep halo pts)
@@ -277,9 +277,6 @@ module dist_solver_module
      !pot and fac_hl are ready to return (updated grid + halo)
 
      ! Deallocate arrays to free memory
-     !if (allocated(rowptr)) deallocate(rowptr)
-     !if (allocated(colind)) deallocate(colind) 
-     !if (allocated(values_csr)) deallocate(values_csr)
      if (allocated(rhs)) deallocate(rhs)
      if (allocated(z)) deallocate(z)
      if (allocated(pot_hl_f)) deallocate(pot_hl_f)

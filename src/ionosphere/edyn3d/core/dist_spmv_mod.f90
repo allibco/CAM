@@ -337,7 +337,7 @@ contains
                 print *, 'dist_spmv ERROR: Rank', myrank, ': loc out of range =', loc, ' colind=', colind(jp), ' fst_row=', halo%fst_row
              end if
              if (x_local(loc) /= x_local(loc)) print *, 'dist_spmv ERROR: NaN in x_local at loc=', loc, ' rank=', myrank
-             if (nzval(jp) /= nzval(jp)) print *, 'dist_smpv ERROR: NaN in nzval at jp=', jp
+             if (nzval(jp) /= nzval(jp)) print *, 'dist_spmv ERROR: NaN in nzval at jp=', jp
              
              y_local(i) = y_local(i) + nzval(jp) * x_local(loc)
           else

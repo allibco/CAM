@@ -381,7 +381,7 @@ module mpi_module
            endif
            
           !now we need to calculate the rowstarts for the global block
-          !csr martix - this will be 0-based indeing for superlu
+          !csr martix - this will be 0-based indexing for superlu
           !do an allgather to get each procs grid size
           task_mygrid_size = all_gather_int(mygrid_size, union_world, un_mpi_size)
           
@@ -403,6 +403,10 @@ module mpi_module
        mlond1 = mlon1 + 1
 
        !write(*, *) 'AB: TOPO un_mpi_rank, mpi_rank, ex_mpi_rank, mlat0, mlat1, mlon0,mlon1',un_mpi_rank, mpi_rank, ex_mpi_rank, mlat0, mlat1, mlon0,mlon1
+
+       if (mpi_rank == 0) then
+          write(*,*) 'TOPO: lon_size (tasks), lat_size(tasks), mygrid_size::: ', lon_size, lat_size, mygrid_size
+       endif
        
     else !completely non-active
        mygrid_size = 0
@@ -588,7 +592,7 @@ subroutine mpi_sendnorth_mat(nnz_per_row, my_rowptr, my_values, my_cols, &
     enddo
     !note for nnz calc that we are 1-based?
     nnz_count = my_rowptr(mygrid_size + 1) -1
-    do concurrent (i = 1: nnz_count
+    do concurrent (i = 1: nnz_count)
        partner_cols(i) = my_cols(i)
        partner_values(i) = my_values(i)
     enddo
@@ -621,7 +625,7 @@ subroutine mpi_sendnorth_vec(send_values, recv_values)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
        ! Wait for my send to complete
-       call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+       call MPI_Wait(send_request, MPI_STATUS_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
     elseif (ex_mpi_rank >= 0) then !recv north from my partner
@@ -633,7 +637,7 @@ subroutine mpi_sendnorth_vec(send_values, recv_values)
        
     
        !Wait for my recv
-       call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+       call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
     endif
@@ -669,7 +673,7 @@ subroutine mpi_recvnorth_vec(send_values, recv_values)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Isend', ierr)
 
        ! Wait for my send to complete
-       call MPI_Wait(send_request, MPI_STATUSES_IGNORE, ierr)
+       call MPI_Wait(send_request, MPI_STATUS_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
     elseif (mpi_rank >= 0) then !recv north from partner
@@ -680,7 +684,7 @@ subroutine mpi_recvnorth_vec(send_values, recv_values)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Irecv', ierr)
     
        !Wait for my recv
-       call MPI_Wait(recv_request, MPI_STATUSES_IGNORE, ierr)
+       call MPI_Wait(recv_request, MPI_STATUS_IGNORE, ierr)
        if (ierr /= MPI_SUCCESS) call handle_error('MPI_Wait', ierr)
 
     endif
@@ -1513,6 +1517,7 @@ endfunction all_gather_int
        else
           ij = nmlat_h*nmlon + (i_in-1)*(nmlat_h-1) + (j_in-nmlat_h)
        endif
+       return
     endif
 
     if (j_in <= nmlat_h) then !south hemi or equator
