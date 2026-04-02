@@ -1370,10 +1370,6 @@ module dist_solver_module
        call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
             values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
-       !added
-       call f_dSolveInit(options, A, ScalePermstruct%perm_r, ScalePermstruct%perm_c, nrhs, SOLVEstruct)
-
-
        ! Initialize the statistics variables
        call f_PStatInit(stat)
     
@@ -1410,8 +1406,6 @@ module dist_solver_module
           call f_Destroy_CompRowLoc_Mat_dist(A)
           call f_dScalePermstructFree(ScalePermstruct)
           call f_dLUstructFree(LUstruct)
-          call f_dSolveFinalize(SOLVEstruct)
-
           
           ! Reinitialize symbolic containers
           call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
@@ -1421,9 +1415,6 @@ module dist_solver_module
           call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
                values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
 
-          call f_dSolveInit(options, A, ScalePermstruct%perm_r, ScalePermstruct%perm_c, nrhs, SOLVEstruct)
-
-          
           call set_superlu_options(options, Fact = DOFACT)
 
        else
@@ -1460,7 +1451,6 @@ module dist_solver_module
        !release storage allocated by superlu
        call f_PStatFree(stat)  !freed after each solve)
        call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-       call f_dSolveFinalize(SOLVEstruct)
        call f_dScalePermstructFree(ScalePermstruct)
        call f_Destroy_CompRowLoc_Mat_dist(A)
 
