@@ -1352,14 +1352,13 @@ module dist_solver_module
        ! Change one or more options
        !these below are the defaults
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
-
        call set_superlu_options(options,RowPerm=LargeDiag_MC64)
        
-       !for IterRefine SLU_DOUBLE=2
+       !for IterRefine SLU_DOUBLE=2 9want double precision for refinement)
        call set_superlu_options(options, IterRefine = 2)
        call set_superlu_options(options, Equil=1)
-       call set_superlu_options(options, ReplaceTinyPivot=0)
-       !turn off print stat for less solver output
+       call set_superlu_options(options, ReplaceTinyPivot=1) !for more stability
+       !you can turn off print stat (with 0) for less solver output
        call set_superlu_options(options, PrintStat=1)
        !
        
@@ -1371,6 +1370,14 @@ module dist_solver_module
        call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
             values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
+       !added
+       call f_dSolveInit(options, A, ScalePermstruct%perm_r, ScalePermstruct%perm_c, nrhs, SOLVEstruct)
+
+
+       ! Initialize the statistics variables
+       call f_PStatInit(stat)
+    
+       
        superlu_initialized = .true.
        
     else
@@ -1400,10 +1407,12 @@ module dist_solver_module
           g_first_row = first_row
           
           ! Destroy old symbolic data
+          call f_Destroy_CompRowLoc_Mat_dist(A)
           call f_dScalePermstructFree(ScalePermstruct)
           call f_dLUstructFree(LUstruct)
-          call f_Destroy_CompRowLoc_Mat_dist(A)
+          call f_dSolveFinalize(SOLVEstruct)
 
+          
           ! Reinitialize symbolic containers
           call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
           call f_dLUstructInit(n_global, n_global, LUstruct)
@@ -1412,20 +1421,21 @@ module dist_solver_module
           call f_dCreate_CompRowLoc_Mat_dist(A, n_global, n_global, nnz_loc, n_loc, first_row, &
                values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
 
+          call f_dSolveInit(options, A, ScalePermstruct%perm_r, ScalePermstruct%perm_c, nrhs, SOLVEstruct)
+
+          
           call set_superlu_options(options, Fact = DOFACT)
 
        else
-          !we do not need to refactor (COlPerm stays the same)
-          call set_superlu_options(options, Fact = SamePattern)
+          !we do not need to refactor (COlPerm and ROwPerm stays the same)
+          call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
        endif
     endif
     
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
 
-    ! Initialize the statistics variables
-    call f_PStatInit(stat)
-    
+   
     ! Call the linear equation solver (writes over rhs (sol))
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
@@ -1439,8 +1449,6 @@ module dist_solver_module
 
     ! result is sol (already assigned by reference in pdgssvx)
 
-    call f_PStatFree(stat)
-
     
   endfunction dist_solve_superlu
   !-----------------------------------------------------------------------
@@ -1449,16 +1457,24 @@ module dist_solver_module
 
     if (superlu_initialized) then
 
+       !release storage allocated by superlu
+       call f_PStatFree(stat)  !freed after each solve)
+       call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
+       call f_dSolveFinalize(SOLVEstruct)
        call f_dScalePermstructFree(ScalePermstruct)
+       call f_Destroy_CompRowLoc_Mat_dist(A)
+
+       ! Release the SuperLU process grid
        call f_superlu_gridexit(grid)
-       
-       call f_destroy_SuperLUStat_handle(stat)
-       call f_destroy_SOLVEstruct_handle(SOLVEstruct)
-       call f_destroy_LUstruct_handle(LUstruct)
-       call f_destroy_ScalePerm_handle(ScalePermstruct)
-       call f_destroy_options_handle(options)
-       call f_destroy_SuperMatrix_handle(A)
+
+       !free the fortran handle wrappers
        call f_destroy_gridinfo_handle(grid)
+       call f_destroy_options_handle(options)
+       call f_destroy_ScalePerm_handle(ScalePermstruct)
+       call f_destroy_LUstruct_handle(LUstruct)
+       call f_destroy_SOLVEstruct_handle(SOLVEstruct)
+       call f_destroy_SuperMatrix_handle(A)
+       call f_destroy_SuperLUStat_handle(stat)
        
        superlu_initialized = .false.
     endif
