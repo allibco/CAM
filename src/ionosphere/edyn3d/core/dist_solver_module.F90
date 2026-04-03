@@ -1449,10 +1449,11 @@ module dist_solver_module
     if (superlu_initialized) then
 
        !release storage allocated by superlu
-       call f_PStatFree(stat)  !freed after each solve)
-       call f_Destroy_CompRowLoc_Mat_dist(A)
+       call f_PStatFree(stat) 
        call f_dScalePermstructFree(ScalePermstruct)
        call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
+       !DO NOT CALL - because I allocated rows, colind & vals in fortran arrays
+       !call f_Destroy_CompRowLoc_Mat_dist(A)
 
        ! Release the SuperLU process grid
        call f_superlu_gridexit(grid)
