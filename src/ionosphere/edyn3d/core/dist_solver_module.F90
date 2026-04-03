@@ -1425,14 +1425,13 @@ module dist_solver_module
           !are we at a refactor interval?
           if (superlu_refactor_interval == superlu_same_perm_count) then
              superlu_same_perm_count = 0
-
              call set_superlu_options(options, Fact = DOFACT)
-             
           else
-          !we do not need to refactor (COlPerm and ROwPerm stays the same)
-          call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
-           !no refactor increase count
-          superlu_same_perm_count = superlu_same_perm_count + 1
+             !we do not need to refactor (COlPerm and ROwPerm stays the same)
+             call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
+             !no refactor increase count
+             superlu_same_perm_count = superlu_same_perm_count + 1
+          endif
        endif
     endif
     
