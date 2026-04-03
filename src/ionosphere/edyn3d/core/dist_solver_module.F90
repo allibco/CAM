@@ -1450,9 +1450,9 @@ module dist_solver_module
 
        !release storage allocated by superlu
        call f_PStatFree(stat)  !freed after each solve)
-       call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-       call f_dScalePermstructFree(ScalePermstruct)
        call f_Destroy_CompRowLoc_Mat_dist(A)
+       call f_dScalePermstructFree(ScalePermstruct)
+       call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
 
        ! Release the SuperLU process grid
        call f_superlu_gridexit(grid)
