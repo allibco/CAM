@@ -21,7 +21,9 @@ module dist_solver_module
 
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
-
+  integer, save :: superlu_same_perm_count = 0
+  integer, save :: superlu_refactor_interval = 100
+  
   integer(superlu_ptr), save :: grid
   integer(superlu_ptr), save :: options
   integer(superlu_ptr), save :: ScalePermstruct
@@ -1348,7 +1350,9 @@ module dist_solver_module
        call f_set_default_options(options)
        !do the factorization from scratch (do not assume values are similar to previous)
        call set_superlu_options(options, Fact = DOFACT)
-
+       !if we refactor, set count to 0
+       superlu_same_perm_count = 0
+       
        ! Change one or more options
        !these below are the defaults
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
@@ -1360,7 +1364,6 @@ module dist_solver_module
        call set_superlu_options(options, ReplaceTinyPivot=1) !for more stability
        !you can turn off print stat (with 0) for less solver output
        call set_superlu_options(options, PrintStat=1)
-       !
        
        ! Initialize ScalePermstruct and LUstruct
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
@@ -1416,10 +1419,20 @@ module dist_solver_module
                values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
 
           call set_superlu_options(options, Fact = DOFACT)
+           !if we refactor, set count to 0
+          superlu_same_perm_count = 0
+       else !A didn't change
+          !are we at a refactor interval?
+          if (superlu_refactor_interval == superlu_same_perm_count) then
+             superlu_same_perm_count = 0
 
-       else
+             call set_superlu_options(options, Fact = DOFACT)
+             
+          else
           !we do not need to refactor (COlPerm and ROwPerm stays the same)
           call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
+           !no refactor increase count
+          superlu_same_perm_count = superlu_same_perm_count + 1
        endif
     endif
     
@@ -1431,6 +1444,9 @@ module dist_solver_module
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
 
+
+    !TO DO: check convergence and see if need to refactor
+    
     if (info /= 0) then
        write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', un_mpi_rank, info
     endif
