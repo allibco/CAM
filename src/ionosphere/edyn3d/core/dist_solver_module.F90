@@ -22,7 +22,7 @@ module dist_solver_module
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 0
-  integer, save :: superlu_refactor_interval = 100
+  integer, save :: superlu_refactor_interval = 5
   
   integer(superlu_ptr), save :: grid
   integer(superlu_ptr), save :: options
