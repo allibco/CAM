@@ -1429,6 +1429,7 @@ module dist_solver_module
              write(*,*) "Refactoring before solve due to interval ... "
              
              !clean up and re-init
+             call f_dSolveFinalize(options, SOLVEstruct)   ! <-- this is what you're missing
              call f_dScalePermstructFree(ScalePermstruct)
              call f_dLUstructFree(LUstruct)
              call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
@@ -1464,6 +1465,7 @@ module dist_solver_module
        write(*,*) "Error too high (", berr_array(1), "). Refactoring and re-solving ... "
         !Force a full refactor and RE-SOLVE the current step
        superlu_same_perm_count = 0
+       
        call f_dScalePermstructFree(ScalePermstruct)
        call f_dLUstructFree(LUstruct)
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
