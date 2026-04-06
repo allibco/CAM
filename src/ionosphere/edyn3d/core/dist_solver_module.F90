@@ -1404,7 +1404,9 @@ module dist_solver_module
           g_nnz_loc = nnz_loc
           g_n_global = n_global
           g_first_row = first_row
-          
+
+          !UPDATE TO AVOID LEAK and test!
+
           ! Destroy old symbolic data
           call f_dScalePermstructFree(ScalePermstruct)
           call f_dLUstructFree(LUstruct)
@@ -1429,11 +1431,12 @@ module dist_solver_module
              write(*,*) "Refactoring before solve due to interval ... "
              
              !clean up and re-init
-             call f_dSolveFinalize(options, SOLVEstruct)
              call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-
+             !the above calls the three below
              !call f_Destroy_LU(n_global, grid, LUstruct)  
              !call f_dLUstructFree(LUstruct)
+             !call f_dSolveFinalize(options, SOLVEstruct)
+
              call f_dScalePermstructFree(ScalePermstruct)
              call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
              call f_dLUstructInit(n_global, n_global, LUstruct)
@@ -1468,7 +1471,8 @@ module dist_solver_module
        write(*,*) "Error too high (", berr_array(1), "). Refactoring and re-solving ... "
         !Force a full refactor and RE-SOLVE the current step
        superlu_same_perm_count = 0
-       
+
+       !UPDATE TO AVOID LEAK
        call f_dScalePermstructFree(ScalePermstruct)
        call f_dLUstructFree(LUstruct)
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
