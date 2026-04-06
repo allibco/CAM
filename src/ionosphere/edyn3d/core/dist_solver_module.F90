@@ -1460,8 +1460,8 @@ module dist_solver_module
     endif
 
     !check backward error  and see if need to refactor
-    if (berr(1) > superlu_berr_thresh) then
-       write(*,*) "Error too high (", berr(1), "). Refactoring and re-solving ... "
+    if (berr_array(1) > superlu_berr_thresh) then
+       write(*,*) "Error too high (", berr_array(1), "). Refactoring and re-solving ... "
         !Force a full refactor and RE-SOLVE the current step
        superlu_same_perm_count = 0
        call f_dScalePermstructFree(ScalePermstruct)
