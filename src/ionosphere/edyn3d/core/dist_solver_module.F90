@@ -1420,13 +1420,13 @@ module dist_solver_module
                values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE)
 
           call set_superlu_options(options, Fact = DOFACT)
-           !if we refactor, set count to 0
-          superlu_same_perm_count = 0
+           !if we refactor, set count to 1
+          superlu_same_perm_count = 1
        else !A didn't change
           !are we at a refactor interval?
           if (superlu_refactor_interval == superlu_same_perm_count) then
              !reset counter
-             superlu_same_perm_count = 0
+             superlu_same_perm_count = 1
 
              write(*,*) "Refactoring before solve due to interval ... "
              
