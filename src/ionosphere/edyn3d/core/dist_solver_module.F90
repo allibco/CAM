@@ -1429,9 +1429,12 @@ module dist_solver_module
              write(*,*) "Refactoring before solve due to interval ... "
              
              !clean up and re-init
-             call f_dSolveFinalize(options, SOLVEstruct)   ! <-- this is what you're missing
+             call f_dSolveFinalize(options, SOLVEstruct)
+             call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
+
+             !call f_Destroy_LU(n_global, grid, LUstruct)  
+             !call f_dLUstructFree(LUstruct)
              call f_dScalePermstructFree(ScalePermstruct)
-             call f_dLUstructFree(LUstruct)
              call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
              call f_dLUstructInit(n_global, n_global, LUstruct)
              !re-factor 
