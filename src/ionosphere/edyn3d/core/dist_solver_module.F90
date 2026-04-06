@@ -23,7 +23,8 @@ module dist_solver_module
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 0
   integer, save :: superlu_refactor_interval = 5
-  
+  real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
+
   integer(superlu_ptr), save :: grid
   integer(superlu_ptr), save :: options
   integer(superlu_ptr), save :: ScalePermstruct
@@ -1358,7 +1359,7 @@ module dist_solver_module
        call set_superlu_options(options,ColPerm=MMD_AT_PLUS_A)
        call set_superlu_options(options,RowPerm=LargeDiag_MC64)
        
-       !for IterRefine SLU_DOUBLE=2 9want double precision for refinement)
+       !for IterRefine SLU_DOUBLE=2 (want double precision for refinement)
        call set_superlu_options(options, IterRefine = 2)
        call set_superlu_options(options, Equil=1)
        call set_superlu_options(options, ReplaceTinyPivot=1) !for more stability
@@ -1375,7 +1376,6 @@ module dist_solver_module
 
        ! Initialize the statistics variables
        call f_PStatInit(stat)
-    
        
        superlu_initialized = .true.
        
@@ -1406,7 +1406,6 @@ module dist_solver_module
           g_first_row = first_row
           
           ! Destroy old symbolic data
-          call f_Destroy_CompRowLoc_Mat_dist(A)
           call f_dScalePermstructFree(ScalePermstruct)
           call f_dLUstructFree(LUstruct)
           
@@ -1424,10 +1423,20 @@ module dist_solver_module
        else !A didn't change
           !are we at a refactor interval?
           if (superlu_refactor_interval == superlu_same_perm_count) then
+             !reset counter
              superlu_same_perm_count = 0
+
+             write(*,*) "Refactoring before solve due to interval ... "
+             
+             !clean up and re-init
+             call f_dScalePermstructFree(ScalePermstruct)
+             call f_dLUstructFree(LUstruct)
+             call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+             call f_dLUstructInit(n_global, n_global, LUstruct)
+             !re-factor 
              call set_superlu_options(options, Fact = DOFACT)
           else
-             !we do not need to refactor (COlPerm and ROwPerm stays the same)
+             !we do not need to refactor (ColPerm and RowPerm stays the same)
              call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
              !no refactor increase count
              superlu_same_perm_count = superlu_same_perm_count + 1
@@ -1443,14 +1452,26 @@ module dist_solver_module
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
 
-
-    !TO DO: check convergence and see if need to refactor
-    
     if (info /= 0) then
        write(*,*) 'SuperLU ERROR: pdgssvx failed with mpi_rank, INFO = ', un_mpi_rank, info
     endif
     if (info == 0 .and. un_mpi_rank == 0) then
        write(*,*) 'Success: SuperLU Backward error: ', berr_array(1)
+    endif
+
+    !check backward error  and see if need to refactor
+    if (berr(1) > superlu_berr_thresh) then
+       write(*,*) "Error too high (", berr(1), "). Refactoring and re-solving ... "
+        !Force a full refactor and RE-SOLVE the current step
+       superlu_same_perm_count = 0
+       call f_dScalePermstructFree(ScalePermstruct)
+       call f_dLUstructFree(LUstruct)
+       call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+       call f_dLUstructInit(n_global, n_global, LUstruct)
+       call set_superlu_options(options, Fact = DOFACT)
+
+       call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
+             grid, LUstruct, SOLVEstruct, berr_array, stat, info)
     endif
 
     ! result is sol (already assigned by reference in pdgssvx)
