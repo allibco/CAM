@@ -21,7 +21,7 @@ module dist_solver_module
 
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
-  integer, save :: superlu_same_perm_count = 0
+  integer, save :: superlu_same_perm_count = 1
   integer, save :: superlu_refactor_interval = 5
   real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
 
@@ -1351,8 +1351,8 @@ module dist_solver_module
        call f_set_default_options(options)
        !do the factorization from scratch (do not assume values are similar to previous)
        call set_superlu_options(options, Fact = DOFACT)
-       !if we refactor, set count to 0
-       superlu_same_perm_count = 0
+       !if we refactor, set count to 1
+       superlu_same_perm_count = 1
        
        ! Change one or more options
        !these below are the defaults
@@ -1375,7 +1375,7 @@ module dist_solver_module
             values, colind, rowptr, SLU_NR_loc, SLU_D, SLU_GE) 
 
        ! Initialize the statistics variables
-       call f_PStatInit(stat)
+       ! call f_PStatInit(stat)
        
        superlu_initialized = .true.
        
@@ -1389,10 +1389,14 @@ module dist_solver_module
        
        if (g_n_loc /= n_loc .or. g_nnz_loc /= nnz_loc .or. &
             g_n_global /= n_global .or. g_first_row /= first_row) then
-          write (*, *) 'SUPERLU ERROR: matrix structure has changed: forcing DOFACT!'
+          if (un_mpi_rank == 0) then
+             write (*, *) 'SUPERLU ERROR: matrix structure has changed: forcing DOFACT!'
+          endif
           A_changed = .true.
        elseif (compute_pattern_hash(rowptr, colind) /= g_pattern_hash) then
-          write(*,*) 'SUPERLU: sparsity pattern changed, forcing DOFACT'
+          if (un_mpi_rank == 0) then
+             write(*,*) 'SUPERLU: sparsity pattern changed, forcing DOFACT'
+          endif
           A_changed = .true.
        endif
 
@@ -1405,11 +1409,9 @@ module dist_solver_module
           g_n_global = n_global
           g_first_row = first_row
 
-          !UPDATE TO AVOID LEAK and test!
-
           ! Destroy old symbolic data
+          call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
           call f_dScalePermstructFree(ScalePermstruct)
-          call f_dLUstructFree(LUstruct)
           
           ! Reinitialize symbolic containers
           call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
@@ -1428,16 +1430,14 @@ module dist_solver_module
              !reset counter
              superlu_same_perm_count = 1
 
-             write(*,*) "Refactoring before solve due to interval ... "
+             if (un_mpi_rank == 0) then
+                write(*,*) "Refactoring before solve due to interval ... "
+             endif
              
              !clean up and re-init
              call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-             !the above calls the three below
-             !call f_Destroy_LU(n_global, grid, LUstruct)  
-             !call f_dLUstructFree(LUstruct)
-             !call f_dSolveFinalize(options, SOLVEstruct)
-
              call f_dScalePermstructFree(ScalePermstruct)
+
              call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
              call f_dLUstructInit(n_global, n_global, LUstruct)
              !re-factor 
@@ -1445,7 +1445,7 @@ module dist_solver_module
           else
              !we do not need to refactor (ColPerm and RowPerm stays the same)
              call set_superlu_options(options, Fact = SamePattern_SameRowPerm)
-             !no refactor increase count
+             !no refactor, so increase count
              superlu_same_perm_count = superlu_same_perm_count + 1
           endif
        endif
@@ -1454,7 +1454,8 @@ module dist_solver_module
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
 
-   
+    call f_PStatInit(stat)
+
     ! Call the linear equation solver (writes over rhs (sol))
     call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
          grid, LUstruct, SOLVEstruct, berr_array, stat, info)
@@ -1466,21 +1467,29 @@ module dist_solver_module
        write(*,*) 'Success: SuperLU Backward error: ', berr_array(1)
     endif
 
+    call f_PStatFree(stat)
+    
     !check backward error  and see if need to refactor
     if (berr_array(1) > superlu_berr_thresh) then
        write(*,*) "Error too high (", berr_array(1), "). Refactoring and re-solving ... "
         !Force a full refactor and RE-SOLVE the current step
-       superlu_same_perm_count = 0
+       superlu_same_perm_count = 1
 
-       !UPDATE TO AVOID LEAK
+       call f_PStatInit(stat)
+
+       call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
        call f_dScalePermstructFree(ScalePermstruct)
-       call f_dLUstructFree(LUstruct)
+       
        call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
        call f_dLUstructInit(n_global, n_global, LUstruct)
        call set_superlu_options(options, Fact = DOFACT)
 
        call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
              grid, LUstruct, SOLVEstruct, berr_array, stat, info)
+
+       call f_PStatFree(stat)
+
+
     endif
 
     ! result is sol (already assigned by reference in pdgssvx)
@@ -1504,6 +1513,7 @@ module dist_solver_module
        call f_superlu_gridexit(grid)
 
        !free the fortran handle wrappers
+
        call f_destroy_gridinfo_handle(grid)
        call f_destroy_options_handle(options)
        call f_destroy_ScalePerm_handle(ScalePermstruct)
