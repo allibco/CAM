@@ -1390,12 +1390,12 @@ module dist_solver_module
        if (g_n_loc /= n_loc .or. g_nnz_loc /= nnz_loc .or. &
             g_n_global /= n_global .or. g_first_row /= first_row) then
           if (un_mpi_rank == 0) then
-             write (*, *) 'SUPERLU ERROR: matrix structure has changed: forcing DOFACT!'
+             write (*, *) 'SUPERLU WARNING: matrix structure has changed: forcing DOFACT!'
           endif
           A_changed = .true.
        elseif (compute_pattern_hash(rowptr, colind) /= g_pattern_hash) then
           if (un_mpi_rank == 0) then
-             write(*,*) 'SUPERLU: sparsity pattern changed, forcing DOFACT'
+             write(*,*) 'SUPERLU WARNING: sparsity pattern changed, forcing DOFACT'
           endif
           A_changed = .true.
        endif
@@ -1431,7 +1431,7 @@ module dist_solver_module
              superlu_same_perm_count = 1
 
              if (un_mpi_rank == 0) then
-                write(*,*) "Refactoring before solve due to interval ... "
+                write(*,*) "Superlu status: Refactoring before solve due to interval ... "
              endif
              
              !clean up and re-init
@@ -1471,7 +1471,7 @@ module dist_solver_module
     
     !check backward error  and see if need to refactor
     if (berr_array(1) > superlu_berr_thresh) then
-       write(*,*) "Error too high (", berr_array(1), "). Refactoring and re-solving ... "
+       write(*,*) "Superlu status: Error too high (", berr_array(1), "). Refactoring and re-solving ... "
         !Force a full refactor and RE-SOLVE the current step
        superlu_same_perm_count = 1
 
