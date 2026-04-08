@@ -22,8 +22,8 @@ module dist_solver_module
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 1
-  integer, save :: superlu_refactor_interval = 5
-  real(kind=rp), save :: superlu_berr_thresh = 1.0d-18
+  integer, save :: superlu_refactor_interval = 20
+  real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
   integer, save :: current_fact = DOFACT
   logical, save :: force_refactor = .false.
   
