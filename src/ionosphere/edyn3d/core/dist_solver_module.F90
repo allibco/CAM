@@ -23,7 +23,7 @@ module dist_solver_module
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 1
   integer, save :: superlu_refactor_interval = 5
-  real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
+  real(kind=rp), save :: superlu_berr_thresh = 1.0d-18
   integer, save :: current_fact = DOFACT
   logical, save :: force_refactor = .false.
   
@@ -1430,18 +1430,18 @@ module dist_solver_module
 
        else !A didn't change
           !are we at a refactor interval or being forced to refactor?
-          if (superlu_refactor_interval == superlu_same_perm_count .or. force_refactor = .true.) then
+          if ((superlu_refactor_interval == superlu_same_perm_count) .or. (force_refactor == .true.)) then
              !reset counter to 1
              superlu_same_perm_count = 1
 
              if (un_mpi_rank == 0) then
                 if (force_refactor) then
                    write(*,*) "Superlu status: Refactoring before solve due to force from last time step ... "
-                   force_refactor = .false.
                 else
-                   write(*,*) "Superlu status: Refactoring before solve due to interval ... "
+                   write(*,*) "Superlu status: Refactoring before solve due to reaching refactor interval ... "
                 endif
              endif
+             force_refactor = .false.
              
              !clean up and re-init
              call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
@@ -1483,23 +1483,23 @@ module dist_solver_module
     !free stats
     call f_PStatFree(stat)
     
-    !check backward error and see if need to refactor next time (* if we didn't just refactor!)
+    !check backward error and see if need to refactor next time
     if (berr_array(1) > superlu_berr_thresh ) then
-       if (current_fact /= DOFACT) then
-          if (un_mpi_rank == 0) then
-             write(*,*) "Superlu status: Error too high (", berr_array(1), "). Need to refactor at the next solve ... "
-          endif
-          !Force a full refactor next time  
-          force_refactor = .true.
-       else
-          if (un_mpi_rank == 0) then
-             write(*,*) "Superlu WARNING: Error is high, but we already refactored ..."
-          endif
+
+       if (un_mpi_rank == 0) then
+          write(*,*) "Superlu status: Backward error is high (", berr_array(1), "). Force a refactor at the next solve ... "
        endif
 
+       !Force a full refactor next time  
+       force_refactor = .true.
+    else
+
+       force_refactor = .false.
+       
     endif
 
-    ! result is sol (already assigned by reference in pdgssvx)
+ 
+    ! result is in sol (already assigned by reference in pdgssvx)
 
     
   endfunction dist_solve_superlu
