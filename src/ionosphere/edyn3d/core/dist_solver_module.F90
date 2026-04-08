@@ -22,9 +22,11 @@ module dist_solver_module
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 1
-  integer, save :: superlu_refactor_interval = 1
+  integer, save :: superlu_refactor_interval = 5
   real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
-
+  integer, save :: current_fact = DOFACT
+  logical, save :: force_refactor = .false.
+  
   integer(superlu_ptr), save :: grid
   integer(superlu_ptr), save :: options
   integer(superlu_ptr), save :: ScalePermstruct
@@ -39,8 +41,7 @@ module dist_solver_module
   integer,dimension(:), allocatable, save :: g_colind
   real(kind=rp),dimension(:), allocatable, save :: g_values_csr
   integer, save :: g_n_global, g_n_loc, g_nnz_loc, g_first_row
-  integer, save :: current_fact
-  
+   
   integer(kind=c_int64_t), save :: g_pattern_hash = 0_c_int64_t
   logical, save :: pattern_initialized = .false.
   
@@ -1401,7 +1402,7 @@ module dist_solver_module
           A_changed = .true.
        endif
 
-       if (A_changed ) then
+       if (A_changed) then
           ! don't believe this will ever be triggered in the current code,
           ! but just to be safe :)
           g_pattern_hash = compute_pattern_hash(rowptr, colind)
@@ -1410,7 +1411,6 @@ module dist_solver_module
           g_n_global = n_global
           g_first_row = first_row
 
-          !TO DO -check this section for memory issues
           ! Destroy old symbolic data
           call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
           call f_dScalePermstructFree(ScalePermstruct)
@@ -1427,22 +1427,27 @@ module dist_solver_module
           current_fact = DOFACT
           !if we refactor, set count to 1
           superlu_same_perm_count = 1
+
        else !A didn't change
-          !are we at a refactor interval?
-          if (superlu_refactor_interval == superlu_same_perm_count) then
+          !are we at a refactor interval or being forced to refactor?
+          if (superlu_refactor_interval == superlu_same_perm_count .or. force_refactor = .true.) then
              !reset counter to 1
              superlu_same_perm_count = 1
 
              if (un_mpi_rank == 0) then
-                write(*,*) "Superlu status: Refactoring before solve due to interval ... "
+                if (force_refactor) then
+                   write(*,*) "Superlu status: Refactoring before solve due to force from last time step ... "
+                   force_refactor = .false.
+                else
+                   write(*,*) "Superlu status: Refactoring before solve due to interval ... "
+                endif
              endif
              
-             ! this bit is not needed acording to documentation
              !clean up and re-init
-             !call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-             !call f_dScalePermstructFree(ScalePermstruct)
-             !call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
-             !call f_dLUstructInit(n_global, n_global, LUstruct)
+             call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
+             call f_dScalePermstructFree(ScalePermstruct)
+             call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
+             call f_dLUstructInit(n_global, n_global, LUstruct)
 
              !re-factor 
              call set_superlu_options(options, Fact = DOFACT)
@@ -1478,35 +1483,19 @@ module dist_solver_module
     !free stats
     call f_PStatFree(stat)
     
-    !check backward error and see if need to refactor (* if we didn't just refactor!)
+    !check backward error and see if need to refactor next time (* if we didn't just refactor!)
     if (berr_array(1) > superlu_berr_thresh ) then
        if (current_fact /= DOFACT) then
           if (un_mpi_rank == 0) then
-             write(*,*) "Superlu status: Error too high (", berr_array(1), "). Refactoring and re-solving ... "
+             write(*,*) "Superlu status: Error too high (", berr_array(1), "). Need to refactor at the next solve ... "
           endif
-          !Force a full refactor and RE-SOLVE the current step
-          superlu_same_perm_count = 1
-
-          call f_PStatInit(stat)
-          !TODO: verify
-          !call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
-          !call f_dScalePermstructFree(ScalePermstruct)
-       
-          !call f_dScalePermstructInit(n_global, n_global, ScalePermstruct)
-          !call f_dLUstructInit(n_global, n_global, LUstruct)
-       
-          call set_superlu_options(options, Fact = DOFACT)
-
-          call f_pdgssvx(options, A, ScalePermstruct, sol, n_loc, nrhs, &
-             grid, LUstruct, SOLVEstruct, berr_array, stat, info)
-          
-          call f_PStatFree(stat)
+          !Force a full refactor next time  
+          force_refactor = .true.
        else
           if (un_mpi_rank == 0) then
-             write(*,*) "Superlu WARNING: Error is high, but we alreadt refactored"
+             write(*,*) "Superlu WARNING: Error is high, but we already refactored ..."
           endif
        endif
-       
 
     endif
 
@@ -1521,15 +1510,12 @@ module dist_solver_module
     if (superlu_initialized) then
 
        !release storage allocated by superlu
-       call f_PStatFree(stat) 
        call f_dScalePermstructFree(ScalePermstruct)
        call f_dDestroy_LU_SOLVE_struct(options, g_n_global, grid, LUstruct, SOLVEstruct)
+
        !DO NOT CALL - because I allocated rows, colind & vals in fortran arrays
        !call f_Destroy_CompRowLoc_Mat_dist(A)
 
-       !CHECK THIS along with get_SuperMatrix
-       !call f_Destroy_SuperMat_Store_dist(A)
-       
        ! Release the SuperLU process grid
        call f_superlu_gridexit(grid)
 
