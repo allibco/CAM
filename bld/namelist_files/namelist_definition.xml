@@ -5203,6 +5203,14 @@ the WACCM-X ionosphere 3-D electro-dynamo.
 Default: 0 (use all atmosphere tasks)
 </entry>
 
+<entry id="ionos_edyn3d_slu_refactor_int" type="integer"
+       category="waccmx" group="ionosphere_nl" valid_values="" >
+Number of superlu solves before performing a full refactor of the
+permutation matrices in
+the WACCM-X ionosphere 3-D electro-dynamo (1=every time, -number=never).
+Default: 20
+</entry>
+
 <entry id="ionos_xport_active" type="logical"  category="waccmx"
        group="ionosphere_nl" valid_values="">
 Switch to to turn on/off O+ transport in ionosphere.
