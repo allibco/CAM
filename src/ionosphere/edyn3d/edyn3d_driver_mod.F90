@@ -6,7 +6,7 @@ module edyn3d_driver_mod
   use mpi_module, only: mpi_size, mpi_rank, un_mpi_rank, ex_mpi_rank
   use infnan, only: nan, assignment(=)
   use perf_mod, only: t_startf, t_stopf
-
+  
   implicit none
 
   private
@@ -18,7 +18,7 @@ contains
 
   !-----------------------------------------------------------------------------
   !-----------------------------------------------------------------------------
-  subroutine edyn3d_driver_init( mpicom_atm, npes_edyn3D, edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt, hilat_pot_model, wei05_coefs_file )
+  subroutine edyn3d_driver_init( mpicom_atm, npes_edyn3D, edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt, hilat_pot_model, wei05_coefs_file, edyn3d__slu_refactor_int )
     use mpi_module, only: mpi_init => init, setup_topology
     use mpi_module, only: mpi_rank, mpi_size, lat_size, lon_size, lat_rank, lon_rank
     use mpi_module, only: nmlon_task,mlon0_task,mlon1_task, nmlat_task,mlat0_task,mlat1_task
@@ -49,11 +49,15 @@ contains
     use cam_history, only: addfld, horiz_only
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_init
 
+    use dist_solver_mod, only: dist_solver_init
+
+    
     integer, intent(in) :: mpicom_atm, npes_edyn3D
     integer, intent(in) :: edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt
     character(len=*),intent(in) :: hilat_pot_model
     character(len=*),intent(in) :: wei05_coefs_file
-
+    integer, intent(in) :: edyn3d_slu_refactor_int
+    
     integer :: ierror
     character(len=*), parameter :: prefix = 'edyn3d_driver_init: '
 
@@ -64,6 +68,9 @@ contains
     ! init mpi for 3D edynamo
     call mpi_init( mpicom_atm, npes_edyn3D )
 
+    !init solver items
+    call dist_solver_init(edyn3d_slu_refactor_int)
+    
     ! set up magnetic latitude and longitude grids (no mpi module)
     call generate_mag_grid(edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt)
 

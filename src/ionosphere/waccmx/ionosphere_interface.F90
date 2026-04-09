@@ -100,7 +100,8 @@ module ionosphere_interface
    integer           :: ionos_edyn3d_nmlat_h = 91
    integer           :: ionos_edyn3d_nmlon = 180
    integer           :: ionos_edyn3d_nhgt = 54
-
+   integer           :: ionos_edyn3d_slu_refactor_int = 20
+   
    logical :: state_debug_checks = .false.
    logical :: ionos_debug_hist = .false.
 
@@ -138,6 +139,7 @@ module ionosphere_interface
       namelist /ionosphere_nl/ oplus_grid, edyn_grid
       namelist /ionosphere_nl/ ionos_debug_hist
       namelist /ionosphere_nl/ ionos_edyn3d_active, ionos_edyn3d_nmlat_h, ionos_edyn3d_nhgt, ionos_edyn3d_nmlon
+      namelist /ionosphere_nl/ ionos_edyn3d_slu_refactor_int
 
       oplus_grid = 0
 
@@ -182,6 +184,7 @@ module ionosphere_interface
       call mpi_bcast(ionos_edyn3d_nmlat_h,1, mpi_integer, masterprocid, mpicom, ierr)
       call mpi_bcast(ionos_edyn3d_nmlon,  1, mpi_integer, masterprocid, mpicom, ierr)
       call mpi_bcast(ionos_edyn3d_nhgt,   1, mpi_integer, masterprocid, mpicom, ierr)
+      call mpi_bcast(ionos_edyn3d_slu_refactor_int, 1, mpi_integer, masterprocid, mpicom, ierr)
 
       ! Extract grid settings
       oplus_nlon = oplus_grid(1)
@@ -239,6 +242,8 @@ module ionosphere_interface
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nmlat_h = ',ionos_edyn3d_nmlat_h
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nmlon = ',ionos_edyn3d_nmlon
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nhgt = ',ionos_edyn3d_nhgt
+         write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_slu_refactor_int = ',ionos_edyn3d_slu_refator_int
+
       end if
       epot_active = .true.
 
@@ -419,7 +424,7 @@ module ionosphere_interface
       if (ionos_edyn3d_active) then
          ! after apex init
          call edyn3d_driver_init(mpicom, ionos_edyn3d_npes, ionos_edyn3d_nmlat_h, ionos_edyn3d_nmlon, ionos_edyn3d_nhgt, &
-                                 ionos_epotential_model, wei05_coefs_file)
+                                 ionos_epotential_model, wei05_coefs_file, ionos_edyn3d_slu_refactor_int)
       end if
 
    end subroutine ionosphere_init

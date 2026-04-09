@@ -22,7 +22,7 @@ module dist_solver_module
   !superlu (here to faciltate reuse across iterations)
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 1
-  integer, save :: superlu_refactor_interval = 20
+  integer, save :: superlu_refactor_interval !set from namelist
   real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
   integer, save :: current_fact = DOFACT
   logical, save :: force_refactor = .false.
@@ -1438,7 +1438,7 @@ module dist_solver_module
                 if (force_refactor) then
                    write(*,*) "Superlu status: Refactoring before solve due to force from last time step ... "
                 else
-                   write(*,*) "Superlu status: Refactoring before solve due to reaching refactor interval ... "
+                   write(*,*) "Superlu status: Refactoring before solve due to reaching refactor interval: ", superlu_refactor_interval
                 endif
              endif
              force_refactor = .false.
@@ -1854,6 +1854,20 @@ end function compute_pattern_hash
     call finalize_superlu()
 
   endsubroutine dist_solver_final
+
+ !-----------------------------------------------------------------------
+
+  subroutine dist_solver_init(refactor_int)
+
+    !set some superlu defaults  (could optionally later read in from namelist)
+
+    integer, intent(in):: refactor_int
+
+    superlu_refactor_interval = refactor_int
+    
+    
+  endsubroutine dist_solver_init
+  
   
   !-----------------------------------------------------------------------
 
