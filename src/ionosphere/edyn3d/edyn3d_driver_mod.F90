@@ -49,7 +49,7 @@ contains
     use cam_history, only: addfld, horiz_only
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_init
 
-    use dist_solver_mod, only: dist_solver_init
+    use dist_solver_module, only: dist_solver_init
 
     
     integer, intent(in) :: mpicom_atm, npes_edyn3D
