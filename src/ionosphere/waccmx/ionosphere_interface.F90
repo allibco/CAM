@@ -242,7 +242,7 @@ module ionosphere_interface
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nmlat_h = ',ionos_edyn3d_nmlat_h
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nmlon = ',ionos_edyn3d_nmlon
          write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_nhgt = ',ionos_edyn3d_nhgt
-         write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_slu_refactor_int = ',ionos_edyn3d_slu_refator_int
+         write(iulog,'(a,i0)') 'ionosphere_readnl: ionos_edyn3d_slu_refactor_int = ',ionos_edyn3d_slu_refactor_int
 
       end if
       epot_active = .true.
