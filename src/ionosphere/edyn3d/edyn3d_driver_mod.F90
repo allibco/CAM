@@ -18,7 +18,7 @@ contains
 
   !-----------------------------------------------------------------------------
   !-----------------------------------------------------------------------------
-  subroutine edyn3d_driver_init( mpicom_atm, npes_edyn3D, edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt, hilat_pot_model, wei05_coefs_file, edyn3d_slu_refactor_int )
+  subroutine edyn3d_driver_init( mpicom_atm, npes_edyn3D, edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt, hilat_pot_model, wei05_coefs_file, edyn3d_slu_refactor_int,  edyn3d_slu_refactor_berr )
     use mpi_module, only: mpi_init => init, setup_topology
     use mpi_module, only: mpi_rank, mpi_size, lat_size, lon_size, lat_rank, lon_rank
     use mpi_module, only: nmlon_task,mlon0_task,mlon1_task, nmlat_task,mlat0_task,mlat1_task
@@ -57,7 +57,8 @@ contains
     character(len=*),intent(in) :: hilat_pot_model
     character(len=*),intent(in) :: wei05_coefs_file
     integer, intent(in) :: edyn3d_slu_refactor_int
-    
+    real(kind=rp), intent(in) :: edyn3d_slu_refactor_BERR
+
     integer :: ierror
     character(len=*), parameter :: prefix = 'edyn3d_driver_init: '
 
@@ -69,7 +70,7 @@ contains
     call mpi_init( mpicom_atm, npes_edyn3D )
 
     !init solver items
-    call dist_solver_init(edyn3d_slu_refactor_int)
+    call dist_solver_init(edyn3d_slu_refactor_int, edyn3d_slu_refactor_berr)
     
     ! set up magnetic latitude and longitude grids (no mpi module)
     call generate_mag_grid(edyn3d_nmlat_h, edyn3d_nmlon, edyn3d_nhgt)

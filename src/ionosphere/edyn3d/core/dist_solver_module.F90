@@ -23,7 +23,7 @@ module dist_solver_module
   logical, save :: superlu_initialized = .false.
   integer, save :: superlu_same_perm_count = 1
   integer, save :: superlu_refactor_interval !set from namelist
-  real(kind=rp), save :: superlu_berr_thresh = 1.0d-12
+  real(kind=rp), save :: superlu_refactor_berr !set from namelist
   integer, save :: current_fact = DOFACT
   logical, save :: force_refactor = .false.
   
@@ -187,17 +187,16 @@ module dist_solver_module
 
        !This init should be called just the first timestep because the nonzero
        !matrix pattern does not change
+       !WARNING - *if the code allows the sparsity pattern to change then this will have to be
+       ! freed with dist_spmv_free(halo) and re-initialized
        if (halo%nprocs_local == 0) then
           call dist_spmv_init(mygrid_size, fst_row, nlonlat, un_mpi_size, un_mpi_rank, g_rowptr, g_colind, task_csr_rowstarts, union_world, halo, ierr)
        endif
           
-       !optional DEBUG
+       !optional for DEBUGGING
        !call write_halo_to_file(halo, union_world)
 
        call dist_spmv(g_rowptr, g_colind, g_values_csr, pot_hl_f, z, halo, union_world, ierr)
-
-       !free later (only after done because we are just initializing once)
-       !call dist_spmv_free(halo)
 
        !write(*,*) 'Dist_ls: Finished spmv'
           
@@ -1296,7 +1295,7 @@ module dist_solver_module
     !most superlu structures are module-level variables
          
     ! Other variables
-    integer(kind=c_int) :: info, ierr
+    integer(kind=c_int) :: info, ierr, refinement_steps
     real(kind=c_double), target :: berr_array(nrhs)
 
     !get my first row in distributed matrix
@@ -1392,12 +1391,12 @@ module dist_solver_module
        if (g_n_loc /= n_loc .or. g_nnz_loc /= nnz_loc .or. &
             g_n_global /= n_global .or. g_first_row /= first_row) then
           if (un_mpi_rank == 0) then
-             write (*, *) 'SUPERLU WARNING: matrix structure has changed: forcing DOFACT!'
+             write (*, *) 'SUPERLU WARNING: matrix structure has changed (Matvec may be wrong)!: forcing DOFACT!'
           endif
           A_changed = .true.
        elseif (compute_pattern_hash(rowptr, colind) /= g_pattern_hash) then
           if (un_mpi_rank == 0) then
-             write(*,*) 'SUPERLU WARNING: sparsity pattern changed, forcing DOFACT'
+             write(*,*) 'SUPERLU WARNING: sparsity pattern changed (Matvec may be wrong)!: forcing DOFACT'
           endif
           A_changed = .true.
        endif
@@ -1405,6 +1404,7 @@ module dist_solver_module
        if (A_changed) then
           ! don't believe this will ever be triggered in the current code,
           ! but just to be safe :)
+          !note: if A has changed, then the spmv routine will be incorrect!
           g_pattern_hash = compute_pattern_hash(rowptr, colind)
           g_n_loc = n_loc
           g_nnz_loc = nnz_loc
@@ -1480,11 +1480,20 @@ module dist_solver_module
        write(*,*) 'Success: SuperLU Backward error: ', berr_array(1)
     endif
 
+
+    ! Get the number of refinement iterations
+    refinement_steps = stat%RefineSteps
+
+    if (un_mpi_rank == 0) then
+       print *, 'Number of refinement iterations:', refinement_steps
+    endif
+
+    
     !free stats
     call f_PStatFree(stat)
     
     !check backward error and see if need to refactor next time
-    if (berr_array(1) > superlu_berr_thresh ) then
+    if (berr_array(1) > superlu_refactor_berr) then
 
        if (un_mpi_rank == 0) then
           write(*,*) "Superlu status: Backward error is high (", berr_array(1), "). Force a refactor at the next solve ... "
@@ -1857,14 +1866,16 @@ end function compute_pattern_hash
 
  !-----------------------------------------------------------------------
 
-  subroutine dist_solver_init(refactor_int)
+  subroutine dist_solver_init(refactor_int, refactor_berr)
 
-    !set some superlu defaults  (could optionally later read in from namelist)
+    !set superlu defaults  (can be read in from namelist)
 
     integer, intent(in):: refactor_int
-
-    superlu_refactor_interval = refactor_int
+    real(kind=rp), intent(in) :: refactor_berr
     
+    superlu_refactor_interval = refactor_int
+    superlu_refactor_berr = refactor_berr
+
     
   endsubroutine dist_solver_init
   
