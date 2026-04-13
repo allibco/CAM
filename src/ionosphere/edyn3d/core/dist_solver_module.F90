@@ -1468,7 +1468,7 @@ module dist_solver_module
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
 
-`    !initialize stats
+    !initialize stats
     call f_PStatInit(stat)
 
     ! Call the linear equation solver (writes over rhs (sol))
