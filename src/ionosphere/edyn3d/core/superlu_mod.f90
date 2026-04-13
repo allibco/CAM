@@ -12,6 +12,20 @@ module superlu_mod
 use superlupara_mod
 
 implicit none
+
+!added to monitor iterative refinement iterations
+! (the max in superlu is 20, but its not configurable via an api)
+interface
+  function get_refine_steps(stat) bind(C)
+    use iso_c_binding
+    implicit none
+    type(c_ptr), value :: stat
+    integer(c_int) :: get_refine_steps
+  end function
+end interface
+
+
+
 contains
 
 subroutine get_GridInfo(grid, iam, nprow, npcol, npdep)

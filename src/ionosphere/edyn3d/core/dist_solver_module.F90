@@ -1298,6 +1298,8 @@ module dist_solver_module
     integer(kind=c_int) :: info, ierr, refinement_steps
     real(kind=c_double), target :: berr_array(nrhs)
 
+    type(c_ptr) :: stat_ptr
+    
     !get my first row in distributed matrix
     first_row = task_csr_rowstarts(un_mpi_rank)     !these are 0-based already 
     if (first_row < 0 .or. first_row >= n_global) then
@@ -1466,7 +1468,7 @@ module dist_solver_module
     ! Setup the right hand side (rhs contains local data)
     sol=rhs ! Copy RHS to solution vector
 
-    !initialize stats
+`    !initialize stats
     call f_PStatInit(stat)
 
     ! Call the linear equation solver (writes over rhs (sol))
@@ -1481,11 +1483,12 @@ module dist_solver_module
     endif
 
 
-    ! Get the number of refinement iterations
-    refinement_steps = stat%RefineSteps
-
+    ! Get the number of refinement iterations (super LU limit is 20, but if more than 5 we'll refactor)
+    stat_ptr = transfer(stat, stat_ptr)
+    refinement_steps = get_refine_steps(stat_ptr)
+    
     if (un_mpi_rank == 0) then
-       print *, 'Number of refinement iterations:', refinement_steps
+       write(*,*), 'SuperLU Warning: Number of refinement iterations is greater than 5 (', refinement_steps, '), and will force a refactor at the next solve ...'
     endif
 
     
@@ -1502,9 +1505,12 @@ module dist_solver_module
        !Force a full refactor next time  
        force_refactor = .true.
     else
-
-       force_refactor = .false.
-       
+       !reactor if more than 5 refinement steps
+       if (refinement_steps > 5) then
+          force_refactor = .true.
+       else
+          force_refactor = .false.
+       endif
     endif
 
  
