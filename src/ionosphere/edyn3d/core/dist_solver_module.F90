@@ -1487,32 +1487,28 @@ module dist_solver_module
     stat_ptr = transfer(stat, stat_ptr)
     refinement_steps = get_refine_steps(stat_ptr)
     
-    if (un_mpi_rank == 0) then
-       write(*,*), 'SuperLU Warning: Number of refinement iterations is greater than 5 (', refinement_steps, '), and will force a refactor at the next solve ...'
-    endif
-
-    
-    !free stats
-    call f_PStatFree(stat)
-    
-    !check backward error and see if need to refactor next time
+    !check backward error and refinement steps to see if we need to force refactor next time
     if (berr_array(1) > superlu_refactor_berr) then
-
        if (un_mpi_rank == 0) then
           write(*,*) "Superlu status: Backward error is high (", berr_array(1), "). Force a refactor at the next solve ... "
        endif
-
        !Force a full refactor next time  
        force_refactor = .true.
     else
        !reactor if more than 5 refinement steps
        if (refinement_steps > 5) then
           force_refactor = .true.
+          if (un_mpi_rank == 0) then
+             write(*,*), 'SuperLU Warning: Number of refinement iterations is greater than 5 (', refinement_steps, '), and will force a refactor at the next solve ...'
+          endif
        else
           force_refactor = .false.
        endif
     endif
 
+    !free stats
+    call f_PStatFree(stat)
+    
  
     ! result is in sol (already assigned by reference in pdgssvx)
 
