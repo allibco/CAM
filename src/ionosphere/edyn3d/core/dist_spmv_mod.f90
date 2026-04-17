@@ -63,7 +63,7 @@ contains
 
     halo%last_row = last_row
     ! 1) Collect remote column indices (may have duplicates)
-    allocate(tmp(0)) !empty array
+    allocate(tmp(size(colind))) !worst case is every col is a halo
     nn = 0
     do i = 1, m_loc
        do j = rowptr(i), rowptr(i+1)-1
@@ -71,13 +71,7 @@ contains
           jp = j+1
           if (colind(jp) < fst_row .or. colind(jp) > last_row ) then !i don't own
              nn = nn + 1 !increase halo
-             if (size(tmp) == 0) then
-                deallocate(tmp)
-                allocate(tmp(1))
-                tmp(1) = colind(jp)
-             else
-                tmp = [tmp, colind(jp)]
-             end if
+             tmp(nn) = colind(jp)
           end if
        end do
     end do
@@ -90,7 +84,8 @@ contains
     halo%nhalo = nn
     allocate(halo%halo_cols(nn))
     halo%halo_cols = tmp(1:nn)
-
+    deallocate(tmp)
+    
     ! 3) Determine owner of each halo column i need (use task_row_starts)
     !   halo%halo_cols and task_row_starts are sorted, so we can go in order
     allocate(halo%col_owners(halo%nhalo))
@@ -227,7 +222,7 @@ contains
     
     
     ! Clean up
-    deallocate(tmp, requests, stats)
+    deallocate(requests, stats)
 
   end subroutine dist_spmv_init
 
