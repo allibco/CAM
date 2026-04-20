@@ -1880,6 +1880,17 @@ end function compute_pattern_hash
 
     
   endsubroutine dist_solver_init
+
+  !-----------------------------------------------------------------------
+
+  subroutine dist_solver_force_refactor()
+
+    !set superlu defaults  (can be read in from namelist)
+
+    force_refactor =.true.
+    
+    
+  endsubroutine dist_solver_force_refactor
   
   
   !-----------------------------------------------------------------------

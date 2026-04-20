@@ -49,7 +49,7 @@ contains
     use cam_history, only: addfld, horiz_only
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_init
 
-    use dist_solver_module, only: dist_solver_init
+    use dist_solver_module, only: dist_solver_init, dist_solver_force_refactor
 
     
     integer, intent(in) :: mpicom_atm, npes_edyn3D
@@ -478,6 +478,11 @@ contains
 
        !now dynamo + extra needed for solve
        ! construct linear system and solve
+
+       !If in the future you want to force a refactor (the numerics of the matrix
+       !change)
+       !call dist_solver_force_refactor()
+       
        call t_startf(subname//'->linear_system_solve')
        call dist_linear_system(mlatd0,mlatd1,mlond0,mlond1, bij,pot_hl_p,fac_hl_p,coef_ns,pot_p)
        call t_stopf(subname//'->linear_system_solve')
