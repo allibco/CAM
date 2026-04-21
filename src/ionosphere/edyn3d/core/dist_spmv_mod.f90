@@ -63,7 +63,20 @@ contains
 
     halo%last_row = last_row
     ! 1) Collect remote column indices (may have duplicates)
-    allocate(tmp(size(colind))) !worst case is every col is a halo
+
+    ! pass 1: count for allocation of tmp
+    nn = 0
+    do i = 1, m_loc
+       do j = rowptr(i), rowptr(i+1)-1
+          !add one to j since row_ptr is 0-based
+          jp = j+1
+          if (colind(jp) < fst_row .or. colind(jp) > last_row ) then !i don't own
+             nn = nn + 1
+          end if
+       end do
+    end do
+    allocate(tmp(nn))
+
     nn = 0
     do i = 1, m_loc
        do j = rowptr(i), rowptr(i+1)-1
@@ -75,11 +88,15 @@ contains
           end if
        end do
     end do
-
+    !TEMP
+    write(*,*) 'Rank', myrank, 'halo candidates nn=', nn
+    
     ! 2) Make unique and sort 
     if (nn > 0) then
        call unique_sort_int(tmp, nn)
     endif
+    !TEMP
+    write(*,*) 'Rank', myrank, 'final nhalo=', nn
     
     halo%nhalo = nn
     allocate(halo%halo_cols(nn))
@@ -129,7 +146,8 @@ contains
     end do
     !how many entries to send
     halo%nhalo_send = cnt
-    
+    !TEMP
+    write(*,*) 'Rank', myrank, 'nhalo_send=', halo%nhalo_send
     
     ! Build list of ranks we will receive from (nonzero recvcounts)
     nowners = 0
