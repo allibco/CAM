@@ -1438,7 +1438,7 @@ module dist_solver_module
 
              if (un_mpi_rank == 0) then
                 if (force_refactor) then
-                   write(*,*) "Superlu status: Refactoring before solve due to force from last time step ... "
+                   write(*,*) "Superlu status: Refactoring before solve due to a force ... "
                 else
                    write(*,*) "Superlu status: Refactoring before solve due to reaching refactor interval: ", superlu_refactor_interval
                 endif
