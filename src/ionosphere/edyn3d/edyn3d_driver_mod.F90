@@ -49,7 +49,7 @@ contains
     use cam_history, only: addfld, horiz_only
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_init
 
-    use dist_solver_module, only: dist_solver_init, dist_solver_force_refactor
+    use dist_solver_module, only: dist_solver_init
 
     
     integer, intent(in) :: mpicom_atm, npes_edyn3D
@@ -211,7 +211,7 @@ contains
     use stencil_module, only: calculate_coef, calculate_coef_ns2, calculate_coef_ns
     use stencil_module, only: calculate_bij
     !use solver_module, only: linear_system
-    use dist_solver_module, only: dist_linear_system
+    use dist_solver_module, only: dist_linear_system, dist_solver_force_refactor
 
     use edyn3d_highlat_potential, only: edyn3d_highlat_potential_get
 
@@ -480,7 +480,7 @@ contains
        ! construct linear system and solve
 
        !If in the future you want to force a refactor (the numerics of the matrix
-       !change)
+       !change), then call the following:
        !call dist_solver_force_refactor()
        
        call t_startf(subname//'->linear_system_solve')
