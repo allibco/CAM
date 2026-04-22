@@ -88,16 +88,12 @@ contains
           end if
        end do
     end do
-    !TEMP
-    write(*,*) 'Rank', myrank, 'halo candidates nn=', nn
-    
+        
     ! 2) Make unique and sort 
     if (nn > 0) then
        call unique_sort_int(tmp, nn)
     endif
-    !TEMP
-    write(*,*) 'Rank', myrank, 'final nhalo=', nn
-    
+        
     halo%nhalo = nn
     allocate(halo%halo_cols(nn))
     halo%halo_cols = tmp(1:nn)
@@ -146,9 +142,7 @@ contains
     end do
     !how many entries to send
     halo%nhalo_send = cnt
-    !TEMP
-    write(*,*) 'Rank', myrank, 'nhalo_send=', halo%nhalo_send
-    
+        
     ! Build list of ranks we will receive from (nonzero recvcounts)
     nowners = 0
     do rank = 1, halo%nprocs_local
