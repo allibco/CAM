@@ -1546,7 +1546,7 @@ module dist_solver_module
   end subroutine finalize_superlu
 
 !-----------------------------------------------------------------------
-
+! we use this to verify that the sparsity patern has not changed
 function compute_pattern_hash(rowptr, colind) result(h)
   use iso_c_binding, only: c_int, c_int64_t
   implicit none
@@ -1558,22 +1558,28 @@ function compute_pattern_hash(rowptr, colind) result(h)
   integer :: i
   integer(kind=c_int64_t), parameter :: FNV_OFFSET = &
        1469598103934665603_c_int64_t
-  integer(kind=c_int64_t), parameter :: FNV_PRIME  = &
-       1099511628211_c_int64_t
-
+  
   ! Initialize hash
   h = FNV_OFFSET
 
   ! Hash rowptr (row structure)
   do i = 1, size(rowptr)
      h = ieor(h, int(rowptr(i), c_int64_t))
-     h = h * FNV_PRIME
+     !h = h * FNV_PRIME
+     h = ieor(h, ishft(h, -30))
+     h = ieor(h, ishft(h,  27))
+     h = ieor(h, ishft(h, -31))
+
+     
   end do
 
   ! Hash colind (column pattern + ordering)
   do i = 1, size(colind)
      h = ieor(h, int(colind(i), c_int64_t))
-     h = h * FNV_PRIME
+     !h = h * FNV_PRIME
+     h = ieor(h, ishft(h, -30))
+     h = ieor(h, ishft(h,  27))
+     h = ieor(h, ishft(h, -31))
   end do
 
 end function compute_pattern_hash
