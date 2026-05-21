@@ -174,6 +174,15 @@ subroutine set_superlu_options(opt, Fact, Equil, ParSymbFact, ColPerm, &
 
 end subroutine set_superlu_options
 
+
+subroutine set_superlu_diagpivotthresh(opt, thresh)
+  integer(superlu_ptr), intent(in) :: opt
+  real(kind=8), intent(in) :: thresh
+  call f_set_superlu_diagpivotthresh(opt, thresh)
+end subroutine set_superlu_diagpivotthresh
+
+
+
 end module superlu_mod
 
 
